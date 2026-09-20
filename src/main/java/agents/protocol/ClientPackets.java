@@ -198,12 +198,13 @@ public final class ClientPackets {
     /**
      * The action an onlooker's client plays for the swing.
      *
-     * A guess pending a capture of what a real client sends for a plain attack - the action
-     * ids live in the client's own Character.wz, not in anything the server knows, so it
-     * cannot be derived from this codebase. Keep it well under 80: the server autobans on
-     * display values above that as a WZ edit.
+     * Taken from a real v83 client rather than guessed: !monitor on a GM character, three
+     * swings at a monster, and every one of them sent 0x80 here with display 0 and speed 4.
+     * That is the only way to get this right - the action ids live in the client's own
+     * Character.wz and nothing in the server knows them, which is why a guess of 1 (a real
+     * action, just not this one) drew nothing.
      */
-    private static final int ATTACK_STANCE = 1;
+    private static final int ATTACK_STANCE = 0x80;
 
     /**
      * @param facingRight which way the attacker is turned, so onlookers see it swing at the
