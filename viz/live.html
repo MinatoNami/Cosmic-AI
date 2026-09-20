@@ -175,7 +175,7 @@ function renderAgents(agents) {
       <h2>${a.name} <span class="disp">${a.disposition}</span></h2>
       <div class="doing">${a.goal ? `<b>${escapeHtml(a.goal)}</b> &mdash; ${escapeHtml(a.intent || '')}` : 'thinking'}</div>
       <div class="nums">
-        <span>map <b>${a.mapId}</b></span>
+        <span>map <b>${escapeHtml(a.mapName || a.mapId)}</b></span>
         <span>level <b>${a.level}</b></span>
         ${a.maxHp > 0 ? `<span>hp <b>${a.hp}/${a.maxHp}</b></span>` : ''}
         <span>beliefs <b>${a.liveBeliefs}</b>/${a.beliefs}</span>

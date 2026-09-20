@@ -12,6 +12,7 @@ import agents.mind.ReflexPolicy;
 import agents.net.LoginFlow;
 import agents.net.LoginFlow.Credentials;
 import agents.net.LoginFlow.InWorld;
+import agents.trace.Labels;
 import agents.trace.Trace;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -228,6 +229,7 @@ public class Population {
                     r.agent().disposition().name(),
                     r.thread().isAlive(),
                     r.agent().world().mapId(),
+                    mapName(r.agent().world().mapId()),
                     r.agent().world().level(),
                     r.agent().world().hp(),
                     r.agent().world().maxHp(),
@@ -241,9 +243,24 @@ public class Population {
         return all;
     }
 
-    public record AgentStatus(String name, String disposition, boolean alive, int mapId, int level,
-                              int hp, int maxHp, int episodes, int beliefs, int liveBeliefs,
-                              long tick, String goal, String intent) {
+    public record AgentStatus(String name, String disposition, boolean alive, int mapId,
+                              String mapName, int level, int hp, int maxHp, int episodes,
+                              int beliefs, int liveBeliefs, long tick, String goal, String intent) {
+    }
+
+    /**
+     * The map's name, for the person trying to walk over and find the agent.
+     *
+     * Display only, and read here rather than by the agent, for the reason {@link Labels}
+     * exists: an agent that knew it was standing in "Dangerous Forest" would have been told
+     * something it is supposed to find out.
+     */
+    private static String mapName(int mapId) {
+        if (mapId <= 0) {
+            return "";
+        }
+        String name = Labels.forRef("map:" + mapId);
+        return name == null ? "" : name;
     }
 
     private static Oracle oracleFor(String policy) {
