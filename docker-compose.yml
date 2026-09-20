@@ -25,6 +25,9 @@ services:
   # The agents are ordinary clients of the server: same jar, different entrypoint, and they
   # reach it by service name on the compose network. Nothing about the server knows they exist.
   agents:
+    # Same context and tag as the server, so this builds nothing new - but without it
+    # `docker compose build agents` silently does nothing and you redeploy a stale image.
+    build: .
     image: cosmic-ai:latest
     restart: unless-stopped
     depends_on:

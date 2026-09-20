@@ -57,6 +57,21 @@ class VoiceTest {
         assertEquals("question 12", voice.next(0).orElseThrow().text());
     }
 
+    /**
+     * The bug this pins: an agent asked "why" answered a minute later, behind the belief it
+     * happened to be broadcasting, which looked exactly like being ignored.
+     */
+    @Test
+    void answersBeforeItFinishesBroadcasting() {
+        Voice voice = voice();
+        voice.announce("a thing I know", 0);
+        voice.tell("the same thing, to you", "Agent1", 0);
+        voice.reply("because I owe Roger something", "Watcher", 0);
+
+        assertEquals("because I owe Roger something", voice.next(1_200).orElseThrow().text());
+        assertEquals("a thing I know", voice.next(6_000).orElseThrow().text());
+    }
+
     @Test
     void saysNothingWhenItHasNothingQueued() {
         Voice voice = voice();

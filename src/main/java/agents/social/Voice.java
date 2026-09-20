@@ -72,26 +72,42 @@ public class Voice {
     public record Utterance(String text, String whisperTo, long dueAtMillis) {
     }
 
-    /** Queues a reply, which waits a beat so it does not arrive in the same breath as the question. */
+    /**
+     * Queues a reply, which waits a beat so it does not arrive in the same breath as the
+     * question - but goes ahead of anything the agent was only announcing.
+     *
+     * Ordering matters more than it looks. An agent that shares a belief queues one message
+     * plus a whisper to everyone it has met, so a plain queue can hold an answer behind half
+     * a minute of unrelated chatter, and a question answered that late is indistinguishable
+     * from a question ignored. Someone asked; that comes first.
+     */
     public void reply(String text, String whisperTo, long nowMillis) {
-        enqueue(new Utterance(text, whisperTo, nowMillis + thinking.toMillis()));
+        enqueue(new Utterance(text, whisperTo, nowMillis + thinking.toMillis()), true);
     }
 
     /** Queues something the agent wants to announce, which can go as soon as the gap allows. */
     public void announce(String text, long nowMillis) {
-        enqueue(new Utterance(text, null, nowMillis));
+        enqueue(new Utterance(text, null, nowMillis), false);
     }
 
     /** Queues something said to one player by name, with no pause - nobody asked a question. */
     public void tell(String text, String whisperTo, long nowMillis) {
-        enqueue(new Utterance(text, whisperTo, nowMillis));
+        enqueue(new Utterance(text, whisperTo, nowMillis), false);
     }
 
-    private void enqueue(Utterance utterance) {
+    /**
+     * @param first true for something said in answer, which goes to the head of the queue and
+     *              displaces the stalest announcement rather than itself when the queue is full
+     */
+    private void enqueue(Utterance utterance, boolean first) {
         while (waiting.size() >= MOST_HELD) {
             waiting.removeFirst();
         }
-        waiting.addLast(utterance);
+        if (first) {
+            waiting.addFirst(utterance);
+        } else {
+            waiting.addLast(utterance);
+        }
     }
 
     /**
