@@ -208,7 +208,8 @@ public class ReflexPolicy implements Policy {
 
         // Nothing here. Head for a door, and keep heading for it until we arrive.
         if (committedPortal == null && (outstayed || decisionsHere % disposition.portalReluctance() == 0)) {
-            committedPortal = chooseDoor(world.portals(), mind, world.mapId());
+            committedPortal = chooseDoor(world.portals(), mind, world.mapId(),
+                    "player:" + world.characterId());
         }
 
         if (committedPortal != null) {
@@ -288,12 +289,12 @@ public class ReflexPolicy implements Policy {
      * it moving.
      */
     private WorldModel.PortalTarget chooseDoor(List<WorldModel.PortalTarget> portals, Mind mind,
-                                               int mapId) {
+                                               int mapId, String selfRef) {
         if (portals.isEmpty()) {
             return null;
         }
         Set<String> beenThere = mapsVisited(mind);
-        Set<String> companionsAre = companionMaps(mind, mapId);
+        Set<String> companionsAre = companionMaps(mind, mapId, selfRef);
 
         List<WorldModel.PortalTarget> towardsCompany = new ArrayList<>();
         List<WorldModel.PortalTarget> untried = new ArrayList<>();
@@ -342,11 +343,16 @@ public class ReflexPolicy implements Policy {
      * or a whisper. Nothing in the process is shared, so two agents on different machines
      * would find each other exactly the same way, or fail to in exactly the same way.
      */
-    private static Set<String> companionMaps(Mind mind, int mapId) {
+    private static Set<String> companionMaps(Mind mind, int mapId, String selfRef) {
         String here = "map:" + mapId;
         Set<String> maps = new HashSet<>();
         for (Belief belief : mind.semantic().liveBeliefs()) {
-            if (belief.subject().startsWith("player:") && belief.predicate().equals("in_map")
+            // Skipping our own player id as well as our own map, because a mind saved before
+            // agents stopped overhearing themselves still holds one of these, and it can never
+            // be corrected now that such claims are refused - it would simply sit there
+            // forever, sending the agent back to a map it left to look for itself.
+            if (belief.subject().startsWith("player:") && !belief.subject().equals(selfRef)
+                    && belief.predicate().equals("in_map")
                     && !belief.object().equals(here)) {
                 maps.add(belief.object());
             }

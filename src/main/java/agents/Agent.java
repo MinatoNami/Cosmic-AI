@@ -259,6 +259,16 @@ public class Agent implements Runnable {
      * for itself.
      */
     private void adopt(Claim claim) {
+        // Never take your own word for something. The speaker check in converse() catches the
+        // map-chat echo, but only once the agent knows its own character id - and the first
+        // position announcements go out in the seconds before the server has said who we are,
+        // so they came back and were filed as hearsay about ourselves. An agent then held a
+        // stale belief that it was somewhere it had since left, and treated it as a reason to
+        // walk back and look for the company of itself. Checking the subject holds whenever
+        // the claim arrives, which is the part the speaker check cannot promise.
+        if (claim.subject().equals("player:" + world.characterId())) {
+            return;
+        }
         mind.hear(claim.subject(), claim.predicate(), claim.object(), perceiver.currentTick());
     }
 
