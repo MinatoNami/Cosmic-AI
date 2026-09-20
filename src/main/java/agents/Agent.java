@@ -1,5 +1,6 @@
 package agents;
 
+import agents.mind.DialogueReader;
 import agents.mind.Disposition;
 import agents.mind.IntentExecutor;
 import agents.mind.Policy;
@@ -20,6 +21,9 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 import java.util.Random;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 /**
  * One agent, living its own loop on its own thread.
@@ -45,7 +49,31 @@ public class Agent implements Runnable {
     private final WorldModel world = new WorldModel();
     private final IntentExecutor executor;
     private final Voice voice;
+    private final DialogueReader dialogueReader;
+
+    /**
+     * Where the thinking about an NPC's words happens, so it does not happen on the tick.
+     *
+     * A local model takes around fifteen seconds, and an agent frozen mid-conversation for
+     * fifteen seconds is worse to watch than one that answers thoughtlessly.
+     */
+    private final ExecutorService reading =
+            Executors.newSingleThreadExecutor(r -> {
+                Thread t = new Thread(r, "dialogue");
+                t.setDaemon(true);
+                return t;
+            });
+
+    private PendingDialogue pendingDialogue;
     private volatile boolean running = true;
+
+    /** An NPC's words, out with the model, with the style byte needed to answer them. */
+    private record PendingDialogue(byte style, long askedAtMillis,
+                                   CompletableFuture<java.util.Optional<DialogueReader.Reply>> answer) {
+    }
+
+    /** After this the NPC has waited long enough and gets the thoughtless answer. */
+    private static final long DIALOGUE_PATIENCE_MILLIS = 20_000;
 
     private final Disposition disposition;
     private int steps;
@@ -60,6 +88,7 @@ public class Agent implements Runnable {
         // Seeded from the name so a given agent paces the same way run to run, and two
         // agents never pace identically.
         this.voice = new Voice(new Random(mind.name().hashCode()));
+        this.dialogueReader = policy.oracle().map(DialogueReader::new).orElse(null);
     }
 
     @Override
@@ -102,6 +131,7 @@ public class Agent implements Runnable {
             share();
         }
 
+        answerWhenRead();
         voice.next(System.currentTimeMillis()).ifPresent(this::say);
 
         // Push the trace out to disk every step. Without this a buffered writer holds the
@@ -129,8 +159,46 @@ public class Agent implements Runnable {
         if (!(observation instanceof Observation.DialogueShown dialogue)) {
             return;
         }
+        // No model, or already thinking about the last thing it said: answer by reflex rather
+        // than leave a conversation open with nobody attending it.
+        if (dialogueReader == null || pendingDialogue != null) {
+            connection.session().send(ClientPackets.npcTalkMore(
+                    (byte) dialogue.style(), NPC_YES_OR_NEXT, NO_SELECTION));
+            return;
+        }
+        pendingDialogue = new PendingDialogue((byte) dialogue.style(), System.currentTimeMillis(),
+                CompletableFuture.supplyAsync(() -> dialogueReader.read(dialogue), reading));
+    }
+
+    /**
+     * Sends the answer once there is one, or once the NPC has waited long enough.
+     *
+     * Checked on the tick rather than from the reading thread so that everything leaving this
+     * agent leaves from one place, in the order the agent decided it.
+     */
+    private void answerWhenRead() {
+        PendingDialogue pending = pendingDialogue;
+        if (pending == null) {
+            return;
+        }
+        boolean outOfPatience =
+                System.currentTimeMillis() - pending.askedAtMillis() > DIALOGUE_PATIENCE_MILLIS;
+        if (!pending.answer().isDone() && !outOfPatience) {
+            return;
+        }
+
+        DialogueReader.Reply reply = DialogueReader.CONTINUE;
+        if (pending.answer().isDone()) {
+            reply = pending.answer().getNow(java.util.Optional.empty())
+                    .orElse(DialogueReader.CONTINUE);
+        } else {
+            pending.answer().cancel(true);
+        }
+
+        log.debug("{} answers the NPC: {}", mind.name(), reply.why());
         connection.session().send(ClientPackets.npcTalkMore(
-                (byte) dialogue.style(), NPC_YES_OR_NEXT, NO_SELECTION));
+                pending.style(), reply.action(), reply.selection()));
+        pendingDialogue = null;
     }
 
     /** Action 1 means yes, or next, depending on what was asked. */

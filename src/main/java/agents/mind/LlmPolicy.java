@@ -203,6 +203,11 @@ public class LlmPolicy implements Policy {
     }
 
     @Override
+    public java.util.Optional<Oracle> oracle() {
+        return java.util.Optional.of(oracle);
+    }
+
+    @Override
     public String name() {
         return "llm:" + oracle.name();
     }

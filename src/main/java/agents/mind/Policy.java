@@ -30,5 +30,16 @@ public interface Policy {
     record Decision(Intent intent, String goal, List<String> consultedBeliefs, List<String> considered) {
     }
 
+    /**
+     * The model behind this policy, if it has one.
+     *
+     * Exposed because reading an NPC's words is language work rather than decision work, and
+     * whatever else wants to do it should not have to be handed its own oracle and kept in
+     * sync with how this one was configured.
+     */
+    default java.util.Optional<Oracle> oracle() {
+        return java.util.Optional.empty();
+    }
+
     String name();
 }
