@@ -79,6 +79,15 @@ public class ReflexPolicy implements Policy {
     private int lastLevel = -1;
 
     /**
+     * Decisions spent in a row on loot and monsters.
+     *
+     * The measure of how long an agent has had its head down. Reset by doing anything else,
+     * which is the point: one look up is enough to reach an NPC, a quest or a door, and then
+     * it is free to go back to what it was doing.
+     */
+    private int headDownFor;
+
+    /**
      * The door just walked through, held until the next map arrives so the agent can find out
      * where it went.
      *
@@ -137,8 +146,22 @@ public class ReflexPolicy implements Policy {
         // simply having been here a very long time, which matters because the first test
         // never fires for an agent that is doing well: it levels, the counter resets, and it
         // happily grinds the same field for its entire life because that field works.
-        boolean outstayed = decisionsSinceProgress > disposition.patience()
-                || decisionsHere > disposition.patience() * LIFETIMES_BEFORE_MOVING_ON;
+        Set<Integer> unfinished = startedQuests(mind);
+
+        // An agent with a quest in hand stays put. It has no idea what the quest asked for -
+        // that is deliberately not readable - but whatever it was, killing and looting where
+        // it is standing is the likeliest thing to advance it, and wandering off is the
+        // likeliest thing to strand it. So having unfinished business doubles its patience.
+        int ceiling = disposition.patience() * LIFETIMES_BEFORE_MOVING_ON
+                * (unfinished.isEmpty() ? 1 : 2);
+        boolean outstayed = (decisionsSinceProgress > disposition.patience() && unfinished.isEmpty())
+                || decisionsHere > ceiling;
+
+        // Head down too long. Loot and monsters starve everything below them, so every so
+        // often the agent looks up and lets one decision reach the NPCs, the quests and the
+        // doors. Without this an agent never speaks to anyone, because there is always one
+        // more snail.
+        boolean lookUp = headDownFor >= disposition.attentionSpan();
 
         List<String> consulted = mind.recall("map monster danger", tick, 3)
                 .stream().map(Belief::ref).toList();
@@ -149,17 +172,21 @@ public class ReflexPolicy implements Policy {
         // resulting pile picking items up forever and never fall through to the door. In
         // forty-five seconds an agent managed forty pickups, thirty-two attacks, and nothing
         // else whatsoever.
-        Optional<WorldModel.Entity> drop = outstayed ? Optional.empty() : world.nearestDrop();
+        Optional<WorldModel.Entity> drop = outstayed || lookUp
+                ? Optional.empty() : world.nearestDrop();
         if (drop.isPresent() && drop.get().position().distance(self) < disposition.scavengeRange()) {
+            headDownFor++;
             return new Decision(new Intent.PickUp(drop.get().objectId(), drop.get().position()),
                     "take what is at my feet", consulted, options());
         }
 
         // An agent that has stopped getting anywhere here stops taking the bait, so the ladder
         // falls through to the door rather than to the next monster.
-        Optional<WorldModel.Entity> monster = outstayed ? Optional.empty() : world.nearestMonster();
+        Optional<WorldModel.Entity> monster = outstayed || lookUp
+                ? Optional.empty() : world.nearestMonster();
         if (monster.isPresent() && monster.get().position().distance(self) < disposition.pursuitRange()) {
             WorldModel.Entity target = monster.get();
+            headDownFor++;
             if (target.position().distance(self) < MELEE_RANGE) {
                 return new Decision(new Intent.Attack(target.objectId(), target.position()),
                         "hit what is in front of me", consulted, options());
@@ -171,8 +198,11 @@ public class ReflexPolicy implements Policy {
         // Unfinished business first. An agent has no idea what a quest asked for, so it goes
         // back and offers; the server says yes or nothing happens, and the state change is
         // how it finds out that whatever it did in between was the thing.
+        // Past the fighting, so the agent has looked up. Whatever it does now counts as
+        // having done something other than grind.
+        headDownFor = 0;
         decisionsMade++;
-        Set<Integer> started = startedQuests(mind);
+        Set<Integer> started = unfinished;
         Optional<Errand> errand = errandFor(world, started);
         if (errand.isPresent()) {
             WorldModel.Entity host = errand.get().npc();

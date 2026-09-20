@@ -59,6 +59,23 @@ public record Disposition(String name, double wanderlust, double aggression, dou
         return (int) Math.round(40 + greed * 360);
     }
 
+    /**
+     * Decisions an agent will spend fighting and looting before it looks up.
+     *
+     * The reflex ladder tries loot, then monsters, then NPCs, then doors, and stops at the
+     * first that matches - so the top two starve the rest whenever there is anything to hit.
+     * Worse, they feed each other: killing a monster makes a drop, and a drop outranks a
+     * monster. Ninety seconds of one agent came to ninety-six attacks and fifty-eight
+     * pickups, which is eighty-eight per cent of its decisions and left no room to talk to
+     * anybody or take a quest.
+     *
+     * Aggression buys a longer attention span, because grinding is a fighter's whole
+     * character. It does not buy an unlimited one.
+     */
+    public int attentionSpan() {
+        return (int) Math.round(20 + aggression * 60);
+    }
+
     /** Steps between saying something. */
     public int shareInterval() {
         return (int) Math.round(80 - sociability * 60);

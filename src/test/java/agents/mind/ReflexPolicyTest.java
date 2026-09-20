@@ -141,4 +141,34 @@ class ReflexPolicyTest {
         assertEquals("hit what is in front of me", decision.goal());
         assertTrue(decision.considered().contains("Attack"));
     }
+
+    /**
+     * The starvation this exists to prevent: loot and monsters sit above NPCs, quests and
+     * doors in the ladder and feed each other - killing a monster makes a drop, and a drop
+     * outranks a monster - so ninety seconds of a real agent came to eighty-eight per cent
+     * fighting and looting, and it never spoke to anybody.
+     */
+    @Test
+    void looksUpFromFightingOftenEnoughToDoSomethingElse() {
+        // A monster permanently within reach, which is the situation that starves everything
+        // below it: hit it, loot it, and there is always another.
+        world.update(new Observation.MonsterAppeared(2, 9001, 100100, new Point(20, 0)));
+        Policy grinder = new ReflexPolicy(new Random(1), Disposition.FIGHTER);
+
+        int grinding = 0;
+        int lookedUp = 0;
+        for (int decision = 0; decision < Disposition.FIGHTER.attentionSpan() * 3; decision++) {
+            Policy.Decision made = grinder.decide(mind, world, decision);
+            if (made.intent() instanceof Intent.Attack || made.intent() instanceof Intent.PickUp) {
+                grinding++;
+            } else {
+                lookedUp++;
+            }
+        }
+
+        assertTrue(grinding > 0, "it should still be fighting most of the time");
+        assertTrue(lookedUp > 0,
+                "it never looked up once in " + (Disposition.FIGHTER.attentionSpan() * 3)
+                        + " decisions, so nothing below the monsters can ever happen");
+    }
 }
