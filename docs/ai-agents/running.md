@@ -21,17 +21,20 @@ mvn compile dependency:build-classpath -Dmdep.outputFile=target/cp.txt
 ## 3. Agents
 
 ```bash
-java -cp "target/classes:$(cat target/cp.txt)" -Dwz-path=wz agents.Launcher 127.0.0.1 8484 3
+java -cp "target/classes:$(cat target/cp.txt)" -Dwz-path=wz agents.Launcher 127.0.0.1 8484 3 10
 ```
 
-The arguments are host, login port and agent count. Each agent `N`:
+The arguments are host, login port, agent count and minutes to run. Each agent `N`:
 
 - logs in as account `agentN`, which the server auto-registers on first sight
   (`AUTOMATIC_REGISTER` is on by default) and accepts the terms of service;
 - creates character `AgentN` if the account has none, with an appearance drawn at random
   from the valid combinations in `Etc.wz/MakeCharInfo.img`;
-- enters the world, greets the channel, and shuffles about for thirty seconds;
-- prints a histogram of the packet opcodes it received but does not yet understand.
+- enters the world and runs its own loop on its own thread: perceive, remember, decide, act;
+- explores with the reflex policy — picks up what is underfoot, attacks what is near, takes
+  a portal when there is nothing else to do;
+- writes a trace to `target/traces/<run>/<AgentName>.jsonl` (see `trace-format.md`);
+- prints its beliefs, sorted by confidence, when the run ends.
 
 Characters persist, so a second run reuses them.
 

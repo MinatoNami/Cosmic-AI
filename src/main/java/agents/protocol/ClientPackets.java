@@ -122,6 +122,20 @@ public final class ClientPackets {
 
     // -------------------------------------------------------------- channel server
 
+    /**
+     * Tells the server the client has finished loading the map it was sent to.
+     *
+     * Easy to miss and it breaks everything: {@code mapTransitioning} starts true at login,
+     * and until this arrives the server treats the character as mid-transition and refuses
+     * every further map change with "got stuck when changing maps". Must be sent once after
+     * entering the world and again after every map change.
+     *
+     * @see net.server.channel.handlers.PlayerMapTransitionHandler
+     */
+    public static Packet mapTransitionComplete() {
+        return packet(RecvOpcode.PLAYER_MAP_TRANSFER);
+    }
+
     /** First packet on a channel connection, after the handshake. */
     public static Packet playerLoggedIn(int characterId) {
         OutPacket p = packet(RecvOpcode.PLAYER_LOGGEDIN);
@@ -162,6 +176,65 @@ public final class ClientPackets {
         OutPacket p = packet(RecvOpcode.GENERAL_CHAT);
         p.writeString(message);
         p.writeByte(shownToGm ? 1 : 0);
+        return p;
+    }
+
+    /**
+     * A one-target, one-line melee swing with no skill.
+     *
+     * The damage claimed is checked against what the character could plausibly deal, and
+     * overreach is an autoban offence, so callers should claim very little.
+     *
+     * @see net.server.channel.handlers.AbstractDealDamageHandler#parseDamage
+     */
+    public static Packet meleeAttack(int targetObjectId, Point targetPosition, int damage) {
+        OutPacket p = packet(RecvOpcode.CLOSE_RANGE_ATTACK);
+        p.writeByte(0);
+        p.writeByte((1 << 4) | 1);      // one target, one damage line
+        p.writeInt(0);                  // skill 0: a plain attack
+        p.writeBytes(new byte[8]);
+        p.writeByte(0);                 // display
+        p.writeByte(0);                 // direction
+        p.writeByte(0);                 // stance
+        p.writeByte(0);
+        p.writeByte(0);                 // speed
+        p.writeBytes(new byte[4]);
+
+        p.writeInt(targetObjectId);
+        p.writeBytes(new byte[4]);
+        p.writePos(targetPosition);     // where the target is
+        p.writePos(targetPosition);     // where it is heading
+        p.writeShort(0);                // delay
+        p.writeInt(damage);
+        p.writeBytes(new byte[4]);
+        return p;
+    }
+
+    /** @see net.server.channel.handlers.ItemPickupHandler */
+    public static Packet pickUpItem(int objectId, Point position) {
+        OutPacket p = packet(RecvOpcode.ITEM_PICKUP);
+        p.writeInt(0);                  // timestamp
+        p.writeByte(0);
+        p.writePos(position);
+        p.writeInt(objectId);
+        return p;
+    }
+
+    /**
+     * Walks into a portal. The target map is -1 because the client does not choose where a
+     * portal goes - it names the portal and the server decides, which is exactly why an
+     * agent has to use one to find out where it leads.
+     *
+     * @see net.server.channel.handlers.ChangeMapHandler
+     */
+    public static Packet enterPortal(String portalName) {
+        OutPacket p = packet(RecvOpcode.CHANGE_MAP);
+        p.writeByte(0);                 // not from dying
+        p.writeInt(-1);                 // let the portal decide
+        p.writeString(portalName);
+        p.writeByte(0);
+        p.writeByte(0);                 // no wheel of fortune
+        p.writeByte(0);                 // not chasing
         return p;
     }
 

@@ -81,13 +81,43 @@ Not yet exercised live: belief **revision**. Nothing an agent can reach in Amher
 functional value - no map changes without portals, no damage without monsters. Unit tests
 cover the mechanism; the first live revision arrives with stage 4.
 
-## Stage 4 — reflex policy and the loop
+## Stage 4 — reflex policy and the loop ✅
 
-`Policy` interface, `ReflexPolicy`, intent executor, N agents in one runtime. No LLM yet —
-this is the control condition.
+`Policy` interface, `ReflexPolicy`, typed intents, executor, one thread and one trace per
+agent. No LLM — this is the control condition.
 
-**Done when** several agents survive unattended for an hour and their traces show belief
-formation (e.g. "attacking mob 100100 reduced my HP").
+A three-minute run of two agents: Agent1 walked `10000 → 20000 → 30000 → 40000`, found
+monsters, threw 47 attacks, reached level 3, and revised 15 beliefs. The revision chain is
+the self-model updating as it plays:
+
+```
+self in_map map:10000 -> superseded after 94 ticks
+self level 1          -> superseded after 185 ticks
+self level 2          -> superseded after 42 ticks
+self maxhp 64         -> superseded after 42 ticks
+```
+
+Two bugs worth remembering, both invisible from unit tests:
+
+- **The policy re-decided every tick**, so it took one step towards a door and then wandered
+  off. 199 decisions, all `MoveTo`, and it never left town. A policy that picks a
+  destination has to commit to it until it arrives.
+- **`PLAYER_MAP_TRANSFER` was never sent.** `mapTransitioning` starts true at login, so
+  until the client acknowledges arrival the server refuses every map change with "got stuck
+  when changing maps" — and the flag latches, so the first portal attempt poisons all the
+  rest. Agents now acknowledge on every `MapEntered` and on entering the world.
+
+Design notes:
+
+- **Intents are typed and coarse.** A policy says "attack that", and what a swing looks like
+  on the wire stays in the executor. The worst a bad decision can do is a sensible action at
+  a silly moment, not a malformed packet that drops the agent.
+- **Attacks claim one point of damage.** The server bans for claiming more than a character
+  could plausibly deal, so agents claim the floor. Killing slowly is a fair price.
+- **Portal targets come from `Map.wz` but their destinations do not.** The file has `tm`;
+  reading it would hand over the world's connectivity for free, which is most of what
+  exploring means here. A player sees a doorway and has to walk through it, and so does an
+  agent — where it led becomes an ordinary belief afterwards.
 
 ## Stage 5 — visualiser
 
