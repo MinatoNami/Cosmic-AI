@@ -1,6 +1,8 @@
 services:
   maplestory:
     build: .
+    # Named so the agent daemon can run the same build without a second one.
+    image: cosmic-ai:latest
     restart: unless-stopped
     depends_on:
       - db
@@ -19,6 +21,31 @@ services:
       - ./wz:/opt/server/wz
     env_file:
       - ./.env
+
+  # The agents are ordinary clients of the server: same jar, different entrypoint, and they
+  # reach it by service name on the compose network. Nothing about the server knows they exist.
+  agents:
+    image: cosmic-ai:latest
+    restart: unless-stopped
+    depends_on:
+      - maplestory
+    entrypoint: ["java", "-cp", "./Server.jar", "-Dwz-path=wz", "agents.Daemon"]
+    environment:
+      GAME_HOST: maplestory
+      GAME_PORT: "8484"
+      AGENTS_API_PORT: "8090"
+      AGENTS_DATA: /opt/server/agents-data
+      AGENTS_UI: /opt/server/viz
+      # The local model lives on somebody's laptop, not in this network. Set it in .env.
+      LMSTUDIO_URL: "${LMSTUDIO_URL:-}"
+    env_file:
+      - ./.env
+    ports:
+      # Control and monitoring. Reachable over tailscale, not published to the world.
+      - "8090:8090"
+    volumes:
+      - ./agents-data:/opt/server/agents-data
+      - ./viz:/opt/server/viz
 
   db:
     image: mysql:8.4.0

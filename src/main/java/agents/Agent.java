@@ -10,6 +10,7 @@ import agents.percept.Observation;
 import agents.percept.Perceiver;
 import agents.social.Claim;
 import agents.social.Conversation;
+import agents.social.Voice;
 import agents.world.WorldModel;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -18,6 +19,7 @@ import java.time.Duration;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
+import java.util.Random;
 
 /**
  * One agent, living its own loop on its own thread.
@@ -42,6 +44,7 @@ public class Agent implements Runnable {
     private final Perceiver perceiver = new Perceiver();
     private final WorldModel world = new WorldModel();
     private final IntentExecutor executor;
+    private final Voice voice;
     private volatile boolean running = true;
 
     private final Disposition disposition;
@@ -54,6 +57,9 @@ public class Agent implements Runnable {
         this.policy = policy;
         this.disposition = disposition;
         this.executor = new IntentExecutor(connection.session());
+        // Seeded from the name so a given agent paces the same way run to run, and two
+        // agents never pace identically.
+        this.voice = new Voice(new Random(mind.name().hashCode()));
     }
 
     @Override
@@ -74,6 +80,11 @@ public class Agent implements Runnable {
         } finally {
             log.info("{} is done: {} episodes, {} beliefs", name,
                     mind.episodic().size(), mind.semantic().size());
+            // Leave the world rather than just stopping in it. A socket left open keeps the
+            // character logged in as far as the server is concerned, and the next run is
+            // refused with "already logged in" until the session times out - which makes
+            // stopping and starting agents, the whole point of a daemon, not work.
+            connection.session().close();
         }
     }
 
@@ -90,6 +101,13 @@ public class Agent implements Runnable {
         if (steps++ % disposition.shareInterval() == disposition.shareInterval() - 1) {
             share();
         }
+
+        voice.next(System.currentTimeMillis()).ifPresent(this::say);
+
+        // Push the trace out to disk every step. Without this a buffered writer holds the
+        // last few kilobytes indefinitely, so anything following the file live - a tail, or
+        // the monitoring page - sees nothing until the run ends.
+        mind.flush();
 
         long tick = perceiver.currentTick();
         Policy.Decision decision = policy.decide(mind, world, tick);
@@ -135,8 +153,8 @@ public class Agent implements Runnable {
             Optional<Claim> told = Claim.parse(whisper.text());
             if (told.isPresent()) {
                 adopt(told.get());
-                connection.session().send(ClientPackets.whisper(whisper.speakerName(),
-                        "noted, though I have not seen that myself"));
+                voice.reply("noted, though I have not seen that myself",
+                        whisper.speakerName(), System.currentTimeMillis());
                 return;
             }
             text = whisper.text();
@@ -156,13 +174,7 @@ public class Agent implements Runnable {
         }
 
         Optional<String> answer = Conversation.answer(text, mind, world);
-        answer.ifPresent(reply -> {
-            if (replyTo != null) {
-                connection.session().send(ClientPackets.whisper(replyTo, reply));
-            } else {
-                connection.session().send(ClientPackets.chat(reply, false));
-            }
-        });
+        answer.ifPresent(reply -> voice.reply(reply, replyTo, System.currentTimeMillis()));
     }
 
     /** "Agent1: why" is for Agent1. Returns the question, or null if it was not for us. */
@@ -206,13 +218,15 @@ public class Agent implements Runnable {
         Belief belief = worthSaying.get(nextToShare++ % worthSaying.size());
         String claim = Claim.announce(belief);
 
-        connection.session().send(ClientPackets.chat(claim, false));
+        long now = System.currentTimeMillis();
+        voice.announce(claim, now);
 
         // Map chat only carries as far as the map, and agents that have diverged are by
         // definition somewhere else. Anyone it has met is reachable by name wherever they
-        // are, which is how news actually travels between people who have split up.
-        acquaintances().forEach(name ->
-                connection.session().send(ClientPackets.whisper(name, claim)));
+        // are, which is how news actually travels between people who have split up. These
+        // queue behind the announcement rather than going out with it, so telling four
+        // people takes four beats, as it would if you were doing the telling.
+        acquaintances().forEach(name -> voice.tell(claim, name, now));
     }
 
     /** Names of players it has seen, from its own beliefs. */
@@ -233,6 +247,31 @@ public class Agent implements Runnable {
                 || observation instanceof Observation.SelfDescribed) {
             connection.session().send(ClientPackets.mapTransitionComplete());
         }
+    }
+
+    /** Whispers to one player, or says it to the whole map. */
+    private void say(Voice.Utterance utterance) {
+        connection.session().send(utterance.whisperTo() == null
+                ? ClientPackets.chat(utterance.text(), false)
+                : ClientPackets.whisper(utterance.whisperTo(), utterance.text()));
+    }
+
+    /**
+     * Carries the clock on from a restored mind, before the loop starts.
+     *
+     * Called by whoever restored the mind rather than by the agent itself: an agent has no
+     * business knowing it has been asleep.
+     */
+    public void resumeAt(long previousTick) {
+        perceiver.resumeFrom(previousTick);
+    }
+
+    public long tick() {
+        return perceiver.currentTick();
+    }
+
+    public Disposition disposition() {
+        return disposition;
     }
 
     public void stop() {

@@ -41,6 +41,8 @@ COPY --from=jar /opt/cosmic/target/Cosmic.jar ./Server.jar
 COPY scripts ./scripts/
 # Config is read on server startup, so you can mount over it for quicker redeploy.
 COPY config.yaml ./
+# The agent daemon serves these; mount over them to change the page without a rebuild.
+COPY viz ./viz
 # Default exposure, although not required if using docker compose.
 # This exposes the login server, and channels.
 # Format for channels: WWCC, where WW is 75 plus the world number and CC is 75 plus the channel number (both zero indexed).
