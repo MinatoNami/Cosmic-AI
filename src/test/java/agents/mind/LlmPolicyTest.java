@@ -66,16 +66,29 @@ class LlmPolicyTest {
         reflex = new ReflexPolicy(new Random(1));
     }
 
-    private Policy policyReturning(String reply) {
+    private LlmPolicy policyReturning(String reply) {
         return new LlmPolicy(new StubOracle(reply), reflex, 1);
+    }
+
+    /**
+     * Deliberation happens in the background, so the first call only asks and the answer is
+     * used on a later one. Tests drive both halves rather than pretending it is synchronous.
+     */
+    private Policy.Decision deliberate(LlmPolicy policy, long tick) {
+        policy.decide(mind, world, tick);
+        long deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(5);
+        while (policy.isThinking() && System.nanoTime() < deadline) {
+            Thread.onSpinWait();
+        }
+        return policy.decide(mind, world, tick);
     }
 
     @Test
     void followsTheActionTheModelChose() {
         world.update(new Observation.MonsterAppeared(2, 9001, 100100, new Point(30, 0)));
-        Policy policy = policyReturning("GOAL: try hitting it\nINTENT: Attack 9001");
+        LlmPolicy policy = policyReturning("GOAL: try hitting it\nINTENT: Attack 9001");
 
-        Policy.Decision decision = policy.decide(mind, world, 2);
+        Policy.Decision decision = deliberate(policy, 2);
 
         assertEquals(9001, assertInstanceOf(Intent.Attack.class, decision.intent()).objectId());
         assertEquals("try hitting it", decision.goal());
@@ -85,19 +98,19 @@ class LlmPolicyTest {
     @Test
     void fillsInThePositionFromTheWorld() {
         world.update(new Observation.MonsterAppeared(2, 9001, 100100, new Point(140, 60)));
-        Policy policy = policyReturning("GOAL: go\nINTENT: Attack 9001");
+        LlmPolicy policy = policyReturning("GOAL: go\nINTENT: Attack 9001");
 
         Intent.Attack attack = assertInstanceOf(Intent.Attack.class,
-                policy.decide(mind, world, 2).intent());
+                deliberate(policy, 2).intent());
 
         assertEquals(new Point(140, 60), attack.position());
     }
 
     @Test
     void fallsBackWhenAskedToActOnSomethingItCannotSee() {
-        Policy policy = policyReturning("GOAL: swing wildly\nINTENT: Attack 4242");
+        LlmPolicy policy = policyReturning("GOAL: swing wildly\nINTENT: Attack 4242");
 
-        Policy.Decision decision = policy.decide(mind, world, 1);
+        Policy.Decision decision = deliberate(policy, 1);
 
         assertFalse(decision.intent() instanceof Intent.Attack,
                 "an object the agent cannot see is not a target");
@@ -105,14 +118,14 @@ class LlmPolicyTest {
 
     @Test
     void fallsBackOnNonsense() {
-        Policy policy = policyReturning("I think I would like to go for a walk, actually.");
+        LlmPolicy policy = policyReturning("I think I would like to go for a walk, actually.");
 
-        assertInstanceOf(Intent.MoveTo.class, policy.decide(mind, world, 1).intent());
+        assertInstanceOf(Intent.MoveTo.class, deliberate(policy, 1).intent());
     }
 
     @Test
     void fallsBackWhenTheModelCannotBeReached() {
-        Policy policy = new LlmPolicy(new Oracle() {
+        LlmPolicy policy = new LlmPolicy(new Oracle() {
             public String ask(String system, String user) {
                 return null;
             }
@@ -122,20 +135,20 @@ class LlmPolicyTest {
             }
         }, reflex, 1);
 
-        assertInstanceOf(Intent.MoveTo.class, policy.decide(mind, world, 1).intent());
+        assertInstanceOf(Intent.MoveTo.class, deliberate(policy, 1).intent());
     }
 
     @Test
     void recordsWhatTheModelWorkedOutAsInferred() {
         world.update(new Observation.MonsterAppeared(2, 9001, 100100, new Point(30, 0)));
         mind.take(new Observation.MonsterAppeared(2, 9001, 100100, new Point(30, 0)));
-        Policy policy = policyReturning("""
+        LlmPolicy policy = policyReturning("""
                 GOAL: fight
                 INTENT: Attack 9001
                 LEARNED: monster:100100 | hurts | me
                 """);
 
-        policy.decide(mind, world, 2);
+        deliberate(policy, 2);
 
         Belief learned = mind.semantic().liveBeliefs().stream()
                 .filter(b -> b.predicate().equals("hurts"))
@@ -152,7 +165,7 @@ class LlmPolicyTest {
     void tellsTheModelIdsAndNeverNames() {
         world.update(new Observation.MonsterAppeared(2, 9001, 100100, new Point(30, 0)));
         StubOracle oracle = new StubOracle("GOAL: x\nINTENT: Wait");
-        new LlmPolicy(oracle, reflex, 1).decide(mind, world, 2);
+        deliberate(new LlmPolicy(oracle, reflex, 1), 2);
 
         String prompt = oracle.prompts.get(0);
         assertTrue(prompt.contains("monster:100100"), "the model should be told the id");
@@ -165,12 +178,45 @@ class LlmPolicyTest {
     @Test
     void onlyConsultsTheModelOccasionally() {
         StubOracle oracle = new StubOracle("GOAL: x\nINTENT: Wait");
-        Policy policy = new LlmPolicy(oracle, reflex, 4);
+        LlmPolicy policy = new LlmPolicy(oracle, reflex, 4);
 
         for (int i = 0; i < 8; i++) {
             policy.decide(mind, world, i);
+            while (policy.isThinking()) {
+                Thread.onSpinWait();
+            }
         }
 
         assertEquals(2, oracle.prompts.size());
+    }
+
+    /**
+     * The constraint that shaped this: a local model takes about fifteen seconds, and an
+     * agent that waited would stop perceiving and be dropped by the server. Asking must
+     * return immediately with a reflex, and the answer is used on a later tick.
+     */
+    @Test
+    void neverWaitsForTheModel() {
+        Oracle slow = new Oracle() {
+            public String ask(String system, String user) {
+                try {
+                    Thread.sleep(3_000);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+                return "GOAL: x\nINTENT: Wait";
+            }
+
+            public String name() {
+                return "slow";
+            }
+        };
+
+        long start = System.nanoTime();
+        Policy.Decision decision = new LlmPolicy(slow, reflex, 1).decide(mind, world, 1);
+        long tookMillis = java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - start);
+
+        assertTrue(tookMillis < 1_000, "deciding took " + tookMillis + "ms; it must not block");
+        assertInstanceOf(Intent.MoveTo.class, decision.intent());
     }
 }

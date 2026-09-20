@@ -61,13 +61,42 @@ cleanly; wait for the server to time the session out, or restart the stack.
 
 ## 5. The LLM policy
 
+Two backends, both behind the same `Oracle` interface, so the policy above them is identical
+and the two are comparable on the same maps.
+
+**Claude** — put the key in `.env` (gitignored, the same file the server reads its database
+settings from) or export it:
+
 ```bash
-export ANTHROPIC_API_KEY=...
+echo "ANTHROPIC_API_KEY=sk-ant-..." >> .env
 java -cp "target/classes:$(cat target/cp.txt)" -Dwz-path=wz agents.Launcher 127.0.0.1 8484 2 10 llm
 ```
 
-Without a key every call fails and the agent falls back to reflexes — survivable, but
-pointless, so the launcher warns at startup.
+**A local model via LM Studio** — start its server with a model loaded; the name is
+discovered from `/v1/models`, so nothing needs configuring:
+
+```bash
+java -cp "target/classes:$(cat target/cp.txt)" -Dwz-path=wz agents.Launcher 127.0.0.1 8484 2 10 local
+```
+
+Override the endpoint with `-Dlmstudio.url=...` if it is not on port 1234.
+
+Either way the launcher refuses to start if the backend is unreachable, rather than falling
+back to reflexes on every decision and looking like it worked.
+
+### What a local model costs you in practice
+
+Measured against `qwen/qwen3.6-35b-a3b` on a laptop, and worth knowing before you tune
+anything:
+
+- It thinks on every call and cannot be told not to — both `/no_think` and
+  `chat_template_kwargs.enable_thinking=false` are ignored by this build.
+- An answer takes 20-30 seconds, so agents deliberate roughly once a minute and reflexes do
+  most of the work.
+- **Temperature matters more than the token budget.** At 0.7 it spent its entire 6000-token
+  budget reasoning and returned nothing on every call of a six-minute run. At 0.3 the same
+  prompt answers in about 2200 tokens. The oracle uses 0.3.
+- Long prompts make it think longer, which is why only eight beliefs go into one.
 
 The model is asked every eighth decision, with reflexes in between; it sees the agent's
 beliefs and what is currently visible, as ids. It never sees the names — those exist only

@@ -11,6 +11,7 @@ import com.anthropic.models.messages.TextBlockParam;
 import com.anthropic.models.messages.ThinkingConfigAdaptive;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import tools.EnvironmentVariables;
 
 import java.util.List;
 import java.util.stream.Collectors;
@@ -40,7 +41,28 @@ public class ClaudeOracle implements Oracle {
     private final AnthropicClient client;
 
     public ClaudeOracle() {
-        this(AnthropicOkHttpClient.fromEnv());
+        this(defaultClient());
+    }
+
+    /**
+     * Takes the key from the environment, or from the project's {@code .env} - the same file
+     * the server reads its database settings from, and already gitignored.
+     *
+     * A key exported in your own shell does not reach a process someone else launches, which
+     * makes .env the one place that works for both. The value is never logged.
+     */
+    private static AnthropicClient defaultClient() {
+        String key = EnvironmentVariables.instance().getAll().get("ANTHROPIC_API_KEY");
+        return key == null || key.isBlank()
+                ? AnthropicOkHttpClient.fromEnv()
+                : AnthropicOkHttpClient.builder().apiKey(key).build();
+    }
+
+    /** True when a key is reachable, so a caller can say so before burning a run. */
+    public static boolean credentialsAvailable() {
+        String fromEnvFile = EnvironmentVariables.instance().getAll().get("ANTHROPIC_API_KEY");
+        return (fromEnvFile != null && !fromEnvFile.isBlank())
+                || System.getenv("ANTHROPIC_API_KEY") != null;
     }
 
     public ClaudeOracle(AnthropicClient client) {

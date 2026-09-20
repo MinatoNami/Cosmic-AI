@@ -141,16 +141,31 @@ What it shows, and why each choice was made:
 
 `viz/sample-trace.jsonl` is a real run, so the page demonstrates itself.
 
-## Stage 6 — LLM policy ✅ (built, not live-verified)
+## Stage 6 — LLM policy ✅
 
 `LlmPolicy` behind the same `Policy` interface as the reflex one, so the two are swappable
 and comparable on the same maps. Claude Opus 5 through the official Java SDK, in
 `ClaudeOracle` — the only class that touches it, which keeps everything else runnable and
 testable without a key.
 
-**Not yet run against the real API**: no credentials in the development environment. Eight
-tests exercise it through a stub oracle, including every failure path. Set
-`ANTHROPIC_API_KEY` and run with the `llm` argument to try it for real.
+Run for real against a local model served by LM Studio (`local`), which is what proved the
+design. The Claude path (`llm`) is built the same way behind the same interface but has not
+been run against the hosted API - no credentials here.
+
+A local model authored goals a rule never would:
+
+```
+GOAL: Investigate monster:120100 to learn about its behavior and rewards
+GOAL: Move to the closest exit to escape the monster and reach a safe area or healer.
+```
+
+Fleeing is not in the reflex ladder at all - it attacks what is near or wanders.
+
+**Deliberation is asynchronous**, which the local model forced and which is right for either
+backend: a 20-second call inside a 600ms tick would stop the agent perceiving and get it
+dropped for idling. The question goes out, reflexes carry the agent meanwhile, and the reply
+is parsed when it is *used* rather than when it arrives - so an answer naming a monster that
+has since died fails to resolve and is discarded.
 
 Decisions:
 

@@ -4,6 +4,8 @@ import agents.memory.Belief;
 import agents.mind.ClaudeOracle;
 import agents.mind.Disposition;
 import agents.mind.LlmPolicy;
+import agents.mind.LmStudioOracle;
+import agents.mind.Oracle;
 import agents.mind.Policy;
 import agents.mind.ReflexPolicy;
 import agents.net.LoginFlow;
@@ -28,9 +30,9 @@ import java.util.concurrent.TimeUnit;
  *   java -cp ... agents.Launcher [host] [port] [count] [minutes] [policy]
  * </pre>
  *
- * Policy is {@code reflex} (the default) or {@code llm}. The LLM policy needs credentials
- * in the environment; without them every call fails and it falls back to reflexes, which is
- * survivable but pointless, so it says so loudly at startup.
+ * Policy is {@code reflex} (the default), {@code llm} for Claude, or {@code local} for a
+ * model served by LM Studio. Claude needs a key in the environment or in .env; LM Studio
+ * needs to be running, and the model name is discovered from the server.
  *
  * Each agent gets its own thread, its own memory and its own trace file. They share nothing
  * but the world.
@@ -41,6 +43,9 @@ public class Launcher {
     private static final String DEFAULT_HOST = "127.0.0.1";
     private static final int DEFAULT_PORT = 8484;
     private static final int WORLD = 0;
+
+    /** At a 600ms tick this is roughly one question every 18 seconds. */
+    private static final int LOCAL_DELIBERATE_EVERY = 30;
     private static final int CHANNEL = 1;
 
     public static void main(String[] args) throws Exception {
@@ -48,16 +53,32 @@ public class Launcher {
         int port = args.length > 1 ? Integer.parseInt(args[1]) : DEFAULT_PORT;
         int count = args.length > 2 ? Integer.parseInt(args[2]) : 2;
         Duration runFor = Duration.ofMinutes(args.length > 3 ? Long.parseLong(args[3]) : 1);
-        boolean useLlm = args.length > 4 && args[4].equalsIgnoreCase("llm");
+        String policyName = args.length > 4 ? args[4].toLowerCase() : "reflex";
 
-        if (useLlm && System.getenv("ANTHROPIC_API_KEY") == null) {
-            log.warn("ANTHROPIC_API_KEY is not set - the LLM policy will fall back to reflexes "
-                    + "on every decision. Set it, or run with the reflex policy instead.");
+        Oracle oracle = null;
+        if (policyName.equals("llm")) {
+            if (!ClaudeOracle.credentialsAvailable()) {
+                log.error("No ANTHROPIC_API_KEY in the environment or in .env. Every decision "
+                        + "would fall back to reflexes, which proves nothing - refusing to "
+                        + "start. Add the key to .env (it is gitignored), then try again.");
+                return;
+            }
+            oracle = new ClaudeOracle();
+        } else if (policyName.equals("local")) {
+            String url = System.getProperty("lmstudio.url", "http://localhost:1234/v1/chat/completions");
+            String model = LmStudioOracle.discoverModel(url);
+            if (model == null) {
+                log.error("Nothing answering at {} - is LM Studio running with a model loaded? "
+                        + "Refusing to start, since every decision would fall back to reflexes.", url);
+                return;
+            }
+            log.info("Using the model LM Studio has loaded: {}", model);
+            oracle = new LmStudioOracle(url, model);
         }
 
         Path traceDir = Path.of("target", "traces", String.valueOf(System.currentTimeMillis()));
         log.info("Starting {} agent(s) against {}:{} for {}, policy {}",
-                count, host, port, runFor, useLlm ? "llm" : "reflex");
+                count, host, port, runFor, policyName);
 
         List<Agent> agents = new ArrayList<>();
         List<Thread> threads = new ArrayList<>();
@@ -72,7 +93,10 @@ public class Launcher {
 
                 Mind mind = new Mind(name, Trace.toFile(traceDir.resolve(name + ".jsonl"), name));
                 Policy reflex = new ReflexPolicy(random, disposition);
-                Policy policy = useLlm ? new LlmPolicy(new ClaudeOracle(), reflex) : reflex;
+                // A local model takes about fifteen seconds to answer, so asking every eighth
+                // decision would queue up behind itself. Ask about as often as it can reply.
+                Policy policy = oracle == null ? reflex
+                        : new LlmPolicy(oracle, reflex, LOCAL_DELIBERATE_EVERY);
                 Agent agent = new Agent(connection, mind, policy, disposition);
 
                 agents.add(agent);

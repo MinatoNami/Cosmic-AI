@@ -8,6 +8,9 @@ import java.awt.Point;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 /**
  * Decides by asking a model, and falls back to reflexes when it cannot.
@@ -23,6 +26,14 @@ import java.util.Optional;
  * <strong>It contains the agent's memory, not the world.</strong> Everything in the prompt
  * came through an observation and is in the belief graph with an episode behind it. The
  * model cannot see the map, the server, or anything the agent has not perceived.
+ *
+ * <strong>Asking happens in the background.</strong> A local 35B model takes around fifteen
+ * seconds to answer, and an agent that blocked for that long would stop perceiving, stop
+ * acknowledging the server and eventually be disconnected. So a question goes out, reflexes
+ * carry the agent meanwhile, and the answer is used when it arrives - which is a fair model
+ * of deliberation anyway. The reply is parsed at the moment it is used rather than when it
+ * arrives, so an answer that names something since killed or picked up simply fails to
+ * resolve and is dropped.
  */
 public class LlmPolicy implements Policy {
 
@@ -32,7 +43,13 @@ public class LlmPolicy implements Policy {
      */
     private static final int DEFAULT_DELIBERATE_EVERY = 8;
 
-    private static final int BELIEFS_IN_PROMPT = 25;
+    /**
+     * Kept small deliberately. A reasoning model's thinking grows with the context it is
+     * given, and a local one has a fixed token budget to spend: at twenty-five beliefs this
+     * model used its entire budget reasoning and returned no answer at all. Eight is enough
+     * to decide with and cheap enough to answer from.
+     */
+    private static final int BELIEFS_IN_PROMPT = 8;
 
     private static final String SYSTEM = """
             You are playing a character in an online game world you have never seen before.
@@ -66,6 +83,14 @@ public class LlmPolicy implements Policy {
     private final Oracle oracle;
     private final Policy fallback;
     private final int deliberateEvery;
+    private final ExecutorService thinking = Executors.newSingleThreadExecutor(runnable -> {
+        Thread thread = new Thread(runnable, "deliberation");
+        thread.setDaemon(true);      // never hold a run open waiting on a thought
+        return thread;
+    });
+
+    private CompletableFuture<String> pending;
+    private String unreadReply;
     private int decisions;
 
     public LlmPolicy(Oracle oracle, Policy fallback) {
@@ -80,17 +105,21 @@ public class LlmPolicy implements Policy {
 
     @Override
     public Decision decide(Mind mind, WorldModel world, long tick) {
-        if (decisions++ % deliberateEvery != 0) {
-            return fallback.decide(mind, world, tick);
-        }
-
+        collectAnswer();
         List<Belief> recalled = mind.recall(situationTopic(world), tick, BELIEFS_IN_PROMPT);
-        String reply = oracle.ask(SYSTEM, describe(mind, world, recalled));
-        if (reply == null || reply.isBlank()) {
+
+        if (pending == null && decisions++ % deliberateEvery == 0) {
+            String question = describe(mind, world, recalled);
+            pending = CompletableFuture.supplyAsync(() -> oracle.ask(SYSTEM, question), thinking);
+        }
+
+        if (unreadReply == null) {
             return fallback.decide(mind, world, tick);
         }
 
-        Reply parsed = Reply.parse(reply, world);
+        Reply parsed = Reply.parse(unreadReply, world);
+        unreadReply = null;
+
         Optional<Intent> intent = parsed.intent();
         if (intent.isEmpty()) {
             return fallback.decide(mind, world, tick);
@@ -103,6 +132,23 @@ public class LlmPolicy implements Policy {
                 parsed.goal().orElse("(no goal given)"),
                 recalled.stream().map(Belief::ref).toList(),
                 List.of("MoveTo", "Attack", "PickUp", "Say", "EnterPortal", "Wait"));
+    }
+
+    /** Takes an answer if one has arrived, without ever waiting for one. */
+    private void collectAnswer() {
+        if (pending == null || !pending.isDone()) {
+            return;
+        }
+        String reply = pending.getNow(null);
+        pending = null;
+        if (reply != null && !reply.isBlank()) {
+            unreadReply = reply;
+        }
+    }
+
+    /** Visible for tests: true while a question is outstanding. */
+    boolean isThinking() {
+        return pending != null && !pending.isDone();
     }
 
     /** What to search memory for - whatever is in front of the agent right now. */
