@@ -105,6 +105,10 @@ You must rebuild images after any code changes:
 docker compose build
 ```
 
+## Deploying to Kubernetes
+
+See [charts/cosmic](./charts/cosmic).
+
 ## Local setup
 You can also run Cosmic on your actual machine.
 
