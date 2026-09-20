@@ -180,6 +180,7 @@ const state = {
   t: 0,
   selected: null,      // {kind:'belief'|'act', id}
   nodes: new Map(),    // id -> {x,y,vx,vy}
+  labels: new Map(),   // ref -> human name, for display only
   playing: false,
 };
 
@@ -233,6 +234,11 @@ function selectAgent(name) {
   state.t = state.maxTick;
   state.selected = null;
   state.nodes.clear();
+
+  // Labels are display only - the agent never held these names.
+  state.labels = new Map(state.events
+    .filter(e => e.kind === 'label')
+    .map(e => [e.ref, e.text]));
 
   const slider = document.getElementById('slider');
   slider.max = state.maxTick; slider.value = state.t; slider.disabled = false;
@@ -464,7 +470,7 @@ function drawGraph(beliefs) {
     }
     g.appendChild(svgEl('text', {
       x: p.x, y: p.y + 30, 'text-anchor': 'middle', class: 'node-label',
-    }, id));
+    }, label(id)));
     svg.appendChild(g);
   }
 
@@ -492,7 +498,7 @@ function renderDetail(beliefs) {
 
   if (state.selected.kind === 'entity') {
     pane.insertAdjacentHTML('beforeend',
-      `<div class="triple">${escape(state.selected.id)}</div>
+      `<div class="triple">${escape(labelFull(state.selected.id))}</div>
        <p class="empty">No attributes believed about this yet — it is only known
        through its relationships.</p>`);
     return;
@@ -521,7 +527,8 @@ function renderDetail(beliefs) {
     for (const ref of used) {
       const b = beliefs.get(ref);
       const li = document.createElement('li');
-      li.innerHTML = b ? `<b>${escape(ref)}</b> ${escape(b.triple.join(' '))}`
+      li.innerHTML = b ? `<b>${escape(ref)}</b> ${escape(
+                            [label(b.triple[0]), b.triple[1], label(b.triple[2])].join(' '))}`
                        : `<b>${escape(ref)}</b> (not yet held at this tick)`;
       li.style.cursor = 'pointer';
       li.onclick = () => select({ kind: 'belief', id: ref });
@@ -540,9 +547,9 @@ function renderDetail(beliefs) {
 
   const held = b.dead ? `died at ${b.dead}, held ${b.dead - b.born} ticks` : 'still held';
   pane.insertAdjacentHTML('beforeend', `
-    <div class="triple">${escape(b.triple[0])}
+    <div class="triple">${escape(labelFull(b.triple[0]))}
       <span class="pred">${escape(b.triple[1])}</span>
-      ${escape(b.triple[2])}</div>
+      ${escape(labelFull(b.triple[2]))}</div>
     <div class="kv"><b>confidence</b><span>${b.confidence}</span></div>
     <div class="kv"><b>provenance</b><span>${escape(b.provenance)}</span></div>
     <div class="kv"><b>first held</b><span>tick ${b.born}</span></div>
@@ -580,6 +587,21 @@ function renderStream() {
     div.onclick = () => select({ kind: 'act', id: act.id });
     pane.appendChild(div);
   }
+}
+
+/**
+ * How a reference is shown to the reader. The agent knows `npc:2101`; a person reading
+ * the replay should not have to.
+ */
+function label(ref) {
+  const name = state.labels.get(ref);
+  return name ? name : ref;
+}
+
+/** Both, where there is room for both — the name leads, the id stays checkable. */
+function labelFull(ref) {
+  const name = state.labels.get(ref);
+  return name ? `${name}  (${ref})` : ref;
 }
 
 function escape(s) {

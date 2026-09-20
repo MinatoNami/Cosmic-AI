@@ -86,11 +86,15 @@ public class SemanticMemory {
      * remaining doubt, so one gets you halfway and three gets you most of the way.
      *
      * Crude, and deliberately so - it is explainable, it is visible climbing in a replay, and
-     * it does not pretend to a rigour we have no basis for. Hearsay starts further back,
-     * because being told something is weaker evidence than seeing it.
+     * it does not pretend to a rigour we have no basis for. Seeing beats reasoning beats
+     * being told, which is the ordering the base values encode.
      */
     private static double confidenceFor(int supportCount, Provenance provenance) {
-        double base = provenance == Provenance.HEARSAY ? 0.25 : 0.5;
+        double base = switch (provenance) {
+            case FIRST_HAND -> 0.5;
+            case INFERRED -> 0.35;
+            case HEARSAY -> 0.25;
+        };
         double doubt = Math.pow(1 - base, supportCount);
         return Math.min(0.99, 1 - doubt);
     }

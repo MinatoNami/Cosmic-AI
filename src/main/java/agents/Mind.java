@@ -53,6 +53,29 @@ public class Mind implements AutoCloseable {
         observations.forEach(this::take);
     }
 
+    /**
+     * Records something the agent worked out rather than saw.
+     *
+     * Grounded in the latest episode, which is where the agent was standing when it drew the
+     * conclusion. That keeps the invariant that every belief names its evidence, and it is
+     * honest about what the evidence is: not a sighting of the fact itself, but the moment
+     * at which it was concluded. The INFERRED provenance carries the rest of the warning.
+     */
+    public void infer(String subject, String predicate, String object, long tick) {
+        if (episodic.size() == 0) {
+            return;     // nothing perceived yet, so nothing to hang it on
+        }
+        long latestEpisode = episodic.size() - 1;
+        SemanticMemory.Assertion assertion = semantic.assertTriple(subject, predicate, object,
+                latestEpisode, tick, Belief.Provenance.INFERRED);
+
+        trace.believed(assertion.belief(), !assertion.isNew());
+        if (assertion.contradicted() != null) {
+            semantic.byId(assertion.contradicted().id())
+                    .ifPresent(invalidated -> trace.revised(invalidated, assertion.belief()));
+        }
+    }
+
     /** The beliefs worth putting in front of a decision about {@code topic}. */
     public List<Belief> recall(String topic, long nowTick, int limit) {
         return Recall.mostRelevant(semantic, topic, nowTick, limit);

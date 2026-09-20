@@ -1,6 +1,8 @@
 package agents;
 
 import agents.memory.Belief;
+import agents.mind.ClaudeOracle;
+import agents.mind.LlmPolicy;
 import agents.mind.Policy;
 import agents.mind.ReflexPolicy;
 import agents.net.LoginFlow;
@@ -22,8 +24,12 @@ import java.util.concurrent.TimeUnit;
  * Runs a population of agents against a Cosmic server.
  *
  * <pre>
- *   java -cp ... agents.Launcher [host] [port] [count] [minutes]
+ *   java -cp ... agents.Launcher [host] [port] [count] [minutes] [policy]
  * </pre>
+ *
+ * Policy is {@code reflex} (the default) or {@code llm}. The LLM policy needs credentials
+ * in the environment; without them every call fails and it falls back to reflexes, which is
+ * survivable but pointless, so it says so loudly at startup.
  *
  * Each agent gets its own thread, its own memory and its own trace file. They share nothing
  * but the world.
@@ -41,9 +47,16 @@ public class Launcher {
         int port = args.length > 1 ? Integer.parseInt(args[1]) : DEFAULT_PORT;
         int count = args.length > 2 ? Integer.parseInt(args[2]) : 2;
         Duration runFor = Duration.ofMinutes(args.length > 3 ? Long.parseLong(args[3]) : 1);
+        boolean useLlm = args.length > 4 && args[4].equalsIgnoreCase("llm");
+
+        if (useLlm && System.getenv("ANTHROPIC_API_KEY") == null) {
+            log.warn("ANTHROPIC_API_KEY is not set - the LLM policy will fall back to reflexes "
+                    + "on every decision. Set it, or run with the reflex policy instead.");
+        }
 
         Path traceDir = Path.of("target", "traces", String.valueOf(System.currentTimeMillis()));
-        log.info("Starting {} agent(s) against {}:{} for {}", count, host, port, runFor);
+        log.info("Starting {} agent(s) against {}:{} for {}, policy {}",
+                count, host, port, runFor, useLlm ? "llm" : "reflex");
 
         List<Agent> agents = new ArrayList<>();
         List<Thread> threads = new ArrayList<>();
@@ -56,7 +69,8 @@ public class Launcher {
                 InWorld connection = flow.enterWorld(new Credentials(name.toLowerCase(), "agentpass"), name);
 
                 Mind mind = new Mind(name, Trace.toFile(traceDir.resolve(name + ".jsonl"), name));
-                Policy policy = new ReflexPolicy(random);
+                Policy reflex = new ReflexPolicy(random);
+                Policy policy = useLlm ? new LlmPolicy(new ClaudeOracle(), reflex) : reflex;
                 Agent agent = new Agent(connection, mind, policy);
 
                 agents.add(agent);
@@ -99,6 +113,19 @@ public class Launcher {
                 .sorted(Comparator.comparingDouble(Belief::confidence).reversed())
                 .limit(10)
                 .forEach(b -> log.info("[{}]    {} ({}, from {} episode(s))", mind.name(),
-                        b.asSentence(), String.format("%.2f", b.confidence()), b.supportedBy().size()));
+                        readable(b), String.format("%.2f", b.confidence()), b.supportedBy().size()));
+    }
+
+    /**
+     * The agent's own sentence with names filled in, for the person reading the console.
+     * The agent itself only ever holds the ids.
+     */
+    private static String readable(Belief belief) {
+        return name(belief.subject()) + " " + belief.predicate() + " " + name(belief.object());
+    }
+
+    private static String name(String ref) {
+        String label = agents.trace.Labels.forRef(ref);
+        return label == null || label.isBlank() ? ref : ref + " (" + label + ")";
     }
 }

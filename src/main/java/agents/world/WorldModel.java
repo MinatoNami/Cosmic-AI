@@ -113,6 +113,16 @@ public class WorldModel {
         return all.stream().min(Comparator.comparingDouble(e -> e.position().distance(self)));
     }
 
+    /** Anything visible with this object id - a monster or a drop. */
+    public Optional<Entity> byObjectId(int objectId) {
+        Entity monster = monsters.get(objectId);
+        return monster != null ? Optional.of(monster) : Optional.ofNullable(drops.get(objectId));
+    }
+
+    public Optional<PortalTarget> portalNamed(String name) {
+        return portals().stream().filter(p -> p.name().equals(name)).findFirst();
+    }
+
     public List<PortalTarget> portals() {
         return MapGeometry.usablePortalsIn(mapId).stream()
                 .map(p -> new PortalTarget(p.name(), p.position()))

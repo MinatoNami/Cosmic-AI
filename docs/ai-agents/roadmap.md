@@ -141,12 +141,37 @@ What it shows, and why each choice was made:
 
 `viz/sample-trace.jsonl` is a real run, so the page demonstrates itself.
 
-## Stage 6 — LLM policy
+## Stage 6 — LLM policy ✅ (built, not live-verified)
 
-`LlmPolicy` against Claude, curriculum, skill library, reflection. Cost controls: LLM on
-decision points, reflex in between.
+`LlmPolicy` behind the same `Policy` interface as the reflex one, so the two are swappable
+and comparable on the same maps. Claude Opus 5 through the official Java SDK, in
+`ClaudeOracle` — the only class that touches it, which keeps everything else runnable and
+testable without a key.
 
-**Done when** an LLM agent measurably out-explores the reflex agent on the same map.
+**Not yet run against the real API**: no credentials in the development environment. Eight
+tests exercise it through a stub oracle, including every failure path. Set
+`ANTHROPIC_API_KEY` and run with the `llm` argument to try it for real.
+
+Decisions:
+
+- **The prompt contains ids, never names.** The model is told about `monster:100100`, not
+  "Blue Snail". A model that has read the internet already knows what a blue snail is, and
+  handing it the name skips exactly the work this project exists to watch an agent do.
+  There is a test asserting the prompt contains the id and not the name.
+- **The prompt contains the agent's memory, not the world.** Everything in it arrived as an
+  observation and sits in the belief graph with an episode behind it.
+- **A line format, not JSON.** `GOAL:` / `INTENT:` / `LEARNED:`. The action space is a dozen
+  typed intents; a strict line format is easier for a model to emit correctly than nested
+  JSON and fails locally rather than globally.
+- **Every failure falls back to reflexes.** Unreachable model, unparseable reply, an action
+  aimed at something the agent cannot see — all become a reflex decision. An agent should
+  degrade to acting stupidly, never to dropping off the network.
+- **The model may propose beliefs**, recorded with a new `INFERRED` provenance that sits
+  between first-hand and hearsay in confidence. A conclusion is grounded in the episode the
+  agent was standing on when it drew it, so the "every belief names its evidence" invariant
+  holds.
+- **It asks every eighth decision**, reflexes in between. Thinking ten times a second is
+  both expensive and wrong — a walk half-completed should not be re-decided.
 
 ## Stage 7 — interaction
 

@@ -33,6 +33,7 @@ public class Trace implements AutoCloseable {
 
     private final BufferedWriter writer;
     private final String agent;
+    private final java.util.Set<String> labelled = new java.util.HashSet<>();
     private long nextDeliberationId;
     private long nextActionId;
 
@@ -64,6 +65,8 @@ public class Trace implements AutoCloseable {
      *                     time reads very differently from a run of separate conclusions
      */
     public void believed(Belief belief, boolean corroborated) {
+        label(belief.subject());
+        label(belief.object());
         write("believe", belief.lastSeen(), Map.of(
                 "id", belief.ref(),
                 "triple", List.of(belief.subject(), belief.predicate(), belief.object()),
@@ -105,6 +108,23 @@ public class Trace implements AutoCloseable {
         fields.put("because", because);
         write("act", tick, fields);
         return id;
+    }
+
+    /**
+     * Emits a human name for an id, once per run.
+     *
+     * Display only, and written by the instrumentation rather than by the agent: the agent's
+     * own memory never holds these, because "Blue Snail" gives away most of what it is
+     * supposed to work out for itself. See {@link Labels}.
+     */
+    private void label(String ref) {
+        if (ref == null || !labelled.add(ref)) {
+            return;
+        }
+        String name = Labels.forRef(ref);
+        if (name != null && !name.isBlank()) {
+            write("label", 0, Map.of("ref", ref, "text", name));
+        }
     }
 
     private void write(String kind, long tick, Map<String, Object> fields) {

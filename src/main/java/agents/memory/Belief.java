@@ -32,8 +32,16 @@ public record Belief(long id,
      * keeping them apart is what lets an agent weigh a rumour differently from a sighting.
      */
     public enum Provenance {
+        /** The agent saw it happen. */
         FIRST_HAND,
-        HEARSAY
+        /** Another player said so. */
+        HEARSAY,
+        /**
+         * The agent worked it out. Weaker than seeing, because a conclusion drawn from
+         * two sightings can be wrong in ways a sighting cannot, and worth keeping
+         * distinct so a replay shows which beliefs were reasoned into being.
+         */
+        INFERRED
     }
 
     public Belief {

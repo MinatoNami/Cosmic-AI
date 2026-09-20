@@ -58,3 +58,30 @@ cleanly; wait for the server to time the session out, or restart the stack.
 
 **Nothing in the map** — check the character's `map` column:
 `docker compose exec db mysql -uroot cosmic -e "SELECT name,level,map FROM characters;"`
+
+## 5. The LLM policy
+
+```bash
+export ANTHROPIC_API_KEY=...
+java -cp "target/classes:$(cat target/cp.txt)" -Dwz-path=wz agents.Launcher 127.0.0.1 8484 2 10 llm
+```
+
+Without a key every call fails and the agent falls back to reflexes — survivable, but
+pointless, so the launcher warns at startup.
+
+The model is asked every eighth decision, with reflexes in between; it sees the agent's
+beliefs and what is currently visible, as ids. It never sees the names — those exist only
+for the person reading the output.
+
+## Reading the output
+
+Ids are dereferenced for you in the console report and in the replay page:
+
+```
+monster:9300018 (Tutorial Jr. Sentinel) present_in map:40000 (Maple Road: In a Small Forest)
+npc:2000 (Roger) present_in map:20000 (Maple Road: Snail Garden)
+```
+
+The agent's own memory holds only the left-hand side of each pair. Names come from
+`String.wz` at write time and go into the trace as `label` events, which the replay page
+uses for display.
