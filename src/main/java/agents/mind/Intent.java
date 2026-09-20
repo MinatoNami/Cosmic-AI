@@ -92,6 +92,22 @@ public sealed interface Intent {
         }
     }
 
+    /**
+     * Go back to an NPC and try to hand a quest in.
+     *
+     * Trying is the whole mechanism: the agent does not know what the quest wanted, so it
+     * offers and finds out. A refusal costs nothing and looks like nothing happening.
+     */
+    record CompleteQuest(int questId, int npcId, Point position) implements Intent {
+        public String name() {
+            return "CompleteQuest";
+        }
+
+        public Map<String, Object> detail() {
+            return Map.of("quest", questId, "npc", npcId);
+        }
+    }
+
     record Wait() implements Intent {
         public String name() {
             return "Wait";

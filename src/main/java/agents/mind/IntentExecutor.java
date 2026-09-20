@@ -31,6 +31,8 @@ public class IntentExecutor {
      */
     private static final int QUEST_START_SCRIPTED = 4;
     private static final int QUEST_START_PLAIN = 1;
+    private static final int QUEST_END_SCRIPTED = 5;
+    private static final int QUEST_END_PLAIN = 2;
 
     private final MapleSession session;
 
@@ -68,6 +70,13 @@ public class IntentExecutor {
                 session.send(ClientPackets.questAction(QUEST_START_SCRIPTED,
                         quest.questId(), quest.npcId()));
                 session.send(ClientPackets.questAction(QUEST_START_PLAIN,
+                        quest.questId(), quest.npcId()));
+            }
+            case Intent.CompleteQuest quest -> {
+                moveTo(quest.position(), world);
+                session.send(ClientPackets.questAction(QUEST_END_SCRIPTED,
+                        quest.questId(), quest.npcId()));
+                session.send(ClientPackets.questAction(QUEST_END_PLAIN,
                         quest.questId(), quest.npcId()));
             }
             case Intent.Wait ignored -> {

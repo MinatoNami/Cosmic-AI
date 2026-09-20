@@ -260,12 +260,30 @@ tell each other. And a claim goes out as map chat *and* as a whisper to everyone
 has met - map chat only reaches the map, and agents that have diverged are by definition
 somewhere else. Acquaintances come from the agent's own `player:N named X` beliefs.
 
-**Quests.** Agents talk to NPCs and start what is offered. `Quest.wz/Check.img` says which
+**Quests, start to finish.** Agents talk to NPCs and start what is offered. `Quest.wz/Check.img` says which
 NPC starts which quest - the marker a client draws over an NPC's head - and nothing deeper
 is read: what a quest asks for and what it gives stay unknown until the agent does it.
 Dialogue is answered without being understood, using the style byte that says whether a yes
-is wanted. Agent3 started quest 1036; earlier runs saw 1021 and 1031, and one agent picked
-up `quest:1031 state 1` as hearsay from another.
+is wanted.
+
+Completion works the same way: the agent reads which NPC takes a quest back - the other
+marker a client draws - goes there, and offers. It has no idea what the quest asked for, so
+it finds out by trying; a refusal costs nothing and looks like nothing happening. Which
+quests it owes comes from its own beliefs (`quest:N state 1`), not a separate ledger, and a
+cooldown keeps trying from becoming pestering.
+
+```
+t2718  StartQuest     {quest: 1009, npc: 12101}  because take whatever this one is offering
+t2719  SAW            QuestStateChanged[questId=1009, state=1]
+t2719  BELIEVE        quest:1009 state 1
+t2720  CompleteQuest  {quest: 1009, npc: 12101}  because see if what I owe is done
+t2721  SAW            QuestStateChanged[questId=1009, state=2]
+t2721  BELIEVE        quest:1009 state 2
+```
+
+That agent finished the run in map 1000001, somewhere no agent had reached before - the
+quest put it there. Earlier runs saw 1021, 1031 and 1036 started, and one agent picked up
+`quest:1031 state 1` as hearsay from another.
 
 Three bugs the runs surfaced:
 

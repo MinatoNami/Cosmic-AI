@@ -118,6 +118,10 @@ public class WorldModel {
         return nearest(npcs.values());
     }
 
+    public List<Entity> visibleNpcs() {
+        return List.copyOf(npcs.values());
+    }
+
     /** Anything visible with this object id - a monster or a drop. */
     public Optional<Entity> byObjectId(int objectId) {
         Entity monster = monsters.get(objectId);

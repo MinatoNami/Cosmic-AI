@@ -6,8 +6,11 @@ import agents.world.QuestBoard;
 import agents.world.WorldModel;
 
 import java.awt.Point;
+import java.util.Comparator;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Random;
 import java.util.Set;
@@ -38,10 +41,19 @@ public class ReflexPolicy implements Policy {
     private final Random random;
     private final Disposition disposition;
 
-    /** Quests already attempted, so a refusal is not retried forever. */
+    /** Quests already started, so a refusal is not retried forever. */
     private final Set<Integer> questsTried = new HashSet<>();
 
+    /**
+     * When each quest was last offered back, so an agent keeps trying without pestering.
+     * Unlike starting, handing in is worth retrying: the reason it failed a minute ago is
+     * usually that the thing it needed had not happened yet.
+     */
+    private final Map<Integer, Integer> lastHandIn = new HashMap<>();
+    private static final int HAND_IN_COOLDOWN = 60;
+
     private int decisionsSinceTalk;
+    private int decisionsMade;
     private int decisionsHere;
     private int lastMapId = -1;
 
@@ -99,6 +111,24 @@ public class ReflexPolicy implements Policy {
                     "get closer to the thing I can see", consulted, options());
         }
 
+        // Unfinished business first. An agent has no idea what a quest asked for, so it goes
+        // back and offers; the server says yes or nothing happens, and the state change is
+        // how it finds out that whatever it did in between was the thing.
+        decisionsMade++;
+        Set<Integer> started = startedQuests(mind);
+        Optional<Errand> errand = errandFor(world, started);
+        if (errand.isPresent()) {
+            WorldModel.Entity host = errand.get().npc();
+            if (host.position().distance(self) >= NPC_RANGE) {
+                return new Decision(new Intent.MoveTo(host.position()),
+                        "go back to the one I owe something", consulted, options());
+            }
+            lastHandIn.put(errand.get().questId(), decisionsMade);
+            return new Decision(
+                    new Intent.CompleteQuest(errand.get().questId(), host.typeId(), host.position()),
+                    "see if what I owe is done", consulted, options());
+        }
+
         // Bother an NPC now and then. An agent has no idea what a quest is; it sees that this
         // one has something on offer and finds out by taking it.
         decisionsSinceTalk++;
@@ -146,8 +176,50 @@ public class ReflexPolicy implements Policy {
         return new Decision(new Intent.MoveTo(wander), "wander", consulted, options());
     }
 
+    /** A quest the agent has started and an NPC in sight who can take it back. */
+    private record Errand(int questId, WorldModel.Entity npc) {
+    }
+
+    private Optional<Errand> errandFor(WorldModel world, Set<Integer> started) {
+        if (started.isEmpty()) {
+            return Optional.empty();
+        }
+        return world.visibleNpcs().stream()
+                .flatMap(npc -> QuestBoard.endedBy(npc.typeId()).stream()
+                        .filter(started::contains)
+                        .filter(this::offWorriedCooldown)
+                        .map(questId -> new Errand(questId, npc)))
+                .min(Comparator.comparingInt(Errand::questId));
+    }
+
+    private boolean offWorriedCooldown(int questId) {
+        Integer last = lastHandIn.get(questId);
+        return last == null || decisionsMade - last >= HAND_IN_COOLDOWN;
+    }
+
+    /**
+     * Which quests it thinks it has going, read from its own beliefs rather than a separate
+     * ledger - the agent acts on what it believes, and "quest:N state 1" is a belief it
+     * formed by watching the quest start.
+     */
+    private static Set<Integer> startedQuests(Mind mind) {
+        Set<Integer> started = new HashSet<>();
+        for (Belief belief : mind.semantic().liveBeliefs()) {
+            if (belief.predicate().equals("state") && belief.object().equals("1")
+                    && belief.subject().startsWith("quest:")) {
+                try {
+                    started.add(Integer.parseInt(belief.subject().substring(6)));
+                } catch (NumberFormatException ignored) {
+                    // not a quest ref after all
+                }
+            }
+        }
+        return started;
+    }
+
     private static List<String> options() {
-        return List.of("PickUp", "Attack", "TalkTo", "StartQuest", "MoveTo", "EnterPortal", "Wait");
+        return List.of("PickUp", "Attack", "TalkTo", "StartQuest", "CompleteQuest",
+                "MoveTo", "EnterPortal", "Wait");
     }
 
     @Override

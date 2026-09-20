@@ -26,20 +26,36 @@ import java.util.Map;
 public class QuestBoard {
 
     private static Map<Integer, List<Integer>> offeredByNpc;
+    private static Map<Integer, List<Integer>> endedByNpc;
 
     private QuestBoard() {
     }
 
     /** Quest ids this NPC starts, in ascending order. Empty if it starts none. */
     public static synchronized List<Integer> offeredBy(int npcId) {
-        if (offeredByNpc == null) {
-            offeredByNpc = load();
-        }
+        loadOnce();
         return offeredByNpc.getOrDefault(npcId, List.of());
     }
 
-    private static Map<Integer, List<Integer>> load() {
+    /**
+     * Quest ids this NPC finishes. The client draws a marker over the NPC who can take a
+     * quest back, the same as it does for the one who gives it out, so an agent may see
+     * where to return - but not what it has to bring.
+     */
+    public static synchronized List<Integer> endedBy(int npcId) {
+        loadOnce();
+        return endedByNpc.getOrDefault(npcId, List.of());
+    }
+
+    private static void loadOnce() {
+        if (offeredByNpc == null) {
+            load();
+        }
+    }
+
+    private static void load() {
         Map<Integer, List<Integer>> byNpc = new HashMap<>();
+        Map<Integer, List<Integer>> endNpc = new HashMap<>();
         try {
             Data check = DataProviderFactory.getDataProvider(WZFiles.QUEST).getData("Check.img");
             for (Data quest : check.getChildren()) {
@@ -47,23 +63,33 @@ public class QuestBoard {
                 if (questId < 0) {
                     continue;
                 }
-                // Step "0" is what it takes to start, and the npc named there is who starts it.
-                Data start = quest.getChildByPath("0");
-                if (start == null) {
-                    continue;
-                }
-                int npcId = DataTool.getInt(start.getChildByPath("npc"), -1);
-                if (npcId > 0) {
-                    byNpc.computeIfAbsent(npcId, id -> new ArrayList<>()).add(questId);
-                }
+                // Step "0" is what it takes to start and "1" what it takes to finish. Only
+                // the npc is read from either; the rest of each node is the requirement list,
+                // which is the thing an agent is supposed to discover by doing it.
+                collectNpc(quest.getChildByPath("0"), questId, byNpc);
+                collectNpc(quest.getChildByPath("1"), questId, endNpc);
             }
         } catch (Exception e) {
             // Without quest data agents simply never start one; not worth failing a run over.
-            return Map.of();
+            offeredByNpc = Map.of();
+            endedByNpc = Map.of();
+            return;
         }
 
         byNpc.values().forEach(java.util.Collections::sort);
-        return Map.copyOf(byNpc);
+        endNpc.values().forEach(java.util.Collections::sort);
+        offeredByNpc = Map.copyOf(byNpc);
+        endedByNpc = Map.copyOf(endNpc);
+    }
+
+    private static void collectNpc(Data step, int questId, Map<Integer, List<Integer>> into) {
+        if (step == null) {
+            return;
+        }
+        int npcId = DataTool.getInt(step.getChildByPath("npc"), -1);
+        if (npcId > 0) {
+            into.computeIfAbsent(npcId, id -> new ArrayList<>()).add(questId);
+        }
     }
 
     private static int parseOrSkip(String name) {

@@ -78,6 +78,48 @@ class ReflexPolicyTest {
         assertEquals(9500, assertInstanceOf(Intent.PickUp.class, intent).objectId());
     }
 
+    /**
+     * The agent reads its own beliefs to know what it owes, and goes back to offer without
+     * any idea what the quest asked for. Quest 1031 is ended by npc 2100.
+     */
+    @Test
+    void goesBackToHandInAQuestItStarted() {
+        mind.take(new Observation.QuestStateChanged(2, 1031, 1));
+        world.update(new Observation.NpcAppeared(3, 7001, 2100, new Point(20, 0)));
+
+        Intent intent = new ReflexPolicy(new Random(1), Disposition.TALKER)
+                .decide(mind, world, 3).intent();
+
+        Intent.CompleteQuest handIn = assertInstanceOf(Intent.CompleteQuest.class, intent);
+        assertEquals(1031, handIn.questId());
+        assertEquals(2100, handIn.npcId());
+    }
+
+    @Test
+    void doesNotHandInToAnNpcWhoCannotTakeIt() {
+        mind.take(new Observation.QuestStateChanged(2, 1031, 1));
+        // 2101 gives quest 1031 out; 2100 is the one who takes it back.
+        world.update(new Observation.NpcAppeared(3, 7002, 2101, new Point(20, 0)));
+
+        Intent intent = new ReflexPolicy(new Random(1), Disposition.TALKER)
+                .decide(mind, world, 3).intent();
+
+        org.junit.jupiter.api.Assertions.assertFalse(intent instanceof Intent.CompleteQuest);
+    }
+
+    @Test
+    void doesNotKeepOfferingTheSameQuestEveryTick() {
+        mind.take(new Observation.QuestStateChanged(2, 1031, 1));
+        world.update(new Observation.NpcAppeared(3, 7001, 2100, new Point(20, 0)));
+        Policy talker = new ReflexPolicy(new Random(1), Disposition.TALKER);
+
+        assertInstanceOf(Intent.CompleteQuest.class, talker.decide(mind, world, 3).intent());
+
+        org.junit.jupiter.api.Assertions.assertFalse(
+                talker.decide(mind, world, 4).intent() instanceof Intent.CompleteQuest,
+                "offering the same thing every tick is pestering, not persistence");
+    }
+
     @Test
     void wandersWhenThereIsNothingToDo() {
         Intent intent = policy.decide(mind, world, 1).intent();

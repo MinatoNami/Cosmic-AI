@@ -107,3 +107,13 @@ It takes your word at hearsay confidence and says so. If it later sees the same 
 belief is promoted to first-hand.
 
 From a real client, whisper an agent the same questions, or say `Agent0: why` in map chat.
+
+## 7. Dispositions
+
+Agents are handed one of four inclinations in turn — wanderer, fighter, forager, talker —
+which scale the reflex ladder's thresholds. They diverge as a result: different maps,
+different levels, different beliefs. That divergence is what makes knowledge transfer worth
+watching, since agents that all know the same things have nothing to tell each other.
+
+Watch for `hearsay` in a trace, or in the replay page: an amber node is something the agent
+was told rather than saw.
