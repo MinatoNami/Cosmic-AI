@@ -65,7 +65,12 @@ public class LlmPolicy implements Policy {
 
             GOAL: <a few words on what you are trying to achieve>
             INTENT: <one of the actions below>
+            PURSUE: <one of: fighting, looting, talking, exploring, errands>
             LEARNED: <subject> | <predicate> | <object>
+
+            PURSUE is what you want to keep doing for the next half a minute or so, not just
+            now. Reflexes will carry it out between your answers; you are saying which way to
+            lean, not giving an order.
 
             LEARNED lines are optional and may repeat. Use them only for something you have
             worked out that is not already in your beliefs, phrased with the same kind of ids
@@ -140,6 +145,16 @@ public class LlmPolicy implements Policy {
 
         Reply parsed = Reply.parse(unreadReply, world);
         unreadReply = null;
+
+        // The lasting half of the answer. A model asked once every thirty decisions cannot
+        // usefully pick a single action - by the time it replies, the monster it was looking
+        // at is dead - but what it wants the agent to be doing outlives the moment, so it
+        // leans on the reflexes until the next answer arrives and they work out the how.
+        parsed.pursue().ifPresent(kind -> {
+            if (fallback instanceof ReflexPolicy reflexes) {
+                reflexes.urge(kind, deliberateEvery * 2);
+            }
+        });
 
         Optional<Intent> intent = parsed.intent();
         if (intent.isEmpty()) {
@@ -272,7 +287,8 @@ public class LlmPolicy implements Policy {
      * {@code problem} says what was dropped, so a run of reflex decisions can be read back as
      * the model missing rather than the model agreeing.
      */
-    record Reply(Optional<String> goal, Optional<Intent> intent, List<Triple> learned, String problem) {
+    record Reply(Optional<String> goal, Optional<Intent> intent, Optional<String> pursue,
+                 List<Triple> learned, String problem) {
 
         record Triple(String subject, String predicate, String object) {
         }
@@ -290,6 +306,7 @@ public class LlmPolicy implements Policy {
 
         static Reply parse(String text, WorldModel world) {
             Optional<String> goal = Optional.empty();
+            Optional<String> pursue = Optional.empty();
             Resolved resolved = Resolved.not("no INTENT line");
             List<Triple> learned = new ArrayList<>();
 
@@ -299,11 +316,40 @@ public class LlmPolicy implements Policy {
                     goal = Optional.of(trimmed.substring(5).trim());
                 } else if (trimmed.startsWith("INTENT:")) {
                     resolved = parseIntent(trimmed.substring(7).trim(), world);
+                } else if (trimmed.startsWith("PURSUE:")) {
+                    pursue = asKind(trimmed.substring(7).trim());
                 } else if (trimmed.startsWith("LEARNED:")) {
                     parseTriple(trimmed.substring(8).trim()).ifPresent(learned::add);
                 }
             }
-            return new Reply(goal, resolved.intent(), learned, resolved.problem());
+            return new Reply(goal, resolved.intent(), pursue, learned, resolved.problem());
+        }
+
+        /**
+         * Turns what the model called it into what the reflexes call it.
+         *
+         * Scanning for the word rather than demanding the line be exactly one, because a
+         * local reasoning model will write "exploring, I think" however plainly it is asked
+         * not to, and throwing away an intention over a trailing clause helps nobody.
+         */
+        private static Optional<String> asKind(String said) {
+            String lower = said.toLowerCase();
+            if (lower.contains("fight")) {
+                return Optional.of("fight");
+            }
+            if (lower.contains("loot")) {
+                return Optional.of("loot");
+            }
+            if (lower.contains("talk")) {
+                return Optional.of("talk");
+            }
+            if (lower.contains("explor")) {
+                return Optional.of("door");
+            }
+            if (lower.contains("errand") || lower.contains("quest")) {
+                return Optional.of("errand");
+            }
+            return Optional.empty();
         }
 
         private static Resolved parseIntent(String text, WorldModel world) {

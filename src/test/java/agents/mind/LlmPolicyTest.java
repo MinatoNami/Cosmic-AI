@@ -334,4 +334,50 @@ class LlmPolicyTest {
             return "counting";
         }
     }
+
+    /**
+     * The half of an answer that outlives the moment.
+     *
+     * A model answering once every thirty decisions cannot usefully choose an action - by the
+     * time it replies the monster is dead - so what it says to pursue leans on the reflexes
+     * until the next answer. Two earlier attempts at this failed because the intent lasted a
+     * single decision, which is not long enough to reach anything.
+     */
+    @Test
+    void anIntentionOutlivesTheDecisionThatSetIt() {
+        ReflexPolicy reflexes = new ReflexPolicy(new Random(1), Disposition.FIGHTER);
+        LlmPolicy policy = new LlmPolicy(
+                new FixedOracle("GOAL: look around\nPURSUE: exploring\nINTENT: Wait"),
+                reflexes, 8);
+
+        // The question goes to a background thread, so the answer lands on some later
+        // decision rather than the next one. Waiting for it is the difference between testing
+        // the behaviour and testing which thread won - a mistake already made once in this
+        // file. Far fewer decisions than the sixteen the intention lasts, either way.
+        for (int decision = 0; decision < 12 && !reflexes.isUrged("door"); decision++) {
+            policy.decide(mind, world, decision);
+            try {
+                Thread.sleep(5);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                break;
+            }
+        }
+
+        assertTrue(reflexes.isUrged("door"),
+                "the model asked it to explore and nothing carried that past the decision");
+    }
+
+    /** Answers whatever it was built with, immediately. */
+    private record FixedOracle(String answer) implements Oracle {
+        @Override
+        public String ask(String system, String user) {
+            return answer;
+        }
+
+        @Override
+        public String name() {
+            return "fixed";
+        }
+    }
 }

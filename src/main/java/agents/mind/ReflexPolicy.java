@@ -127,6 +127,17 @@ public class ReflexPolicy implements Policy {
     /** When each kind of thing was last done, for working out what is being neglected. */
     private final Map<String, Integer> lastChosenAt = new HashMap<>();
 
+    /** Decisions for which something has been urged, by kind. See {@link #urge}. */
+    private final Map<String, Integer> urgedFor = new HashMap<>();
+
+    /**
+     * How much an intention is worth against what is in front of the agent.
+     *
+     * Enough to change what it does, not enough to make it ignore a monster hitting it. An
+     * intention is a lean, not an order.
+     */
+    private static final double URGED = 1.0;
+
     /**
      * The door just walked through, held until the next map arrives so the agent can find out
      * where it went.
@@ -205,6 +216,8 @@ public class ReflexPolicy implements Policy {
                 new Point(self.x + random.nextInt(2 * WANDER_STEP) - WANDER_STEP, self.y)),
                 "wander", WANDERING_IS_BETTER_THAN_NOTHING, null));
 
+        ageUrges();
+
         Choice best = choices.stream().max(Comparator.comparingDouble(Choice::score)).orElseThrow();
         lastChosenAt.put(best.kind(), decisionsMade);
         if (best.onChosen() != null) {
@@ -239,6 +252,44 @@ public class ReflexPolicy implements Policy {
         return Math.min(1.0, (double) since / Math.max(1, disposition.attentionSpan()));
     }
 
+    /**
+     * Leans the agent towards a kind of thing for a while.
+     *
+     * This is how something slower and more thoughtful than a reflex gets a say. A model
+     * asked once every thirty decisions cannot usefully choose a single action - by the time
+     * it answers, the monster it was looking at is dead - but it can say what the agent should
+     * be trying to do for the next half minute, and let reflexes work out how.
+     *
+     * <p>It also sidesteps the trap that caught two attempts at this: one decision's worth of
+     * intent achieves nothing, because an NPC or a door is many decisions away. An urge
+     * outlives the decision that set it.
+     */
+    public void urge(String kind, int forDecisions) {
+        urgedFor.merge(kind, forDecisions, Math::max);
+    }
+
+    /**
+     * What is currently being urged on this kind.
+     *
+     * Reads only. Ageing it here would age it once per option actually scored, so an urge
+     * towards fighting would outlive one towards talking purely because there were monsters
+     * about - and scoring an option would have a side effect, which is the mistake that had
+     * agents committing to a door on the first decision of their lives.
+     */
+    private double urgeFor(String kind) {
+        return urgedFor.getOrDefault(kind, 0) > 0 ? URGED : 0;
+    }
+
+    /** Whether something is currently being urged on this kind, for anything that asks. */
+    public boolean isUrged(String kind) {
+        return urgedFor.getOrDefault(kind, 0) > 0;
+    }
+
+    /** One decision's worth of forgetting, for every intention at once. */
+    private void ageUrges() {
+        urgedFor.replaceAll((kind, left) -> Math.max(0, left - 1));
+    }
+
     /** 1 when standing on it, 0 at the edge of what the agent would cross for it. */
     private static double nearness(double distance, double range) {
         return distance >= range ? 0 : 1 - distance / range;
@@ -258,7 +309,7 @@ public class ReflexPolicy implements Policy {
                     new Intent.PickUp(drop.objectId(), drop.position()),
                     "take what is at my feet",
                     (0.2 + disposition.greed()) * near + underfoot
-                            + NEGLECT_MATTERS * neglect("loot"), null));
+                            + NEGLECT_MATTERS * neglect("loot") + urgeFor("loot"), null));
         });
     }
 
@@ -269,7 +320,7 @@ public class ReflexPolicy implements Policy {
             if (near <= 0) {
                 return;
             }
-            double score = (0.2 + disposition.aggression()) * near + NEGLECT_MATTERS * neglect("fight");
+            double score = (0.2 + disposition.aggression()) * near + NEGLECT_MATTERS * neglect("fight") + urgeFor("fight");
             Intent intent = distance < MELEE_RANGE
                     ? new Intent.Attack(monster.objectId(), monster.position())
                     : new Intent.MoveTo(monster.position());
@@ -291,7 +342,7 @@ public class ReflexPolicy implements Policy {
         errandFor(world, unfinished).ifPresent(errand -> {
             WorldModel.Entity host = errand.npc();
             double distance = host.position().distance(self);
-            double score = 0.8 + NEGLECT_MATTERS * neglect("errand");
+            double score = 0.8 + NEGLECT_MATTERS * neglect("errand") + urgeFor("errand");
             if (distance >= NPC_RANGE) {
                 choices.add(new Choice("errand", new Intent.MoveTo(host.position()),
                         "go back to the one I owe something", score, null));
@@ -312,7 +363,7 @@ public class ReflexPolicy implements Policy {
                     .findFirst();
             // Something on offer is worth crossing a map for; a chat is worth a wander.
             double appeal = offer.isPresent() ? 0.7 : 0.2 + disposition.curiosity() * 0.3;
-            double score = appeal + NEGLECT_MATTERS * neglect("talk");
+            double score = appeal + NEGLECT_MATTERS * neglect("talk") + urgeFor("talk");
 
             if (distance >= NPC_RANGE) {
                 choices.add(new Choice("talk", new Intent.MoveTo(npc.position()),
@@ -352,7 +403,7 @@ public class ReflexPolicy implements Policy {
         double score = 0.15 + disposition.wanderlust() * 0.5
                 + Math.min(1.0, (double) decisionsHere / disposition.patience())
                 + (stale ? 1.0 : 0)
-                + NEGLECT_MATTERS * neglect("door")
+                + NEGLECT_MATTERS * neglect("door") + urgeFor("door")
                 + (alreadyOnTheWay ? COMMITTED : 0);
 
         if (door.position().distance(self) < PORTAL_RANGE) {
