@@ -119,7 +119,6 @@ public final class Channel {
     private long ongoingStartTime;
 
     private final Lock lock = new ReentrantLock(true);
-    ;
     private final Lock merchRlock;
     private final Lock merchWlock;
 
