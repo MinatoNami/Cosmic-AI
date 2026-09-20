@@ -30,6 +30,9 @@ public class IntentExecutor {
      * way and never complains.
      */
     private static final double STEP_PIXELS = 75;
+
+    /** Close enough to be standing on it. */
+    private static final double ARRIVED_PIXELS = 4;
     /**
      * Walking, per docs/moveactions.txt. These were 4 and 5, which that same file lists as
      * <em>standing</em> right and left - so every agent broadcast "I am standing still" on
@@ -118,6 +121,14 @@ public class IntentExecutor {
     private void moveTo(Point destination, WorldModel world) {
         Point from = world.selfPosition();
         double distance = from.distance(destination);
+
+        // Already there. Attacking walks to the target first, and a target within reach is
+        // one you are standing on, so this fired every tick of every fight: a move packet
+        // going nowhere, one millisecond long. It draws nothing, but it is a packet a second
+        // per agent and it buries the real movement in anything watching the map.
+        if (distance < ARRIVED_PIXELS) {
+            return;
+        }
 
         Point step = destination;
         if (distance > STEP_PIXELS) {
