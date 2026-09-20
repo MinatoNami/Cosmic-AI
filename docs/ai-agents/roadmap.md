@@ -119,12 +119,27 @@ Design notes:
   exploring means here. A player sees a doorway and has to walk through it, and so does an
   agent — where it led becomes an ordinary belief afterwards.
 
-## Stage 5 — visualiser
+## Stage 5 — visualiser ✅
 
-Replay page over a trace file: tick scrubber, belief graph at time *T*, click-through to
-supporting episodes, hearsay vs first-hand colouring.
+`viz/replay.html` — a single page, no dependencies, that plays a trace back. Drop a
+`.jsonl` on it, or serve the directory and pass `?trace=`. See `viz/README.md`.
 
-**Done when** watching a run back is more informative than reading the log.
+What it shows, and why each choice was made:
+
+- **The belief graph at tick T.** Entities get nodes; plain values become attributes counted
+  on their subject. A naive triple graph gave `self level 3` its own node and buried the
+  structure worth seeing — who is where, what lives in which map — under a cloud of
+  integers.
+- **Click an action, and the beliefs that justified it light up in the graph.** This is the
+  feature the trace format exists for. Not what the agent did, but what it thought it knew
+  when it did it.
+- **Click a belief** for its confidence, how long it has been held, and the episodes behind
+  it, each with the raw observation text.
+- **Revisions are visible.** A belief that dies turns into a red dashed edge and lingers
+  briefly rather than vanishing, so scrubbing past tick 96 of the sample run shows
+  `self in_map map:10000` dying as the agent walks through a portal.
+
+`viz/sample-trace.jsonl` is a real run, so the page demonstrates itself.
 
 ## Stage 6 — LLM policy
 

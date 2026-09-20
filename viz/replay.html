@@ -1,0 +1,648 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agent replay</title>
+<style>
+  :root {
+    --bg: #fbfaf9;
+    --panel: #ffffff;
+    --line: #e4e0db;
+    --ink: #1d1b19;
+    --ink-soft: #6b645d;
+    --ink-faint: #9a938b;
+    --accent: #2f6f4e;
+    --accent-soft: #e8f1eb;
+    --hearsay: #9a6b2f;
+    --dead: #b4483c;
+    --highlight: #c8a02f;
+    --radius: 8px;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #16151a;
+      --panel: #1e1d24;
+      --line: #32303a;
+      --ink: #eceaf0;
+      --ink-soft: #a8a3b2;
+      --ink-faint: #736e7e;
+      --accent: #6fcf9a;
+      --accent-soft: #23342b;
+      --hearsay: #d6a45e;
+      --dead: #e2796b;
+      --highlight: #e8c15c;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #16151a; --panel: #1e1d24; --line: #32303a; --ink: #eceaf0;
+    --ink-soft: #a8a3b2; --ink-faint: #736e7e; --accent: #6fcf9a;
+    --accent-soft: #23342b; --hearsay: #d6a45e; --dead: #e2796b; --highlight: #e8c15c;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+    height: 100vh; display: flex; flex-direction: column;
+  }
+
+  header {
+    display: flex; align-items: baseline; gap: 16px; flex-wrap: wrap;
+    padding: 12px 16px; border-bottom: 1px solid var(--line); background: var(--panel);
+  }
+  h1 { font-size: 15px; margin: 0; font-weight: 600; letter-spacing: -0.01em; }
+  header .meta { color: var(--ink-soft); font-size: 13px; }
+  header .spacer { flex: 1; }
+  button, select, label.file {
+    font: inherit; color: var(--ink); background: var(--panel);
+    border: 1px solid var(--line); border-radius: 6px; padding: 5px 11px; cursor: pointer;
+  }
+  button:hover, label.file:hover { border-color: var(--accent); }
+  input[type=file] { display: none; }
+
+  main { flex: 1; display: grid; grid-template-columns: 1fr 340px; min-height: 0; }
+  #graphWrap { position: relative; min-width: 0; border-right: 1px solid var(--line); }
+  svg { width: 100%; height: 100%; display: block; }
+
+  aside { display: flex; flex-direction: column; min-height: 0; background: var(--panel); }
+  .pane { padding: 12px 14px; border-bottom: 1px solid var(--line); overflow-y: auto; }
+  .pane h2 {
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em;
+    color: var(--ink-faint); margin: 0 0 8px; font-weight: 600;
+  }
+  #detail { flex: 0 0 auto; max-height: 44%; }
+  #stream { flex: 1; }
+
+  .triple { font-family: var(--mono); font-size: 13px; margin-bottom: 8px; word-break: break-word; }
+  .triple .pred { color: var(--accent); }
+  .kv { display: flex; gap: 8px; font-size: 12.5px; color: var(--ink-soft); margin-bottom: 3px; }
+  .kv b { color: var(--ink); font-weight: 500; min-width: 82px; }
+  .evidence { margin-top: 10px; }
+  .evidence li {
+    font-family: var(--mono); font-size: 11.5px; color: var(--ink-soft);
+    list-style: none; padding: 5px 7px; margin: 3px 0;
+    border-left: 2px solid var(--line); background: var(--bg); border-radius: 0 4px 4px 0;
+  }
+  .evidence li b { color: var(--ink); font-weight: 500; }
+  .empty { color: var(--ink-faint); font-style: italic; font-size: 13px; }
+
+  .act { padding: 7px 8px; border-radius: 6px; cursor: pointer; margin-bottom: 4px; border: 1px solid transparent; }
+  .act:hover { background: var(--bg); }
+  .act.on { background: var(--accent-soft); border-color: var(--accent); }
+  .act .head { font-family: var(--mono); font-size: 12px; }
+  .act .goal { color: var(--ink-soft); font-size: 12px; }
+  .act .t { color: var(--ink-faint); font-size: 11px; font-family: var(--mono); }
+
+  footer { padding: 10px 16px; border-top: 1px solid var(--line); background: var(--panel); }
+  .scrub { display: flex; align-items: center; gap: 12px; }
+  input[type=range] { flex: 1; accent-color: var(--accent); }
+  .tick { font-family: var(--mono); font-size: 12px; color: var(--ink-soft); min-width: 116px; }
+  .legend { display: flex; gap: 14px; margin-top: 7px; font-size: 11.5px; color: var(--ink-faint); flex-wrap: wrap; }
+  .legend i { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 4px; vertical-align: -1px; }
+
+  #drop {
+    position: absolute; inset: 0; display: grid; place-items: center;
+    background: var(--bg); text-align: center; padding: 24px;
+  }
+  #drop.hide { display: none; }
+  #drop p { color: var(--ink-soft); max-width: 42ch; }
+  #drop code { font-family: var(--mono); font-size: 12px; color: var(--ink); }
+
+  .node-label { font-size: 11px; fill: var(--ink); pointer-events: none; }
+  .edge-label { font-size: 9.5px; fill: var(--ink-faint); pointer-events: none; }
+
+  @media (max-width: 860px) {
+    main { grid-template-columns: 1fr; grid-template-rows: 55% 1fr; }
+    #graphWrap { border-right: none; border-bottom: 1px solid var(--line); }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Agent replay</h1>
+  <span class="meta" id="meta">no trace loaded</span>
+  <span class="spacer"></span>
+  <select id="agentPick" hidden></select>
+  <label class="file">load trace<input type="file" id="file" accept=".jsonl,.json,.txt" multiple></label>
+</header>
+
+<main>
+  <div id="graphWrap">
+    <svg id="graph"></svg>
+    <div id="drop">
+      <div>
+        <p><strong>Drop a trace here</strong>, or use “load trace”.</p>
+        <p>Traces are written to <code>target/traces/&lt;run&gt;/&lt;Agent&gt;.jsonl</code>
+           when you run <code>agents.Launcher</code>. Drop several to compare agents.</p>
+      </div>
+    </div>
+  </div>
+
+  <aside>
+    <div class="pane" id="detail">
+      <h2>Selected</h2>
+      <p class="empty">Click a belief in the graph, or an action below.</p>
+    </div>
+    <div class="pane" id="stream">
+      <h2>Decisions</h2>
+      <p class="empty">—</p>
+    </div>
+  </aside>
+</main>
+
+<footer>
+  <div class="scrub">
+    <button id="play">play</button>
+    <input type="range" id="slider" min="0" max="0" value="0" disabled>
+    <span class="tick" id="tickLabel">t 0</span>
+  </div>
+  <div class="legend">
+    <span><i style="background:var(--accent)"></i>first-hand</span>
+    <span><i style="background:var(--hearsay)"></i>hearsay</span>
+    <span><i style="background:var(--dead)"></i>just revised</span>
+    <span>ring thickness = confidence</span>
+  </div>
+</footer>
+
+<script>
+'use strict';
+
+/* ------------------------------------------------------------------ state */
+
+const state = {
+  agents: new Map(),   // name -> events[]
+  current: null,       // agent name
+  events: [],
+  maxTick: 0,
+  t: 0,
+  selected: null,      // {kind:'belief'|'act', id}
+  nodes: new Map(),    // id -> {x,y,vx,vy}
+  playing: false,
+};
+
+/* How long a revised belief lingers on screen, in ticks. Long enough to notice
+   it die while scrubbing, short enough not to clutter. */
+const REVISED_LINGER = 25;
+
+/* ------------------------------------------------------------------ loading */
+
+function parseTrace(text) {
+  const events = [];
+  for (const line of text.split('\n')) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    try { events.push(JSON.parse(trimmed)); } catch (e) { /* skip a torn last line */ }
+  }
+  return events;
+}
+
+function loadFiles(files) {
+  const reads = [...files].map(f => f.text().then(text => {
+    const events = parseTrace(text);
+    if (!events.length) return;
+    const name = events[0].agent || f.name.replace(/\.[^.]+$/, '');
+    state.agents.set(name, events);
+  }));
+  Promise.all(reads).then(() => {
+    if (!state.agents.size) return;
+    buildAgentPicker();
+    selectAgent([...state.agents.keys()][0]);
+    document.getElementById('drop').classList.add('hide');
+  });
+}
+
+function buildAgentPicker() {
+  const pick = document.getElementById('agentPick');
+  pick.innerHTML = '';
+  for (const name of state.agents.keys()) {
+    const opt = document.createElement('option');
+    opt.value = name; opt.textContent = name;
+    pick.appendChild(opt);
+  }
+  pick.hidden = state.agents.size < 2;
+  pick.onchange = () => selectAgent(pick.value);
+}
+
+function selectAgent(name) {
+  state.current = name;
+  state.events = state.agents.get(name);
+  state.maxTick = state.events.reduce((m, e) => Math.max(m, e.t || 0), 0);
+  state.t = state.maxTick;
+  state.selected = null;
+  state.nodes.clear();
+
+  const slider = document.getElementById('slider');
+  slider.max = state.maxTick; slider.value = state.t; slider.disabled = false;
+
+  const counts = state.events.reduce((acc, e) => (acc[e.kind] = (acc[e.kind] || 0) + 1, acc), {});
+  document.getElementById('meta').textContent =
+    `${name} · ${counts.observe || 0} episodes · ${counts.believe || 0} belief updates · ` +
+    `${counts.revise || 0} revisions · ${counts.act || 0} actions`;
+
+  render();
+}
+
+/* ------------------------------------------- replay: the world at time t */
+
+/**
+ * Beliefs as they stood at tick t. A belief id can be written many times as it
+ * is corroborated, so the last write at or before t wins, and a revise marks it
+ * dead without removing it — seeing one die is the point of the exercise.
+ */
+function beliefsAt(t) {
+  const beliefs = new Map();
+  for (const e of state.events) {
+    if (e.t > t) continue;
+    if (e.kind === 'believe') {
+      const prev = beliefs.get(e.id);
+      beliefs.set(e.id, {
+        id: e.id, triple: e.triple, confidence: e.confidence,
+        provenance: e.provenance, from: e.from,
+        born: prev ? prev.born : e.t, updated: e.t, dead: null, supersededBy: null,
+      });
+    } else if (e.kind === 'revise') {
+      const b = beliefs.get(e.id);
+      if (b) { b.dead = e.t; b.supersededBy = e.supersededBy; }
+    }
+  }
+  return beliefs;
+}
+
+function episodesById() {
+  const map = new Map();
+  for (const e of state.events) if (e.kind === 'observe') map.set(e.id, e);
+  return map;
+}
+
+function actsUpTo(t, limit) {
+  const byId = new Map(state.events.filter(e => e.id).map(e => [e.id, e]));
+  return state.events
+    .filter(e => e.kind === 'act' && e.t <= t)
+    .slice(-limit)
+    .reverse()
+    .map(a => ({ act: a, delib: byId.get(a.because) }));
+}
+
+/* --------------------------------------------------------------- the graph */
+
+/**
+ * Entities get nodes; plain values become attributes on their subject.
+ *
+ * A naive triple graph turns every `self level 3` into its own node and drowns
+ * the interesting structure — who is where, what lives in which map — in a
+ * cloud of numbers. Something is an entity if it is namespaced (`map:40000`)
+ * or if it is a subject in its own right.
+ */
+function buildGraph(beliefs) {
+  const subjects = new Set([...beliefs.values()].map(b => b.triple[0]));
+  const isEntity = v => /^[a-z]+:/.test(v) || subjects.has(v) || v === 'self';
+
+  const nodes = new Map();
+  const edges = [];
+  const attributes = new Map();
+
+  const touch = id => {
+    if (!nodes.has(id)) nodes.set(id, { id, live: false, hearsay: false, conf: 0 });
+    return nodes.get(id);
+  };
+
+  for (const b of beliefs.values()) {
+    const [s, p, o] = b.triple;
+    const visible = !b.dead || (state.t - b.dead) < REVISED_LINGER;
+    if (!visible) continue;
+
+    const node = touch(s);
+    node.live = node.live || !b.dead;
+    node.conf = Math.max(node.conf, b.confidence);
+    if (b.provenance === 'hearsay') node.hearsay = true;
+
+    if (isEntity(o)) {
+      // An entity that only ever appears as an object is still alive; without this
+      // every map an agent had walked to rendered in the "revised" colour.
+      const target = touch(o);
+      target.live = target.live || !b.dead;
+      target.conf = Math.max(target.conf, b.confidence);
+      edges.push({ from: s, to: o, predicate: p, belief: b });
+    } else {
+      if (!attributes.has(s)) attributes.set(s, []);
+      attributes.get(s).push(b);
+    }
+  }
+  return { nodes, edges, attributes };
+}
+
+/** A small force layout: repel everything, pull edges together, settle to centre. */
+function layout(graph, width, height) {
+  const ids = [...graph.nodes.keys()];
+  ids.forEach((id, i) => {
+    if (!state.nodes.has(id)) {
+      const angle = (i / Math.max(1, ids.length)) * Math.PI * 2;
+      state.nodes.set(id, {
+        x: width / 2 + Math.cos(angle) * Math.min(width, height) * 0.28,
+        y: height / 2 + Math.sin(angle) * Math.min(width, height) * 0.28,
+      });
+    }
+  });
+
+  const pos = id => state.nodes.get(id);
+  for (let step = 0; step < 220; step++) {
+    for (const a of ids) {
+      const pa = pos(a);
+      let fx = (width / 2 - pa.x) * 0.004, fy = (height / 2 - pa.y) * 0.004;
+      for (const b of ids) {
+        if (a === b) continue;
+        const pb = pos(b);
+        let dx = pa.x - pb.x, dy = pa.y - pb.y;
+        let d2 = dx * dx + dy * dy || 0.01;
+        const push = 9000 / d2;
+        fx += dx * push / Math.sqrt(d2);
+        fy += dy * push / Math.sqrt(d2);
+      }
+      pa.x += fx; pa.y += fy;
+    }
+    for (const e of graph.edges) {
+      const pa = pos(e.from), pb = pos(e.to);
+      if (!pa || !pb) continue;
+      const dx = pb.x - pa.x, dy = pb.y - pa.y;
+      const d = Math.hypot(dx, dy) || 0.01;
+      const pull = (d - 150) * 0.012;
+      pa.x += dx / d * pull; pa.y += dy / d * pull;
+      pb.x -= dx / d * pull; pb.y -= dy / d * pull;
+    }
+  }
+  const pad = 54;
+  for (const id of ids) {
+    const p = pos(id);
+    p.x = Math.max(pad, Math.min(width - pad, p.x));
+    p.y = Math.max(pad, Math.min(height - pad, p.y));
+  }
+}
+
+function svgEl(name, attrs, text) {
+  const el = document.createElementNS('http://www.w3.org/2000/svg', name);
+  for (const [k, v] of Object.entries(attrs || {})) el.setAttribute(k, v);
+  if (text != null) el.textContent = text;
+  return el;
+}
+
+function highlightedBeliefs() {
+  if (!state.selected) return new Set();
+  if (state.selected.kind === 'belief') return new Set([state.selected.id]);
+  const byId = new Map(state.events.filter(e => e.id).map(e => [e.id, e]));
+  const act = byId.get(state.selected.id);
+  const delib = act && byId.get(act.because);
+  return new Set(delib ? delib.used : []);
+}
+
+function drawGraph(beliefs) {
+  const svg = document.getElementById('graph');
+  const wrap = document.getElementById('graphWrap');
+  const width = wrap.clientWidth, height = wrap.clientHeight;
+  svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+  svg.innerHTML = '';
+
+  const graph = buildGraph(beliefs);
+  layout(graph, width, height);
+  const hot = highlightedBeliefs();
+
+  const defs = svgEl('defs');
+  const marker = svgEl('marker', {
+    id: 'arrow', viewBox: '0 0 10 10', refX: 22, refY: 5,
+    markerWidth: 5, markerHeight: 5, orient: 'auto-start-reverse',
+  });
+  marker.appendChild(svgEl('path', { d: 'M 0 0 L 10 5 L 0 10 z', fill: 'var(--ink-faint)' }));
+  defs.appendChild(marker);
+  svg.appendChild(defs);
+
+  for (const e of graph.edges) {
+    const a = state.nodes.get(e.from), b = state.nodes.get(e.to);
+    if (!a || !b) continue;
+    const dead = !!e.belief.dead;
+    const on = hot.has(e.belief.id);
+    const line = svgEl('line', {
+      x1: a.x, y1: a.y, x2: b.x, y2: b.y,
+      stroke: dead ? 'var(--dead)' : on ? 'var(--highlight)' : 'var(--line)',
+      'stroke-width': on ? 2.5 : 1.5,
+      'stroke-dasharray': dead ? '4 3' : 'none',
+      'marker-end': 'url(#arrow)',
+      style: 'cursor:pointer',
+    });
+    line.onclick = () => select({ kind: 'belief', id: e.belief.id });
+    svg.appendChild(line);
+    svg.appendChild(svgEl('text', {
+      x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 - 4,
+      'text-anchor': 'middle', class: 'edge-label',
+    }, e.predicate));
+  }
+
+  for (const [id, node] of graph.nodes) {
+    const p = state.nodes.get(id);
+    if (!p) continue;
+    const attrs = graph.attributes.get(id) || [];
+    const anyHot = attrs.some(b => hot.has(b.id));
+    const colour = node.hearsay ? 'var(--hearsay)' : node.live ? 'var(--accent)' : 'var(--dead)';
+
+    const g = svgEl('g', { style: 'cursor:pointer' });
+    g.onclick = () => select(attrs.length
+      ? { kind: 'belief', id: attrs[0].id }
+      : { kind: 'entity', id });
+
+    g.appendChild(svgEl('circle', {
+      cx: p.x, cy: p.y, r: 16,
+      fill: 'var(--panel)',
+      stroke: anyHot ? 'var(--highlight)' : colour,
+      'stroke-width': anyHot ? 3.5 : 1 + Math.round(node.conf * 3),
+    }));
+    if (attrs.length) {
+      g.appendChild(svgEl('text', {
+        x: p.x, y: p.y + 3.5, 'text-anchor': 'middle',
+        class: 'node-label', style: 'font-size:9px;fill:var(--ink-soft)',
+      }, String(attrs.length)));
+    }
+    g.appendChild(svgEl('text', {
+      x: p.x, y: p.y + 30, 'text-anchor': 'middle', class: 'node-label',
+    }, id));
+    svg.appendChild(g);
+  }
+
+  if (!graph.nodes.size) {
+    svg.appendChild(svgEl('text', {
+      x: width / 2, y: height / 2, 'text-anchor': 'middle',
+      style: 'fill:var(--ink-faint);font-style:italic',
+    }, 'nothing believed yet at this tick'));
+  }
+}
+
+/* --------------------------------------------------------------- the panes */
+
+function renderDetail(beliefs) {
+  const pane = document.getElementById('detail');
+  pane.innerHTML = '<h2>Selected</h2>';
+
+  if (!state.selected) {
+    pane.insertAdjacentHTML('beforeend',
+      '<p class="empty">Click a belief in the graph, or an action below.</p>');
+    return;
+  }
+
+  const episodes = episodesById();
+
+  if (state.selected.kind === 'entity') {
+    pane.insertAdjacentHTML('beforeend',
+      `<div class="triple">${escape(state.selected.id)}</div>
+       <p class="empty">No attributes believed about this yet — it is only known
+       through its relationships.</p>`);
+    return;
+  }
+
+  if (state.selected.kind === 'act') {
+    const byId = new Map(state.events.filter(e => e.id).map(e => [e.id, e]));
+    const act = byId.get(state.selected.id);
+    const delib = byId.get(act.because);
+    pane.insertAdjacentHTML('beforeend', `
+      <div class="triple">${escape(act.intent)} <span class="pred">${
+        escape(JSON.stringify(act.detail || {}))}</span></div>
+      <div class="kv"><b>at tick</b><span>${act.t}</span></div>
+      <div class="kv"><b>because</b><span>${escape(delib ? delib.goal : '—')}</span></div>
+      <div class="kv"><b>considered</b><span>${
+        escape(delib ? (delib.considered || []).join(', ') : '—')}</span></div>
+      <h2 style="margin-top:12px">Beliefs it used</h2>`);
+
+    const used = delib ? (delib.used || []) : [];
+    if (!used.length) {
+      pane.insertAdjacentHTML('beforeend', '<p class="empty">It consulted nothing.</p>');
+      return;
+    }
+    const list = document.createElement('ul');
+    list.className = 'evidence';
+    for (const ref of used) {
+      const b = beliefs.get(ref);
+      const li = document.createElement('li');
+      li.innerHTML = b ? `<b>${escape(ref)}</b> ${escape(b.triple.join(' '))}`
+                       : `<b>${escape(ref)}</b> (not yet held at this tick)`;
+      li.style.cursor = 'pointer';
+      li.onclick = () => select({ kind: 'belief', id: ref });
+      list.appendChild(li);
+    }
+    pane.appendChild(list);
+    return;
+  }
+
+  const b = beliefs.get(state.selected.id);
+  if (!b) {
+    pane.insertAdjacentHTML('beforeend',
+      '<p class="empty">Not held at this tick — scrub forward.</p>');
+    return;
+  }
+
+  const held = b.dead ? `died at ${b.dead}, held ${b.dead - b.born} ticks` : 'still held';
+  pane.insertAdjacentHTML('beforeend', `
+    <div class="triple">${escape(b.triple[0])}
+      <span class="pred">${escape(b.triple[1])}</span>
+      ${escape(b.triple[2])}</div>
+    <div class="kv"><b>confidence</b><span>${b.confidence}</span></div>
+    <div class="kv"><b>provenance</b><span>${escape(b.provenance)}</span></div>
+    <div class="kv"><b>first held</b><span>tick ${b.born}</span></div>
+    <div class="kv"><b>status</b><span${b.dead ? ' style="color:var(--dead)"' : ''}>${held}</span></div>
+    ${b.supersededBy ? `<div class="kv"><b>replaced by</b><span>${escape(b.supersededBy)}</span></div>` : ''}
+    <h2 style="margin-top:12px">Evidence</h2>`);
+
+  const list = document.createElement('ul');
+  list.className = 'evidence';
+  for (const ref of b.from) {
+    const ep = episodes.get(ref);
+    const li = document.createElement('li');
+    li.innerHTML = ep
+      ? `<b>${escape(ref)}</b> ${escape(ep.obs.type)}<br>${escape(ep.obs.detail)}`
+      : `<b>${escape(ref)}</b> (episode not in this trace)`;
+    list.appendChild(li);
+  }
+  pane.appendChild(list);
+}
+
+function renderStream() {
+  const pane = document.getElementById('stream');
+  pane.innerHTML = '<h2>Decisions</h2>';
+  const recent = actsUpTo(state.t, 40);
+  if (!recent.length) {
+    pane.insertAdjacentHTML('beforeend', '<p class="empty">Nothing done yet.</p>');
+    return;
+  }
+  for (const { act, delib } of recent) {
+    const div = document.createElement('div');
+    div.className = 'act' + (state.selected && state.selected.id === act.id ? ' on' : '');
+    div.innerHTML = `<div class="head">${escape(act.intent)}
+        <span class="t">t${act.t}</span></div>
+      <div class="goal">${escape(delib ? delib.goal : '')}</div>`;
+    div.onclick = () => select({ kind: 'act', id: act.id });
+    pane.appendChild(div);
+  }
+}
+
+function escape(s) {
+  return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+}
+
+function select(sel) {
+  state.selected = sel;
+  render();
+}
+
+function render() {
+  if (!state.events.length) return;
+  const beliefs = beliefsAt(state.t);
+  document.getElementById('tickLabel').textContent = `t ${state.t} / ${state.maxTick}`;
+  drawGraph(beliefs);
+  renderDetail(beliefs);
+  renderStream();
+}
+
+/* --------------------------------------------------------------- controls */
+
+document.getElementById('file').onchange = e => loadFiles(e.target.files);
+
+document.getElementById('slider').oninput = e => {
+  state.t = +e.target.value;
+  render();
+};
+
+document.getElementById('play').onclick = function () {
+  state.playing = !state.playing;
+  this.textContent = state.playing ? 'pause' : 'play';
+  const step = () => {
+    if (!state.playing) return;
+    state.t = state.t >= state.maxTick ? 0 : state.t + 1;
+    document.getElementById('slider').value = state.t;
+    render();
+    setTimeout(() => requestAnimationFrame(step), 60);
+  };
+  step();
+};
+
+document.addEventListener('dragover', e => e.preventDefault());
+document.addEventListener('drop', e => {
+  e.preventDefault();
+  if (e.dataTransfer.files.length) loadFiles(e.dataTransfer.files);
+});
+
+window.addEventListener('resize', () => { state.nodes.clear(); render(); });
+
+/* Served over http, ?trace=<url> loads directly. Opening the page from disk
+   cannot fetch a sibling file, which is why drag and drop is the main path. */
+const traceParam = new URLSearchParams(location.search).get('trace');
+if (traceParam) {
+  fetch(traceParam).then(r => r.text()).then(text => {
+    const events = parseTrace(text);
+    if (!events.length) return;
+    state.agents.set(events[0].agent || 'trace', events);
+    buildAgentPicker();
+    selectAgent([...state.agents.keys()][0]);
+    document.getElementById('drop').classList.add('hide');
+  }).catch(() => {});
+}
+</script>
+</body>
+</html>

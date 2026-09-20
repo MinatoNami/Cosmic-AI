@@ -1,0 +1,931 @@
+{"t":0,"agent":"Agent1","kind":"deliberate","used":[],"goal":"wander","id":"d0","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":0,"agent":"Agent1","kind":"act","id":"a0","intent":"MoveTo","detail":{"y":0,"x":18},"because":"d0"}
+{"t":1,"agent":"Agent1","kind":"observe","obs":{"type":"NoticeShown","detail":"NoticeShown[tick=1, text=Welcome to Scania!]"},"id":"e0"}
+{"t":2,"agent":"Agent1","kind":"observe","obs":{"type":"SelfDescribed","detail":"SelfDescribed[tick=2, characterId=3, name=Agent1, level=1, job=0, mapId=10000]"},"id":"e1"}
+{"t":2,"agent":"Agent1","kind":"believe","provenance":"first_hand","id":"b0","confidence":0.5,"corroborated":false,"from":["e1"],"triple":["self","named","Agent1"]}
+{"t":2,"agent":"Agent1","kind":"believe","provenance":"first_hand","id":"b1","confidence":0.5,"corroborated":false,"from":["e1"],"triple":["self","level","1"]}
+{"t":2,"agent":"Agent1","kind":"believe","provenance":"first_hand","id":"b2","confidence":0.5,"corroborated":false,"from":["e1"],"triple":["self","job","0"]}
+{"t":2,"agent":"Agent1","kind":"believe","provenance":"first_hand","id":"b3","confidence":0.5,"corroborated":false,"from":["e1"],"triple":["self","in_map","map:10000"]}
+{"t":3,"agent":"Agent1","kind":"observe","obs":{"type":"Unrecognised","detail":"Unrecognised[tick=3, opcode=335, opcodeName=KEYMAP, bytes=451]"},"id":"e2"}
+{"t":4,"agent":"Agent1","kind":"observe","obs":{"type":"Unrecognised","detail":"Unrecognised[tick=4, opcode=159, opcodeName=QUICKSLOT_INIT, bytes=1]"},"id":"e3"}
+{"t":5,"agent":"Agent1","kind":"observe","obs":{"type":"Unrecognised","detail":"Unrecognised[tick=5, opcode=124, opcodeName=MACRO_SYS_DATA_INIT, bytes=1]"},"id":"e4"}
+{"t":6,"agent":"Agent1","kind":"observe","obs":{"type":"Unrecognised","detail":"Unrecognised[tick=6, opcode=336, opcodeName=AUTO_HP_POT, bytes=4]"},"id":"e5"}
+{"t":7,"agent":"Agent1","kind":"observe","obs":{"type":"Unrecognised","detail":"Unrecognised[tick=7, opcode=337, opcodeName=AUTO_MP_POT, bytes=4]"},"id":"e6"}
+{"t":8,"agent":"Agent1","kind":"observe","obs":{"type":"Unrecognised","detail":"Unrecognised[tick=8, opcode=222, opcodeName=DISABLE_UI, bytes=1]"},"id":"e7"}
+{"t":9,"agent":"Agent1","kind":"observe","obs":{"type":"Unrecognised","detail":"Unrecognised[tick=9, opcode=221, opcodeName=LOCK_UI, bytes=1]"},"id":"e8"}
+{"t":10,"agent":"Agent1","kind":"observe","obs":{"type":"Unrecognised","detail":"Unrecognised[tick=10, opcode=138, opcodeName=FIELD_EFFECT, bytes=23]"},"id":"e9"}
+{"t":11,"agent":"Agent1","kind":"observe","obs":{"type":"NpcAppeared","detail":"NpcAppeared[tick=11, objectId=1000000002, npcId=2101, position=java.awt.Point[x=130,y=305]]"},"id":"e10"}
+{"t":11,"agent":"Agent1","kind":"believe","provenance":"first_hand","id":"b4","confidence":0.5,"corroborated":false,"from":["e10"],"triple":["npc:2101","present_in","map:10000"]}
+{"t":12,"agent":"Agent1","kind":"observe","obs":{"type":"Unrecognised","detail":"Unrecognised[tick=12, opcode=259, opcodeName=SPAWN_NPC_REQUEST_CONTROLLER, bytes=21]"},"id":"e11"}
+{"t":13,"agent":"Agent1","kind":"observe","obs":{"type":"NpcAppeared","detail":"NpcAppeared[tick=13, objectId=1000000003, npcId=2100, position=java.awt.Point[x=833,y=125]]"},"id":"e12"}
+{"t":13,"agent":"Agent1","kind":"believe","provenance":"first_hand","id":"b5","confidence":0.5,"corroborated":false,"from":["e12"],"triple":["npc:2100","present_in","map:10000"]}
+{"t":14,"agent":"Agent1","kind":"observe","obs":{"type":"Unrecognised","detail":"Unrecognised[tick=14, opcode=259, opcodeName=SPAWN_NPC_REQUEST_CONTROLLER, bytes=21]"},"id":"e13"}
+{"t":15,"agent":"Agent1","kind":"observe","obs":{"type":"NpcAppeared","detail":"NpcAppeared[tick=15, objectId=1000000004, npcId=2007, position=java.awt.Point[x=1394,y=125]]"},"id":"e14"}
+{"t":15,"agent":"Agent1","kind":"believe","provenance":"first_hand","id":"b6","confidence":0.5,"corroborated":false,"from":["e14"],"triple":["npc:2007","present_in","map:10000"]}
+{"t":16,"agent":"Agent1","kind":"observe","obs":{"type":"Unrecognised","detail":"Unrecognised[tick=16, opcode=259, opcodeName=SPAWN_NPC_REQUEST_CONTROLLER, bytes=21]"},"id":"e15"}
+{"t":17,"agent":"Agent1","kind":"observe","obs":{"type":"PlayerAppeared","detail":"PlayerAppeared[tick=17, characterId=2, name=Agent0, level=1]"},"id":"e16"}
+{"t":17,"agent":"Agent1","kind":"believe","provenance":"first_hand","id":"b7","confidence":0.5,"corroborated":false,"from":["e16"],"triple":["player:2","named","Agent0"]}
+{"t":17,"agent":"Agent1","kind":"believe","provenance":"first_hand","id":"b8","confidence":0.5,"corroborated":false,"from":["e16"],"triple":["player:2","level","1"]}
+{"t":17,"agent":"Agent1","kind":"believe","provenance":"first_hand","id":"b9","confidence":0.5,"corroborated":false,"from":["e16"],"triple":["player:2","in_map","map:10000"]}
+{"t":18,"agent":"Agent1","kind":"observe","obs":{"type":"NpcAppeared","detail":"NpcAppeared[tick=18, objectId=1000000002, npcId=2101, position=java.awt.Point[x=130,y=305]]"},"id":"e17"}
+{"t":18,"agent":"Agent1","kind":"believe","provenance":"first_hand","id":"b4","confidence":0.75,"corroborated":true,"from":["e10","e17"],"triple":["npc:2101","present_in","map:10000"]}
+{"t":19,"agent":"Agent1","kind":"observe","obs":{"type":"Unrecognised","detail":"Unrecognised[tick=19, opcode=259, opcodeName=SPAWN_NPC_REQUEST_CONTROLLER, bytes=21]"},"id":"e18"}
+{"t":20,"agent":"Agent1","kind":"observe","obs":{"type":"NpcAppeared","detail":"NpcAppeared[tick=20, objectId=1000000003, npcId=2100, position=java.awt.Point[x=833,y=125]]"},"id":"e19"}
+{"t":20,"agent":"Agent1","kind":"believe","provenance":"first_hand","id":"b5","confidence":0.75,"corroborated":true,"from":["e12","e19"],"triple":["npc:2100","present_in","map:10000"]}
+{"t":21,"agent":"Agent1","kind":"observe","obs":{"type":"Unrecognised","detail":"Unrecognised[tick=21, opcode=259, opcodeName=SPAWN_NPC_REQUEST_CONTROLLER, bytes=21]"},"id":"e20"}
+{"t":22,"agent":"Agent1","kind":"observe","obs":{"type":"NpcAppeared","detail":"NpcAppeared[tick=22, objectId=1000000004, npcId=2007, position=java.awt.Point[x=1394,y=125]]"},"id":"e21"}
+{"t":22,"agent":"Agent1","kind":"believe","provenance":"first_hand","id":"b6","confidence":0.75,"corroborated":true,"from":["e14","e21"],"triple":["npc:2007","present_in","map:10000"]}
+{"t":23,"agent":"Agent1","kind":"observe","obs":{"type":"Unrecognised","detail":"Unrecognised[tick=23, opcode=259, opcodeName=SPAWN_NPC_REQUEST_CONTROLLER, bytes=21]"},"id":"e22"}
+{"t":24,"agent":"Agent1","kind":"observe","obs":{"type":"Unrecognised","detail":"Unrecognised[tick=24, opcode=35, opcodeName=FORCED_STAT_RESET, bytes=0]"},"id":"e23"}
+{"t":25,"agent":"Agent1","kind":"observe","obs":{"type":"Unrecognised","detail":"Unrecognised[tick=25, opcode=63, opcodeName=BUDDYLIST, bytes=2]"},"id":"e24"}
+{"t":26,"agent":"Agent1","kind":"observe","obs":{"type":"Unrecognised","detail":"Unrecognised[tick=26, opcode=100, opcodeName=FAMILY_PRIVILEGE_LIST, bytes=1952]"},"id":"e25"}
+{"t":27,"agent":"Agent1","kind":"observe","obs":{"type":"Unrecognised","detail":"Unrecognised[tick=27, opcode=95, opcodeName=FAMILY_INFO_RESULT, bytes=30]"},"id":"e26"}
+{"t":28,"agent":"Agent1","kind":"observe","obs":{"type":"Unrecognised","detail":"Unrecognised[tick=28, opcode=63, opcodeName=BUDDYLIST, bytes=2]"},"id":"e27"}
+{"t":29,"agent":"Agent1","kind":"observe","obs":{"type":"Unrecognised","detail":"Unrecognised[tick=29, opcode=58, opcodeName=SET_GENDER, bytes=1]"},"id":"e28"}
+{"t":30,"agent":"Agent1","kind":"observe","obs":{"type":"Unrecognised","detail":"Unrecognised[tick=30, opcode=47, opcodeName=CLAIM_STATUS_CHANGED, bytes=1]"},"id":"e29"}
+{"t":31,"agent":"Agent1","kind":"observe","obs":{"type":"Unrecognised","detail":"Unrecognised[tick=31, opcode=36, opcodeName=UPDATE_SKILLS, bytes=24]"},"id":"e30"}
+{"t":32,"agent":"Agent1","kind":"observe","obs":{"type":"Unrecognised","detail":"Unrecognised[tick=32, opcode=263, opcodeName=SET_NPC_SCRIPTABLE, bytes=27]"},"id":"e31"}
+{"t":33,"agent":"Agent1","kind":"observe","obs":{"type":"ThingMoved","detail":"ThingMoved[tick=33, objectId=2, position=java.awt.Point[x=118,y=0]]"},"id":"e32"}
+{"t":33,"agent":"Agent1","kind":"deliberate","used":["b6","b5","b4"],"goal":"wander","id":"d1","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":33,"agent":"Agent1","kind":"act","id":"a1","intent":"MoveTo","detail":{"y":0,"x":75},"because":"d1"}
+{"t":34,"agent":"Agent1","kind":"observe","obs":{"type":"ThingMoved","detail":"ThingMoved[tick=34, objectId=2, position=java.awt.Point[x=170,y=0]]"},"id":"e33"}
+{"t":34,"agent":"Agent1","kind":"deliberate","used":["b6","b5","b4"],"goal":"wander","id":"d2","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":34,"agent":"Agent1","kind":"act","id":"a2","intent":"MoveTo","detail":{"y":0,"x":144},"because":"d2"}
+{"t":35,"agent":"Agent1","kind":"observe","obs":{"type":"ThingMoved","detail":"ThingMoved[tick=35, objectId=2, position=java.awt.Point[x=235,y=0]]"},"id":"e34"}
+{"t":35,"agent":"Agent1","kind":"deliberate","used":["b6","b5","b4"],"goal":"wander","id":"d3","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":35,"agent":"Agent1","kind":"act","id":"a3","intent":"MoveTo","detail":{"y":0,"x":160},"because":"d3"}
+{"t":36,"agent":"Agent1","kind":"observe","obs":{"type":"ThingMoved","detail":"ThingMoved[tick=36, objectId=2, position=java.awt.Point[x=267,y=0]]"},"id":"e35"}
+{"t":36,"agent":"Agent1","kind":"deliberate","used":["b6","b5","b4"],"goal":"wander","id":"d4","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":36,"agent":"Agent1","kind":"act","id":"a4","intent":"MoveTo","detail":{"y":0,"x":136},"because":"d4"}
+{"t":37,"agent":"Agent1","kind":"observe","obs":{"type":"ThingMoved","detail":"ThingMoved[tick=37, objectId=2, position=java.awt.Point[x=287,y=0]]"},"id":"e36"}
+{"t":37,"agent":"Agent1","kind":"deliberate","used":["b6","b5","b4"],"goal":"wander","id":"d5","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":37,"agent":"Agent1","kind":"act","id":"a5","intent":"MoveTo","detail":{"y":0,"x":78},"because":"d5"}
+{"t":38,"agent":"Agent1","kind":"observe","obs":{"type":"ThingMoved","detail":"ThingMoved[tick=38, objectId=2, position=java.awt.Point[x=306,y=0]]"},"id":"e37"}
+{"t":38,"agent":"Agent1","kind":"deliberate","used":["b6","b5","b4"],"goal":"wander","id":"d6","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":38,"agent":"Agent1","kind":"act","id":"a6","intent":"MoveTo","detail":{"y":0,"x":98},"because":"d6"}
+{"t":39,"agent":"Agent1","kind":"observe","obs":{"type":"ThingMoved","detail":"ThingMoved[tick=39, objectId=2, position=java.awt.Point[x=284,y=0]]"},"id":"e38"}
+{"t":39,"agent":"Agent1","kind":"deliberate","used":["b6","b5","b4"],"goal":"wander","id":"d7","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":39,"agent":"Agent1","kind":"act","id":"a7","intent":"MoveTo","detail":{"y":0,"x":167},"because":"d7"}
+{"t":40,"agent":"Agent1","kind":"observe","obs":{"type":"ThingMoved","detail":"ThingMoved[tick=40, objectId=2, position=java.awt.Point[x=288,y=0]]"},"id":"e39"}
+{"t":40,"agent":"Agent1","kind":"deliberate","used":["b6","b5","b4"],"goal":"wander","id":"d8","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":40,"agent":"Agent1","kind":"act","id":"a8","intent":"MoveTo","detail":{"y":0,"x":125},"because":"d8"}
+{"t":41,"agent":"Agent1","kind":"observe","obs":{"type":"ThingMoved","detail":"ThingMoved[tick=41, objectId=2, position=java.awt.Point[x=274,y=0]]"},"id":"e40"}
+{"t":41,"agent":"Agent1","kind":"deliberate","used":["b6","b5","b4"],"goal":"wander","id":"d9","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":41,"agent":"Agent1","kind":"act","id":"a9","intent":"MoveTo","detail":{"y":0,"x":65},"because":"d9"}
+{"t":42,"agent":"Agent1","kind":"observe","obs":{"type":"ThingMoved","detail":"ThingMoved[tick=42, objectId=2, position=java.awt.Point[x=261,y=0]]"},"id":"e41"}
+{"t":42,"agent":"Agent1","kind":"deliberate","used":["b6","b5","b4"],"goal":"wander","id":"d10","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":42,"agent":"Agent1","kind":"act","id":"a10","intent":"MoveTo","detail":{"y":0,"x":38},"because":"d10"}
+{"t":43,"agent":"Agent1","kind":"observe","obs":{"type":"ThingMoved","detail":"ThingMoved[tick=43, objectId=2, position=java.awt.Point[x=294,y=0]]"},"id":"e42"}
+{"t":43,"agent":"Agent1","kind":"deliberate","used":["b6","b5","b4"],"goal":"wander","id":"d11","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":43,"agent":"Agent1","kind":"act","id":"a11","intent":"MoveTo","detail":{"y":0,"x":66},"because":"d11"}
+{"t":44,"agent":"Agent1","kind":"observe","obs":{"type":"ThingMoved","detail":"ThingMoved[tick=44, objectId=2, position=java.awt.Point[x=258,y=0]]"},"id":"e43"}
+{"t":44,"agent":"Agent1","kind":"deliberate","used":["b6","b5","b4"],"goal":"wander","id":"d12","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":44,"agent":"Agent1","kind":"act","id":"a12","intent":"MoveTo","detail":{"y":0,"x":88},"because":"d12"}
+{"t":45,"agent":"Agent1","kind":"observe","obs":{"type":"ThingMoved","detail":"ThingMoved[tick=45, objectId=2, position=java.awt.Point[x=184,y=0]]"},"id":"e44"}
+{"t":45,"agent":"Agent1","kind":"deliberate","used":["b6","b5","b4"],"goal":"wander","id":"d13","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":45,"agent":"Agent1","kind":"act","id":"a13","intent":"MoveTo","detail":{"y":0,"x":27},"because":"d13"}
+{"t":46,"agent":"Agent1","kind":"observe","obs":{"type":"ThingMoved","detail":"ThingMoved[tick=46, objectId=2, position=java.awt.Point[x=231,y=0]]"},"id":"e45"}
+{"t":46,"agent":"Agent1","kind":"deliberate","used":["b6","b5","b4"],"goal":"wander","id":"d14","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":46,"agent":"Agent1","kind":"act","id":"a14","intent":"MoveTo","detail":{"y":0,"x":40},"because":"d14"}
+{"t":47,"agent":"Agent1","kind":"observe","obs":{"type":"ThingMoved","detail":"ThingMoved[tick=47, objectId=2, position=java.awt.Point[x=206,y=0]]"},"id":"e46"}
+{"t":47,"agent":"Agent1","kind":"deliberate","used":["b6","b5","b4"],"goal":"wander","id":"d15","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":47,"agent":"Agent1","kind":"act","id":"a15","intent":"MoveTo","detail":{"y":0,"x":117},"because":"d15"}
+{"t":48,"agent":"Agent1","kind":"observe","obs":{"type":"ThingMoved","detail":"ThingMoved[tick=48, objectId=2, position=java.awt.Point[x=126,y=0]]"},"id":"e47"}
+{"t":48,"agent":"Agent1","kind":"deliberate","used":["b6","b5","b4"],"goal":"wander","id":"d16","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":48,"agent":"Agent1","kind":"act","id":"a16","intent":"MoveTo","detail":{"y":0,"x":136},"because":"d16"}
+{"t":49,"agent":"Agent1","kind":"observe","obs":{"type":"ThingMoved","detail":"ThingMoved[tick=49, objectId=2, position=java.awt.Point[x=69,y=0]]"},"id":"e48"}
+{"t":49,"agent":"Agent1","kind":"deliberate","used":["b6","b5","b4"],"goal":"wander","id":"d17","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":49,"agent":"Agent1","kind":"act","id":"a17","intent":"MoveTo","detail":{"y":0,"x":215},"because":"d17"}
+{"t":50,"agent":"Agent1","kind":"observe","obs":{"type":"ThingMoved","detail":"ThingMoved[tick=50, objectId=2, position=java.awt.Point[x=59,y=0]]"},"id":"e49"}
+{"t":50,"agent":"Agent1","kind":"deliberate","used":["b6","b5","b4"],"goal":"wander","id":"d18","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":50,"agent":"Agent1","kind":"act","id":"a18","intent":"MoveTo","detail":{"y":0,"x":261},"because":"d18"}
+{"t":51,"agent":"Agent1","kind":"observe","obs":{"type":"ThingMoved","detail":"ThingMoved[tick=51, objectId=2, position=java.awt.Point[x=19,y=0]]"},"id":"e50"}
+{"t":51,"agent":"Agent1","kind":"deliberate","used":["b6","b5","b4"],"goal":"wander","id":"d19","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":51,"agent":"Agent1","kind":"act","id":"a19","intent":"MoveTo","detail":{"y":0,"x":217},"because":"d19"}
+{"t":51,"agent":"Agent1","kind":"deliberate","used":["b6","b5","b4"],"goal":"walk to a way out","id":"d20","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":51,"agent":"Agent1","kind":"act","id":"a20","intent":"MoveTo","detail":{"y":431,"x":1164},"because":"d20"}
+{"t":52,"agent":"Agent1","kind":"observe","obs":{"type":"ThingMoved","detail":"ThingMoved[tick=52, objectId=2, position=java.awt.Point[x=280,y=455]]"},"id":"e51"}
+{"t":52,"agent":"Agent1","kind":"deliberate","used":["b6","b5","b4"],"goal":"see where this goes","id":"d21","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":52,"agent":"Agent1","kind":"act","id":"a21","intent":"EnterPortal","detail":{"portal":"glBmsg1"},"because":"d21"}
+{"t":53,"agent":"Agent1","kind":"observe","obs":{"type":"ThingMoved","detail":"ThingMoved[tick=53, objectId=2, position=java.awt.Point[x=280,y=455]]"},"id":"e52"}
+{"t":54,"agent":"Agent1","kind":"observe","obs":{"type":"Unrecognised","detail":"Unrecognised[tick=54, opcode=214, opcodeName=PLAYER_HINT, bytes=60]"},"id":"e53"}
+{"t":55,"agent":"Agent1","kind":"observe","obs":{"type":"StatsChanged","detail":"StatsChanged[tick=55, stats={}]"},"id":"e54"}
+{"t":56,"agent":"Agent1","kind":"observe","obs":{"type":"ThingMoved","detail":"ThingMoved[tick=56, objectId=2, position=java.awt.Point[x=317,y=455]]"},"id":"e55"}
+{"t":56,"agent":"Agent1","kind":"deliberate","used":["b6","b5","b4"],"goal":"wander","id":"d22","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":56,"agent":"Agent1","kind":"act","id":"a22","intent":"MoveTo","detail":{"y":431,"x":1197},"because":"d22"}
+{"t":56,"agent":"Agent1","kind":"deliberate","used":["b6","b5","b4"],"goal":"wander","id":"d23","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":56,"agent":"Agent1","kind":"act","id":"a23","intent":"MoveTo","detail":{"y":431,"x":1230},"because":"d23"}
+{"t":57,"agent":"Agent1","kind":"observe","obs":{"type":"ThingMoved","detail":"ThingMoved[tick=57, objectId=2, position=java.awt.Point[x=381,y=455]]"},"id":"e56"}
+{"t":57,"agent":"Agent1","kind":"deliberate","used":["b6","b5","b4"],"goal":"wander","id":"d24","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":57,"agent":"Agent1","kind":"act","id":"a24","intent":"MoveTo","detail":{"y":431,"x":1179},"because":"d24"}
+{"t":58,"agent":"Agent1","kind":"observe","obs":{"type":"ThingMoved","detail":"ThingMoved[tick=58, objectId=2, position=java.awt.Point[x=429,y=455]]"},"id":"e57"}
+{"t":58,"agent":"Agent1","kind":"deliberate","used":["b6","b5","b4"],"goal":"wander","id":"d25","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":58,"agent":"Agent1","kind":"act","id":"a25","intent":"MoveTo","detail":{"y":431,"x":1201},"because":"d25"}
+{"t":59,"agent":"Agent1","kind":"observe","obs":{"type":"ThingMoved","detail":"ThingMoved[tick=59, objectId=2, position=java.awt.Point[x=421,y=455]]"},"id":"e58"}
+{"t":60,"agent":"Agent1","kind":"observe","obs":{"type":"ThingMoved","detail":"ThingMoved[tick=60, objectId=2, position=java.awt.Point[x=362,y=455]]"},"id":"e59"}
+{"t":60,"agent":"Agent1","kind":"deliberate","used":["b6","b5","b4"],"goal":"wander","id":"d26","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":60,"agent":"Agent1","kind":"act","id":"a26","intent":"MoveTo","detail":{"y":431,"x":1219},"because":"d26"}
+{"t":61,"agent":"Agent1","kind":"observe","obs":{"type":"ThingMoved","detail":"ThingMoved[tick=61, objectId=2, position=java.awt.Point[x=395,y=455]]"},"id":"e60"}
+{"t":61,"agent":"Agent1","kind":"deliberate","used":["b6","b5","b4"],"goal":"wander","id":"d27","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":61,"agent":"Agent1","kind":"act","id":"a27","intent":"MoveTo","detail":{"y":431,"x":1217},"because":"d27"}
+{"t":62,"agent":"Agent1","kind":"observe","obs":{"type":"ThingMoved","detail":"ThingMoved[tick=62, objectId=2, position=java.awt.Point[x=356,y=455]]"},"id":"e61"}
+{"t":62,"agent":"Agent1","kind":"deliberate","used":["b6","b5","b4"],"goal":"wander","id":"d28","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":62,"agent":"Agent1","kind":"act","id":"a28","intent":"MoveTo","detail":{"y":431,"x":1241},"because":"d28"}
+{"t":63,"agent":"Agent1","kind":"observe","obs":{"type":"ThingMoved","detail":"ThingMoved[tick=63, objectId=2, position=java.awt.Point[x=276,y=455]]"},"id":"e62"}
+{"t":63,"agent":"Agent1","kind":"deliberate","used":["b6","b5","b4"],"goal":"wander","id":"d29","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":63,"agent":"Agent1","kind":"act","id":"a29","intent":"MoveTo","detail":{"y":431,"x":1210},"because":"d29"}
+{"t":64,"agent":"Agent1","kind":"observe","obs":{"type":"ThingMoved","detail":"ThingMoved[tick=64, objectId=2, position=java.awt.Point[x=222,y=455]]"},"id":"e63"}
+{"t":64,"agent":"Agent1","kind":"deliberate","used":["b6","b5","b4"],"goal":"wander","id":"d30","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":64,"agent":"Agent1","kind":"act","id":"a30","intent":"MoveTo","detail":{"y":431,"x":1220},"because":"d30"}
+{"t":65,"agent":"Agent1","kind":"observe","obs":{"type":"ThingMoved","detail":"ThingMoved[tick=65, objectId=2, position=java.awt.Point[x=250,y=455]]"},"id":"e64"}
+{"t":65,"agent":"Agent1","kind":"deliberate","used":["b6","b5","b4"],"goal":"wander","id":"d31","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":65,"agent":"Agent1","kind":"act","id":"a31","intent":"MoveTo","detail":{"y":431,"x":1295},"because":"d31"}
+{"t":65,"agent":"Agent1","kind":"deliberate","used":["b6","b5","b4"],"goal":"wander","id":"d32","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":65,"agent":"Agent1","kind":"act","id":"a32","intent":"MoveTo","detail":{"y":431,"x":1356},"because":"d32"}
+{"t":66,"agent":"Agent1","kind":"observe","obs":{"type":"ThingMoved","detail":"ThingMoved[tick=66, objectId=2, position=java.awt.Point[x=271,y=455]]"},"id":"e65"}
+{"t":67,"agent":"Agent1","kind":"observe","obs":{"type":"ThingMoved","detail":"ThingMoved[tick=67, objectId=2, position=java.awt.Point[x=193,y=455]]"},"id":"e66"}
+{"t":67,"agent":"Agent1","kind":"deliberate","used":["b6","b5","b4"],"goal":"wander","id":"d33","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":67,"agent":"Agent1","kind":"act","id":"a33","intent":"MoveTo","detail":{"y":431,"x":1300},"because":"d33"}
+{"t":67,"agent":"Agent1","kind":"deliberate","used":["b6","b5","b4"],"goal":"wander","id":"d34","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":67,"agent":"Agent1","kind":"act","id":"a34","intent":"MoveTo","detail":{"y":431,"x":1322},"because":"d34"}
+{"t":68,"agent":"Agent1","kind":"observe","obs":{"type":"ThingMoved","detail":"ThingMoved[tick=68, objectId=2, position=java.awt.Point[x=221,y=455]]"},"id":"e67"}
+{"t":68,"agent":"Agent1","kind":"deliberate","used":["b6","b5","b4"],"goal":"wander","id":"d35","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":68,"agent":"Agent1","kind":"act","id":"a35","intent":"MoveTo","detail":{"y":431,"x":1289},"because":"d35"}
+{"t":69,"agent":"Agent1","kind":"observe","obs":{"type":"ThingMoved","detail":"ThingMoved[tick=69, objectId=2, position=java.awt.Point[x=268,y=455]]"},"id":"e68"}
+{"t":69,"agent":"Agent1","kind":"deliberate","used":["b6","b5","b4"],"goal":"wander","id":"d36","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":69,"agent":"Agent1","kind":"act","id":"a36","intent":"MoveTo","detail":{"y":431,"x":1330},"because":"d36"}
+{"t":70,"agent":"Agent1","kind":"observe","obs":{"type":"ThingMoved","detail":"ThingMoved[tick=70, objectId=2, position=java.awt.Point[x=208,y=455]]"},"id":"e69"}
+{"t":70,"agent":"Agent1","kind":"deliberate","used":["b6","b5","b4"],"goal":"wander","id":"d37","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":70,"agent":"Agent1","kind":"act","id":"a37","intent":"MoveTo","detail":{"y":431,"x":1393},"because":"d37"}
+{"t":71,"agent":"Agent1","kind":"observe","obs":{"type":"ThingMoved","detail":"ThingMoved[tick=71, objectId=2, position=java.awt.Point[x=180,y=455]]"},"id":"e70"}
+{"t":71,"agent":"Agent1","kind":"deliberate","used":["b6","b5","b4"],"goal":"wander","id":"d38","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":71,"agent":"Agent1","kind":"act","id":"a38","intent":"MoveTo","detail":{"y":431,"x":1448},"because":"d38"}
+{"t":72,"agent":"Agent1","kind":"observe","obs":{"type":"ThingMoved","detail":"ThingMoved[tick=72, objectId=2, position=java.awt.Point[x=124,y=455]]"},"id":"e71"}
+{"t":72,"agent":"Agent1","kind":"deliberate","used":["b6","b5","b4"],"goal":"wander","id":"d39","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":72,"agent":"Agent1","kind":"act","id":"a39","intent":"MoveTo","detail":{"y":431,"x":1434},"because":"d39"}
+{"t":73,"agent":"Agent1","kind":"observe","obs":{"type":"ThingMoved","detail":"ThingMoved[tick=73, objectId=2, position=java.awt.Point[x=72,y=455]]"},"id":"e72"}
+{"t":73,"agent":"Agent1","kind":"deliberate","used":["b6","b5","b4"],"goal":"walk to a way out","id":"d40","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":73,"agent":"Agent1","kind":"act","id":"a40","intent":"MoveTo","detail":{"y":428,"x":-95},"because":"d40"}
+{"t":74,"agent":"Agent1","kind":"observe","obs":{"type":"ThingMoved","detail":"ThingMoved[tick=74, objectId=2, position=java.awt.Point[x=987,y=430]]"},"id":"e73"}
+{"t":74,"agent":"Agent1","kind":"deliberate","used":["b6","b5","b4"],"goal":"see where this goes","id":"d41","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":74,"agent":"Agent1","kind":"act","id":"a41","intent":"EnterPortal","detail":{"portal":"tuto00"},"because":"d41"}
+{"t":75,"agent":"Agent1","kind":"observe","obs":{"type":"StatsChanged","detail":"StatsChanged[tick=75, stats={}]"},"id":"e74"}
+{"t":76,"agent":"Agent1","kind":"observe","obs":{"type":"ThingMoved","detail":"ThingMoved[tick=76, objectId=2, position=java.awt.Point[x=987,y=430]]"},"id":"e75"}
+{"t":76,"agent":"Agent1","kind":"deliberate","used":["b6","b5","b4"],"goal":"wander","id":"d42","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":76,"agent":"Agent1","kind":"act","id":"a42","intent":"MoveTo","detail":{"y":428,"x":-20},"because":"d42"}
+{"t":77,"agent":"Agent1","kind":"observe","obs":{"type":"ThingMoved","detail":"ThingMoved[tick=77, objectId=2, position=java.awt.Point[x=977,y=430]]"},"id":"e76"}
+{"t":77,"agent":"Agent1","kind":"deliberate","used":["b6","b5","b4"],"goal":"wander","id":"d43","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":77,"agent":"Agent1","kind":"act","id":"a43","intent":"MoveTo","detail":{"y":428,"x":3},"because":"d43"}
+{"t":78,"agent":"Agent1","kind":"observe","obs":{"type":"ThingMoved","detail":"ThingMoved[tick=78, objectId=2, position=java.awt.Point[x=997,y=430]]"},"id":"e77"}
+{"t":78,"agent":"Agent1","kind":"deliberate","used":["b6","b5","b4"],"goal":"wander","id":"d44","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":78,"agent":"Agent1","kind":"act","id":"a44","intent":"MoveTo","detail":{"y":428,"x":-26},"because":"d44"}
+{"t":79,"agent":"Agent1","kind":"observe","obs":{"type":"ThingMoved","detail":"ThingMoved[tick=79, objectId=2, position=java.awt.Point[x=940,y=430]]"},"id":"e78"}
+{"t":79,"agent":"Agent1","kind":"deliberate","used":["b6","b5","b4"],"goal":"wander","id":"d45","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":79,"agent":"Agent1","kind":"act","id":"a45","intent":"MoveTo","detail":{"y":428,"x":-82},"because":"d45"}
+{"t":80,"agent":"Agent1","kind":"observe","obs":{"type":"ThingMoved","detail":"ThingMoved[tick=80, objectId=2, position=java.awt.Point[x=973,y=430]]"},"id":"e79"}
+{"t":80,"agent":"Agent1","kind":"deliberate","used":["b6","b5","b4"],"goal":"wander","id":"d46","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":80,"agent":"Agent1","kind":"act","id":"a46","intent":"MoveTo","detail":{"y":428,"x":-153},"because":"d46"}
+{"t":81,"agent":"Agent1","kind":"observe","obs":{"type":"ThingMoved","detail":"ThingMoved[tick=81, objectId=2, position=java.awt.Point[x=1035,y=430]]"},"id":"e80"}
+{"t":81,"agent":"Agent1","kind":"deliberate","used":["b6","b5","b4"],"goal":"wander","id":"d47","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":81,"agent":"Agent1","kind":"act","id":"a47","intent":"MoveTo","detail":{"y":428,"x":-130},"because":"d47"}
+{"t":82,"agent":"Agent1","kind":"observe","obs":{"type":"ThingMoved","detail":"ThingMoved[tick=82, objectId=2, position=java.awt.Point[x=1000,y=430]]"},"id":"e81"}
+{"t":82,"agent":"Agent1","kind":"deliberate","used":["b6","b5","b4"],"goal":"wander","id":"d48","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":82,"agent":"Agent1","kind":"act","id":"a48","intent":"MoveTo","detail":{"y":428,"x":-93},"because":"d48"}
+{"t":83,"agent":"Agent1","kind":"observe","obs":{"type":"ThingMoved","detail":"ThingMoved[tick=83, objectId=2, position=java.awt.Point[x=1011,y=430]]"},"id":"e82"}
+{"t":83,"agent":"Agent1","kind":"deliberate","used":["b6","b5","b4"],"goal":"wander","id":"d49","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":83,"agent":"Agent1","kind":"act","id":"a49","intent":"MoveTo","detail":{"y":428,"x":-41},"because":"d49"}
+{"t":84,"agent":"Agent1","kind":"observe","obs":{"type":"ThingMoved","detail":"ThingMoved[tick=84, objectId=2, position=java.awt.Point[x=962,y=430]]"},"id":"e83"}
+{"t":84,"agent":"Agent1","kind":"deliberate","used":["b6","b5","b4"],"goal":"wander","id":"d50","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":84,"agent":"Agent1","kind":"act","id":"a50","intent":"MoveTo","detail":{"y":428,"x":-110},"because":"d50"}
+{"t":85,"agent":"Agent1","kind":"observe","obs":{"type":"ThingMoved","detail":"ThingMoved[tick=85, objectId=2, position=java.awt.Point[x=959,y=430]]"},"id":"e84"}
+{"t":85,"agent":"Agent1","kind":"deliberate","used":["b6","b5","b4"],"goal":"wander","id":"d51","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":85,"agent":"Agent1","kind":"act","id":"a51","intent":"MoveTo","detail":{"y":428,"x":-42},"because":"d51"}
+{"t":86,"agent":"Agent1","kind":"observe","obs":{"type":"ThingMoved","detail":"ThingMoved[tick=86, objectId=2, position=java.awt.Point[x=942,y=430]]"},"id":"e85"}
+{"t":86,"agent":"Agent1","kind":"deliberate","used":["b6","b5","b4"],"goal":"wander","id":"d52","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":86,"agent":"Agent1","kind":"act","id":"a52","intent":"MoveTo","detail":{"y":428,"x":-3},"because":"d52"}
+{"t":87,"agent":"Agent1","kind":"observe","obs":{"type":"ThingMoved","detail":"ThingMoved[tick=87, objectId=2, position=java.awt.Point[x=1014,y=430]]"},"id":"e86"}
+{"t":87,"agent":"Agent1","kind":"deliberate","used":["b6","b5","b4"],"goal":"wander","id":"d53","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":87,"agent":"Agent1","kind":"act","id":"a53","intent":"MoveTo","detail":{"y":428,"x":-72},"because":"d53"}
+{"t":88,"agent":"Agent1","kind":"observe","obs":{"type":"ThingMoved","detail":"ThingMoved[tick=88, objectId=2, position=java.awt.Point[x=1050,y=430]]"},"id":"e87"}
+{"t":88,"agent":"Agent1","kind":"deliberate","used":["b6","b5","b4"],"goal":"wander","id":"d54","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":88,"agent":"Agent1","kind":"act","id":"a54","intent":"MoveTo","detail":{"y":428,"x":-8},"because":"d54"}
+{"t":89,"agent":"Agent1","kind":"observe","obs":{"type":"ThingMoved","detail":"ThingMoved[tick=89, objectId=2, position=java.awt.Point[x=1115,y=430]]"},"id":"e88"}
+{"t":89,"agent":"Agent1","kind":"deliberate","used":["b6","b5","b4"],"goal":"wander","id":"d55","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":89,"agent":"Agent1","kind":"act","id":"a55","intent":"MoveTo","detail":{"y":428,"x":33},"because":"d55"}
+{"t":90,"agent":"Agent1","kind":"observe","obs":{"type":"ThingMoved","detail":"ThingMoved[tick=90, objectId=2, position=java.awt.Point[x=1051,y=430]]"},"id":"e89"}
+{"t":90,"agent":"Agent1","kind":"deliberate","used":["b6","b5","b4"],"goal":"wander","id":"d56","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":90,"agent":"Agent1","kind":"act","id":"a56","intent":"MoveTo","detail":{"y":428,"x":-32},"because":"d56"}
+{"t":91,"agent":"Agent1","kind":"observe","obs":{"type":"ThingMoved","detail":"ThingMoved[tick=91, objectId=2, position=java.awt.Point[x=1122,y=430]]"},"id":"e90"}
+{"t":91,"agent":"Agent1","kind":"deliberate","used":["b6","b5","b4"],"goal":"wander","id":"d57","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":91,"agent":"Agent1","kind":"act","id":"a57","intent":"MoveTo","detail":{"y":428,"x":-108},"because":"d57"}
+{"t":92,"agent":"Agent1","kind":"observe","obs":{"type":"ThingMoved","detail":"ThingMoved[tick=92, objectId=2, position=java.awt.Point[x=1116,y=430]]"},"id":"e91"}
+{"t":92,"agent":"Agent1","kind":"deliberate","used":["b6","b5","b4"],"goal":"wander","id":"d58","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":92,"agent":"Agent1","kind":"act","id":"a58","intent":"MoveTo","detail":{"y":428,"x":-157},"because":"d58"}
+{"t":93,"agent":"Agent1","kind":"observe","obs":{"type":"ThingMoved","detail":"ThingMoved[tick=93, objectId=2, position=java.awt.Point[x=1184,y=430]]"},"id":"e92"}
+{"t":93,"agent":"Agent1","kind":"deliberate","used":["b6","b5","b4"],"goal":"wander","id":"d59","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":93,"agent":"Agent1","kind":"act","id":"a59","intent":"MoveTo","detail":{"y":428,"x":-160},"because":"d59"}
+{"t":94,"agent":"Agent1","kind":"observe","obs":{"type":"ThingMoved","detail":"ThingMoved[tick=94, objectId=2, position=java.awt.Point[x=1225,y=430]]"},"id":"e93"}
+{"t":94,"agent":"Agent1","kind":"deliberate","used":["b6","b5","b4"],"goal":"walk to a way out","id":"d60","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":94,"agent":"Agent1","kind":"act","id":"a60","intent":"MoveTo","detail":{"y":480,"x":1077},"because":"d60"}
+{"t":95,"agent":"Agent1","kind":"observe","obs":{"type":"ThingMoved","detail":"ThingMoved[tick=95, objectId=2, position=java.awt.Point[x=-95,y=428]]"},"id":"e94"}
+{"t":95,"agent":"Agent1","kind":"deliberate","used":["b6","b5","b4"],"goal":"see where this goes","id":"d61","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":95,"agent":"Agent1","kind":"act","id":"a61","intent":"EnterPortal","detail":{"portal":"out00"},"because":"d61"}
+{"t":96,"agent":"Agent1","kind":"observe","obs":{"type":"MapEntered","detail":"MapEntered[tick=96, mapId=20000, spawnPoint=1]"},"id":"e95"}
+{"t":96,"agent":"Agent1","kind":"believe","provenance":"first_hand","id":"b10","confidence":0.5,"corroborated":false,"from":["e95"],"triple":["self","in_map","map:20000"]}
+{"t":96,"agent":"Agent1","kind":"revise","supersededBy":"b10","heldFor":94,"id":"b3","triple":["self","in_map","map:10000"]}
+{"t":97,"agent":"Agent1","kind":"observe","obs":{"type":"Unrecognised","detail":"Unrecognised[tick=97, opcode=222, opcodeName=DISABLE_UI, bytes=1]"},"id":"e96"}
+{"t":98,"agent":"Agent1","kind":"observe","obs":{"type":"Unrecognised","detail":"Unrecognised[tick=98, opcode=221, opcodeName=LOCK_UI, bytes=1]"},"id":"e97"}
+{"t":99,"agent":"Agent1","kind":"observe","obs":{"type":"Unrecognised","detail":"Unrecognised[tick=99, opcode=138, opcodeName=FIELD_EFFECT, bytes=23]"},"id":"e98"}
+{"t":100,"agent":"Agent1","kind":"observe","obs":{"type":"NpcAppeared","detail":"NpcAppeared[tick=100, objectId=1000000002, npcId=2000, position=java.awt.Point[x=233,y=65]]"},"id":"e99"}
+{"t":100,"agent":"Agent1","kind":"believe","provenance":"first_hand","id":"b11","confidence":0.5,"corroborated":false,"from":["e99"],"triple":["npc:2000","present_in","map:20000"]}
+{"t":101,"agent":"Agent1","kind":"observe","obs":{"type":"Unrecognised","detail":"Unrecognised[tick=101, opcode=259, opcodeName=SPAWN_NPC_REQUEST_CONTROLLER, bytes=21]"},"id":"e100"}
+{"t":102,"agent":"Agent1","kind":"observe","obs":{"type":"NpcAppeared","detail":"NpcAppeared[tick=102, objectId=1000000002, npcId=2000, position=java.awt.Point[x=233,y=65]]"},"id":"e101"}
+{"t":102,"agent":"Agent1","kind":"believe","provenance":"first_hand","id":"b11","confidence":0.75,"corroborated":true,"from":["e99","e101"],"triple":["npc:2000","present_in","map:20000"]}
+{"t":103,"agent":"Agent1","kind":"observe","obs":{"type":"Unrecognised","detail":"Unrecognised[tick=103, opcode=259, opcodeName=SPAWN_NPC_REQUEST_CONTROLLER, bytes=21]"},"id":"e102"}
+{"t":104,"agent":"Agent1","kind":"observe","obs":{"type":"Unrecognised","detail":"Unrecognised[tick=104, opcode=35, opcodeName=FORCED_STAT_RESET, bytes=0]"},"id":"e103"}
+{"t":105,"agent":"Agent1","kind":"observe","obs":{"type":"Unrecognised","detail":"Unrecognised[tick=105, opcode=140, opcodeName=FIELD_OBSTACLE_ONOFF_LIST, bytes=4]"},"id":"e104"}
+{"t":106,"agent":"Agent1","kind":"observe","obs":{"type":"ThingMoved","detail":"ThingMoved[tick=106, objectId=2, position=java.awt.Point[x=-95,y=428]]"},"id":"e105"}
+{"t":106,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d62","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":106,"agent":"Agent1","kind":"act","id":"a62","intent":"MoveTo","detail":{"y":480,"x":1021},"because":"d62"}
+{"t":106,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d63","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":106,"agent":"Agent1","kind":"act","id":"a63","intent":"MoveTo","detail":{"y":480,"x":957},"because":"d63"}
+{"t":106,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d64","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":106,"agent":"Agent1","kind":"act","id":"a64","intent":"MoveTo","detail":{"y":480,"x":889},"because":"d64"}
+{"t":106,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d65","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":106,"agent":"Agent1","kind":"act","id":"a65","intent":"MoveTo","detail":{"y":480,"x":923},"because":"d65"}
+{"t":106,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d66","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":106,"agent":"Agent1","kind":"act","id":"a66","intent":"MoveTo","detail":{"y":480,"x":946},"because":"d66"}
+{"t":106,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d67","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":106,"agent":"Agent1","kind":"act","id":"a67","intent":"MoveTo","detail":{"y":480,"x":969},"because":"d67"}
+{"t":106,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d68","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":106,"agent":"Agent1","kind":"act","id":"a68","intent":"MoveTo","detail":{"y":480,"x":989},"because":"d68"}
+{"t":106,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d69","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":106,"agent":"Agent1","kind":"act","id":"a69","intent":"MoveTo","detail":{"y":480,"x":977},"because":"d69"}
+{"t":106,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d70","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":106,"agent":"Agent1","kind":"act","id":"a70","intent":"MoveTo","detail":{"y":480,"x":937},"because":"d70"}
+{"t":106,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d71","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":106,"agent":"Agent1","kind":"act","id":"a71","intent":"MoveTo","detail":{"y":480,"x":934},"because":"d71"}
+{"t":106,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d72","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":106,"agent":"Agent1","kind":"act","id":"a72","intent":"MoveTo","detail":{"y":480,"x":924},"because":"d72"}
+{"t":106,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d73","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":106,"agent":"Agent1","kind":"act","id":"a73","intent":"MoveTo","detail":{"y":480,"x":985},"because":"d73"}
+{"t":106,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d74","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":106,"agent":"Agent1","kind":"act","id":"a74","intent":"MoveTo","detail":{"y":480,"x":1014},"because":"d74"}
+{"t":106,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d75","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":106,"agent":"Agent1","kind":"act","id":"a75","intent":"MoveTo","detail":{"y":480,"x":979},"because":"d75"}
+{"t":106,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d76","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":106,"agent":"Agent1","kind":"act","id":"a76","intent":"MoveTo","detail":{"y":480,"x":1055},"because":"d76"}
+{"t":106,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d77","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":106,"agent":"Agent1","kind":"act","id":"a77","intent":"MoveTo","detail":{"y":480,"x":1097},"because":"d77"}
+{"t":106,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d78","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":106,"agent":"Agent1","kind":"act","id":"a78","intent":"MoveTo","detail":{"y":480,"x":1054},"because":"d78"}
+{"t":106,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d79","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":106,"agent":"Agent1","kind":"act","id":"a79","intent":"MoveTo","detail":{"y":480,"x":1078},"because":"d79"}
+{"t":106,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d80","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":106,"agent":"Agent1","kind":"act","id":"a80","intent":"MoveTo","detail":{"y":480,"x":1024},"because":"d80"}
+{"t":106,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"walk to a way out","id":"d81","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":106,"agent":"Agent1","kind":"act","id":"a81","intent":"MoveTo","detail":{"y":168,"x":543},"because":"d81"}
+{"t":106,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"see where this goes","id":"d82","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":106,"agent":"Agent1","kind":"act","id":"a82","intent":"EnterPortal","detail":{"portal":"glBmsg0"},"because":"d82"}
+{"t":107,"agent":"Agent1","kind":"observe","obs":{"type":"Unrecognised","detail":"Unrecognised[tick=107, opcode=214, opcodeName=PLAYER_HINT, bytes=60]"},"id":"e106"}
+{"t":108,"agent":"Agent1","kind":"observe","obs":{"type":"StatsChanged","detail":"StatsChanged[tick=108, stats={}]"},"id":"e107"}
+{"t":108,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d83","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":108,"agent":"Agent1","kind":"act","id":"a83","intent":"MoveTo","detail":{"y":168,"x":490},"because":"d83"}
+{"t":108,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d84","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":108,"agent":"Agent1","kind":"act","id":"a84","intent":"MoveTo","detail":{"y":168,"x":560},"because":"d84"}
+{"t":108,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d85","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":108,"agent":"Agent1","kind":"act","id":"a85","intent":"MoveTo","detail":{"y":168,"x":589},"because":"d85"}
+{"t":108,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d86","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":108,"agent":"Agent1","kind":"act","id":"a86","intent":"MoveTo","detail":{"y":168,"x":611},"because":"d86"}
+{"t":108,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d87","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":108,"agent":"Agent1","kind":"act","id":"a87","intent":"MoveTo","detail":{"y":168,"x":622},"because":"d87"}
+{"t":108,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d88","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":108,"agent":"Agent1","kind":"act","id":"a88","intent":"MoveTo","detail":{"y":168,"x":632},"because":"d88"}
+{"t":108,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d89","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":108,"agent":"Agent1","kind":"act","id":"a89","intent":"MoveTo","detail":{"y":168,"x":600},"because":"d89"}
+{"t":108,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d90","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":108,"agent":"Agent1","kind":"act","id":"a90","intent":"MoveTo","detail":{"y":168,"x":541},"because":"d90"}
+{"t":108,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d91","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":108,"agent":"Agent1","kind":"act","id":"a91","intent":"MoveTo","detail":{"y":168,"x":610},"because":"d91"}
+{"t":108,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d92","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":108,"agent":"Agent1","kind":"act","id":"a92","intent":"MoveTo","detail":{"y":168,"x":530},"because":"d92"}
+{"t":108,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d93","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":108,"agent":"Agent1","kind":"act","id":"a93","intent":"MoveTo","detail":{"y":168,"x":607},"because":"d93"}
+{"t":108,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d94","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":108,"agent":"Agent1","kind":"act","id":"a94","intent":"MoveTo","detail":{"y":168,"x":679},"because":"d94"}
+{"t":108,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d95","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":108,"agent":"Agent1","kind":"act","id":"a95","intent":"MoveTo","detail":{"y":168,"x":657},"because":"d95"}
+{"t":108,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d96","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":108,"agent":"Agent1","kind":"act","id":"a96","intent":"MoveTo","detail":{"y":168,"x":726},"because":"d96"}
+{"t":108,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d97","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":108,"agent":"Agent1","kind":"act","id":"a97","intent":"MoveTo","detail":{"y":168,"x":710},"because":"d97"}
+{"t":108,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d98","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":108,"agent":"Agent1","kind":"act","id":"a98","intent":"MoveTo","detail":{"y":168,"x":740},"because":"d98"}
+{"t":108,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d99","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":108,"agent":"Agent1","kind":"act","id":"a99","intent":"MoveTo","detail":{"y":168,"x":663},"because":"d99"}
+{"t":108,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d100","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":108,"agent":"Agent1","kind":"act","id":"a100","intent":"MoveTo","detail":{"y":168,"x":650},"because":"d100"}
+{"t":108,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"walk to a way out","id":"d101","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":108,"agent":"Agent1","kind":"act","id":"a101","intent":"MoveTo","detail":{"y":273,"x":-140},"because":"d101"}
+{"t":108,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"see where this goes","id":"d102","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":108,"agent":"Agent1","kind":"act","id":"a102","intent":"EnterPortal","detail":{"portal":"in00"},"because":"d102"}
+{"t":109,"agent":"Agent1","kind":"observe","obs":{"type":"StatsChanged","detail":"StatsChanged[tick=109, stats={}]"},"id":"e108"}
+{"t":109,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d103","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":109,"agent":"Agent1","kind":"act","id":"a103","intent":"MoveTo","detail":{"y":273,"x":-178},"because":"d103"}
+{"t":109,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d104","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":109,"agent":"Agent1","kind":"act","id":"a104","intent":"MoveTo","detail":{"y":273,"x":-208},"because":"d104"}
+{"t":109,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d105","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":109,"agent":"Agent1","kind":"act","id":"a105","intent":"MoveTo","detail":{"y":273,"x":-216},"because":"d105"}
+{"t":109,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d106","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":109,"agent":"Agent1","kind":"act","id":"a106","intent":"MoveTo","detail":{"y":273,"x":-274},"because":"d106"}
+{"t":109,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d107","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":109,"agent":"Agent1","kind":"act","id":"a107","intent":"MoveTo","detail":{"y":273,"x":-231},"because":"d107"}
+{"t":109,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d108","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":109,"agent":"Agent1","kind":"act","id":"a108","intent":"MoveTo","detail":{"y":273,"x":-167},"because":"d108"}
+{"t":109,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d109","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":109,"agent":"Agent1","kind":"act","id":"a109","intent":"MoveTo","detail":{"y":273,"x":-197},"because":"d109"}
+{"t":109,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d110","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":109,"agent":"Agent1","kind":"act","id":"a110","intent":"MoveTo","detail":{"y":273,"x":-221},"because":"d110"}
+{"t":109,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d111","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":109,"agent":"Agent1","kind":"act","id":"a111","intent":"MoveTo","detail":{"y":273,"x":-144},"because":"d111"}
+{"t":109,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d112","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":109,"agent":"Agent1","kind":"act","id":"a112","intent":"MoveTo","detail":{"y":273,"x":-203},"because":"d112"}
+{"t":109,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d113","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":109,"agent":"Agent1","kind":"act","id":"a113","intent":"MoveTo","detail":{"y":273,"x":-130},"because":"d113"}
+{"t":109,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d114","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":109,"agent":"Agent1","kind":"act","id":"a114","intent":"MoveTo","detail":{"y":273,"x":-99},"because":"d114"}
+{"t":109,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d115","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":109,"agent":"Agent1","kind":"act","id":"a115","intent":"MoveTo","detail":{"y":273,"x":-24},"because":"d115"}
+{"t":109,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d116","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":109,"agent":"Agent1","kind":"act","id":"a116","intent":"MoveTo","detail":{"y":273,"x":-99},"because":"d116"}
+{"t":109,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d117","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":109,"agent":"Agent1","kind":"act","id":"a117","intent":"MoveTo","detail":{"y":273,"x":-26},"because":"d117"}
+{"t":109,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d118","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":109,"agent":"Agent1","kind":"act","id":"a118","intent":"MoveTo","detail":{"y":273,"x":-94},"because":"d118"}
+{"t":109,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d119","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":109,"agent":"Agent1","kind":"act","id":"a119","intent":"MoveTo","detail":{"y":273,"x":-144},"because":"d119"}
+{"t":109,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d120","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":109,"agent":"Agent1","kind":"act","id":"a120","intent":"MoveTo","detail":{"y":273,"x":-72},"because":"d120"}
+{"t":109,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"walk to a way out","id":"d121","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":109,"agent":"Agent1","kind":"act","id":"a121","intent":"MoveTo","detail":{"y":168,"x":543},"because":"d121"}
+{"t":109,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"see where this goes","id":"d122","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":109,"agent":"Agent1","kind":"act","id":"a122","intent":"EnterPortal","detail":{"portal":"glBmsg0"},"because":"d122"}
+{"t":110,"agent":"Agent1","kind":"observe","obs":{"type":"Unrecognised","detail":"Unrecognised[tick=110, opcode=214, opcodeName=PLAYER_HINT, bytes=60]"},"id":"e109"}
+{"t":111,"agent":"Agent1","kind":"observe","obs":{"type":"StatsChanged","detail":"StatsChanged[tick=111, stats={}]"},"id":"e110"}
+{"t":111,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d123","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":111,"agent":"Agent1","kind":"act","id":"a123","intent":"MoveTo","detail":{"y":168,"x":521},"because":"d123"}
+{"t":111,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d124","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":111,"agent":"Agent1","kind":"act","id":"a124","intent":"MoveTo","detail":{"y":168,"x":592},"because":"d124"}
+{"t":111,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d125","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":111,"agent":"Agent1","kind":"act","id":"a125","intent":"MoveTo","detail":{"y":168,"x":626},"because":"d125"}
+{"t":111,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d126","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":111,"agent":"Agent1","kind":"act","id":"a126","intent":"MoveTo","detail":{"y":168,"x":671},"because":"d126"}
+{"t":111,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d127","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":111,"agent":"Agent1","kind":"act","id":"a127","intent":"MoveTo","detail":{"y":168,"x":612},"because":"d127"}
+{"t":111,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d128","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":111,"agent":"Agent1","kind":"act","id":"a128","intent":"MoveTo","detail":{"y":168,"x":569},"because":"d128"}
+{"t":111,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d129","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":111,"agent":"Agent1","kind":"act","id":"a129","intent":"MoveTo","detail":{"y":168,"x":538},"because":"d129"}
+{"t":111,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d130","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":111,"agent":"Agent1","kind":"act","id":"a130","intent":"MoveTo","detail":{"y":168,"x":480},"because":"d130"}
+{"t":111,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d131","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":111,"agent":"Agent1","kind":"act","id":"a131","intent":"MoveTo","detail":{"y":168,"x":456},"because":"d131"}
+{"t":111,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d132","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":111,"agent":"Agent1","kind":"act","id":"a132","intent":"MoveTo","detail":{"y":168,"x":508},"because":"d132"}
+{"t":111,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d133","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":111,"agent":"Agent1","kind":"act","id":"a133","intent":"MoveTo","detail":{"y":168,"x":466},"because":"d133"}
+{"t":111,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d134","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":111,"agent":"Agent1","kind":"act","id":"a134","intent":"MoveTo","detail":{"y":168,"x":451},"because":"d134"}
+{"t":111,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d135","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":111,"agent":"Agent1","kind":"act","id":"a135","intent":"MoveTo","detail":{"y":168,"x":487},"because":"d135"}
+{"t":111,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d136","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":111,"agent":"Agent1","kind":"act","id":"a136","intent":"MoveTo","detail":{"y":168,"x":521},"because":"d136"}
+{"t":111,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d137","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":111,"agent":"Agent1","kind":"act","id":"a137","intent":"MoveTo","detail":{"y":168,"x":563},"because":"d137"}
+{"t":111,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d138","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":111,"agent":"Agent1","kind":"act","id":"a138","intent":"MoveTo","detail":{"y":168,"x":629},"because":"d138"}
+{"t":111,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d139","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":111,"agent":"Agent1","kind":"act","id":"a139","intent":"MoveTo","detail":{"y":168,"x":673},"because":"d139"}
+{"t":111,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d140","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":111,"agent":"Agent1","kind":"act","id":"a140","intent":"MoveTo","detail":{"y":168,"x":624},"because":"d140"}
+{"t":111,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"walk to a way out","id":"d141","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":111,"agent":"Agent1","kind":"act","id":"a141","intent":"MoveTo","detail":{"y":168,"x":543},"because":"d141"}
+{"t":111,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"see where this goes","id":"d142","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":111,"agent":"Agent1","kind":"act","id":"a142","intent":"EnterPortal","detail":{"portal":"glBmsg0"},"because":"d142"}
+{"t":112,"agent":"Agent1","kind":"observe","obs":{"type":"Unrecognised","detail":"Unrecognised[tick=112, opcode=214, opcodeName=PLAYER_HINT, bytes=60]"},"id":"e111"}
+{"t":113,"agent":"Agent1","kind":"observe","obs":{"type":"StatsChanged","detail":"StatsChanged[tick=113, stats={}]"},"id":"e112"}
+{"t":113,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d143","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":113,"agent":"Agent1","kind":"act","id":"a143","intent":"MoveTo","detail":{"y":168,"x":620},"because":"d143"}
+{"t":113,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d144","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":113,"agent":"Agent1","kind":"act","id":"a144","intent":"MoveTo","detail":{"y":168,"x":697},"because":"d144"}
+{"t":113,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d145","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":113,"agent":"Agent1","kind":"act","id":"a145","intent":"MoveTo","detail":{"y":168,"x":697},"because":"d145"}
+{"t":113,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d146","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":113,"agent":"Agent1","kind":"act","id":"a146","intent":"MoveTo","detail":{"y":168,"x":757},"because":"d146"}
+{"t":113,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d147","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":113,"agent":"Agent1","kind":"act","id":"a147","intent":"MoveTo","detail":{"y":168,"x":755},"because":"d147"}
+{"t":113,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d148","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":113,"agent":"Agent1","kind":"act","id":"a148","intent":"MoveTo","detail":{"y":168,"x":687},"because":"d148"}
+{"t":113,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d149","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":113,"agent":"Agent1","kind":"act","id":"a149","intent":"MoveTo","detail":{"y":168,"x":719},"because":"d149"}
+{"t":113,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d150","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":113,"agent":"Agent1","kind":"act","id":"a150","intent":"MoveTo","detail":{"y":168,"x":775},"because":"d150"}
+{"t":113,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d151","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":113,"agent":"Agent1","kind":"act","id":"a151","intent":"MoveTo","detail":{"y":168,"x":798},"because":"d151"}
+{"t":113,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d152","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":113,"agent":"Agent1","kind":"act","id":"a152","intent":"MoveTo","detail":{"y":168,"x":773},"because":"d152"}
+{"t":113,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d153","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":113,"agent":"Agent1","kind":"act","id":"a153","intent":"MoveTo","detail":{"y":168,"x":713},"because":"d153"}
+{"t":113,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d154","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":113,"agent":"Agent1","kind":"act","id":"a154","intent":"MoveTo","detail":{"y":168,"x":637},"because":"d154"}
+{"t":113,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d155","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":113,"agent":"Agent1","kind":"act","id":"a155","intent":"MoveTo","detail":{"y":168,"x":673},"because":"d155"}
+{"t":113,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d156","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":113,"agent":"Agent1","kind":"act","id":"a156","intent":"MoveTo","detail":{"y":168,"x":718},"because":"d156"}
+{"t":113,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d157","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":113,"agent":"Agent1","kind":"act","id":"a157","intent":"MoveTo","detail":{"y":168,"x":647},"because":"d157"}
+{"t":113,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d158","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":113,"agent":"Agent1","kind":"act","id":"a158","intent":"MoveTo","detail":{"y":168,"x":632},"because":"d158"}
+{"t":113,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d159","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":113,"agent":"Agent1","kind":"act","id":"a159","intent":"MoveTo","detail":{"y":168,"x":563},"because":"d159"}
+{"t":113,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d160","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":113,"agent":"Agent1","kind":"act","id":"a160","intent":"MoveTo","detail":{"y":168,"x":540},"because":"d160"}
+{"t":113,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"see where this goes","id":"d161","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":113,"agent":"Agent1","kind":"act","id":"a161","intent":"EnterPortal","detail":{"portal":"glBmsg0"},"because":"d161"}
+{"t":114,"agent":"Agent1","kind":"observe","obs":{"type":"Unrecognised","detail":"Unrecognised[tick=114, opcode=214, opcodeName=PLAYER_HINT, bytes=60]"},"id":"e113"}
+{"t":115,"agent":"Agent1","kind":"observe","obs":{"type":"StatsChanged","detail":"StatsChanged[tick=115, stats={}]"},"id":"e114"}
+{"t":115,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d162","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":115,"agent":"Agent1","kind":"act","id":"a162","intent":"MoveTo","detail":{"y":168,"x":529},"because":"d162"}
+{"t":115,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d163","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":115,"agent":"Agent1","kind":"act","id":"a163","intent":"MoveTo","detail":{"y":168,"x":550},"because":"d163"}
+{"t":115,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d164","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":115,"agent":"Agent1","kind":"act","id":"a164","intent":"MoveTo","detail":{"y":168,"x":527},"because":"d164"}
+{"t":115,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d165","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":115,"agent":"Agent1","kind":"act","id":"a165","intent":"MoveTo","detail":{"y":168,"x":453},"because":"d165"}
+{"t":115,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d166","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":115,"agent":"Agent1","kind":"act","id":"a166","intent":"MoveTo","detail":{"y":168,"x":423},"because":"d166"}
+{"t":115,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d167","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":115,"agent":"Agent1","kind":"act","id":"a167","intent":"MoveTo","detail":{"y":168,"x":395},"because":"d167"}
+{"t":115,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d168","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":115,"agent":"Agent1","kind":"act","id":"a168","intent":"MoveTo","detail":{"y":168,"x":393},"because":"d168"}
+{"t":115,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d169","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":115,"agent":"Agent1","kind":"act","id":"a169","intent":"MoveTo","detail":{"y":168,"x":460},"because":"d169"}
+{"t":115,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d170","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":115,"agent":"Agent1","kind":"act","id":"a170","intent":"MoveTo","detail":{"y":168,"x":512},"because":"d170"}
+{"t":115,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d171","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":115,"agent":"Agent1","kind":"act","id":"a171","intent":"MoveTo","detail":{"y":168,"x":561},"because":"d171"}
+{"t":115,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d172","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":115,"agent":"Agent1","kind":"act","id":"a172","intent":"MoveTo","detail":{"y":168,"x":605},"because":"d172"}
+{"t":115,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d173","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":115,"agent":"Agent1","kind":"act","id":"a173","intent":"MoveTo","detail":{"y":168,"x":666},"because":"d173"}
+{"t":115,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d174","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":115,"agent":"Agent1","kind":"act","id":"a174","intent":"MoveTo","detail":{"y":168,"x":704},"because":"d174"}
+{"t":115,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d175","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":115,"agent":"Agent1","kind":"act","id":"a175","intent":"MoveTo","detail":{"y":168,"x":755},"because":"d175"}
+{"t":115,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d176","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":115,"agent":"Agent1","kind":"act","id":"a176","intent":"MoveTo","detail":{"y":168,"x":756},"because":"d176"}
+{"t":115,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d177","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":115,"agent":"Agent1","kind":"act","id":"a177","intent":"MoveTo","detail":{"y":168,"x":685},"because":"d177"}
+{"t":115,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d178","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":115,"agent":"Agent1","kind":"act","id":"a178","intent":"MoveTo","detail":{"y":168,"x":684},"because":"d178"}
+{"t":115,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d179","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":115,"agent":"Agent1","kind":"act","id":"a179","intent":"MoveTo","detail":{"y":168,"x":729},"because":"d179"}
+{"t":115,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d180","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":115,"agent":"Agent1","kind":"act","id":"a180","intent":"MoveTo","detail":{"y":168,"x":732},"because":"d180"}
+{"t":115,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"walk to a way out","id":"d181","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":115,"agent":"Agent1","kind":"act","id":"a181","intent":"MoveTo","detail":{"y":273,"x":-140},"because":"d181"}
+{"t":115,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"see where this goes","id":"d182","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":115,"agent":"Agent1","kind":"act","id":"a182","intent":"EnterPortal","detail":{"portal":"in00"},"because":"d182"}
+{"t":116,"agent":"Agent1","kind":"observe","obs":{"type":"StatsChanged","detail":"StatsChanged[tick=116, stats={}]"},"id":"e115"}
+{"t":116,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d183","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":116,"agent":"Agent1","kind":"act","id":"a183","intent":"MoveTo","detail":{"y":273,"x":-117},"because":"d183"}
+{"t":116,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d184","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":116,"agent":"Agent1","kind":"act","id":"a184","intent":"MoveTo","detail":{"y":273,"x":-113},"because":"d184"}
+{"t":116,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d185","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":116,"agent":"Agent1","kind":"act","id":"a185","intent":"MoveTo","detail":{"y":273,"x":-176},"because":"d185"}
+{"t":116,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d186","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":116,"agent":"Agent1","kind":"act","id":"a186","intent":"MoveTo","detail":{"y":273,"x":-100},"because":"d186"}
+{"t":116,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d187","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":116,"agent":"Agent1","kind":"act","id":"a187","intent":"MoveTo","detail":{"y":273,"x":-174},"because":"d187"}
+{"t":116,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d188","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":116,"agent":"Agent1","kind":"act","id":"a188","intent":"MoveTo","detail":{"y":273,"x":-147},"because":"d188"}
+{"t":116,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d189","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":116,"agent":"Agent1","kind":"act","id":"a189","intent":"MoveTo","detail":{"y":273,"x":-136},"because":"d189"}
+{"t":116,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d190","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":116,"agent":"Agent1","kind":"act","id":"a190","intent":"MoveTo","detail":{"y":273,"x":-88},"because":"d190"}
+{"t":116,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d191","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":116,"agent":"Agent1","kind":"act","id":"a191","intent":"MoveTo","detail":{"y":273,"x":-100},"because":"d191"}
+{"t":116,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d192","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":116,"agent":"Agent1","kind":"act","id":"a192","intent":"MoveTo","detail":{"y":273,"x":-150},"because":"d192"}
+{"t":116,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d193","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":116,"agent":"Agent1","kind":"act","id":"a193","intent":"MoveTo","detail":{"y":273,"x":-184},"because":"d193"}
+{"t":116,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d194","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":116,"agent":"Agent1","kind":"act","id":"a194","intent":"MoveTo","detail":{"y":273,"x":-245},"because":"d194"}
+{"t":116,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d195","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":116,"agent":"Agent1","kind":"act","id":"a195","intent":"MoveTo","detail":{"y":273,"x":-277},"because":"d195"}
+{"t":116,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d196","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":116,"agent":"Agent1","kind":"act","id":"a196","intent":"MoveTo","detail":{"y":273,"x":-237},"because":"d196"}
+{"t":116,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d197","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":116,"agent":"Agent1","kind":"act","id":"a197","intent":"MoveTo","detail":{"y":273,"x":-214},"because":"d197"}
+{"t":116,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d198","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":116,"agent":"Agent1","kind":"act","id":"a198","intent":"MoveTo","detail":{"y":273,"x":-252},"because":"d198"}
+{"t":116,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d199","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":116,"agent":"Agent1","kind":"act","id":"a199","intent":"MoveTo","detail":{"y":273,"x":-320},"because":"d199"}
+{"t":116,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d200","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":116,"agent":"Agent1","kind":"act","id":"a200","intent":"MoveTo","detail":{"y":273,"x":-255},"because":"d200"}
+{"t":116,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"walk to a way out","id":"d201","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":116,"agent":"Agent1","kind":"act","id":"a201","intent":"MoveTo","detail":{"y":273,"x":-140},"because":"d201"}
+{"t":116,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"see where this goes","id":"d202","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":116,"agent":"Agent1","kind":"act","id":"a202","intent":"EnterPortal","detail":{"portal":"in00"},"because":"d202"}
+{"t":117,"agent":"Agent1","kind":"observe","obs":{"type":"StatsChanged","detail":"StatsChanged[tick=117, stats={}]"},"id":"e116"}
+{"t":117,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d203","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":117,"agent":"Agent1","kind":"act","id":"a203","intent":"MoveTo","detail":{"y":273,"x":-189},"because":"d203"}
+{"t":117,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d204","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":117,"agent":"Agent1","kind":"act","id":"a204","intent":"MoveTo","detail":{"y":273,"x":-152},"because":"d204"}
+{"t":117,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d205","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":117,"agent":"Agent1","kind":"act","id":"a205","intent":"MoveTo","detail":{"y":273,"x":-129},"because":"d205"}
+{"t":117,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d206","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":117,"agent":"Agent1","kind":"act","id":"a206","intent":"MoveTo","detail":{"y":273,"x":-119},"because":"d206"}
+{"t":117,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d207","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":117,"agent":"Agent1","kind":"act","id":"a207","intent":"MoveTo","detail":{"y":273,"x":-46},"because":"d207"}
+{"t":117,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d208","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":117,"agent":"Agent1","kind":"act","id":"a208","intent":"MoveTo","detail":{"y":273,"x":-61},"because":"d208"}
+{"t":117,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d209","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":117,"agent":"Agent1","kind":"act","id":"a209","intent":"MoveTo","detail":{"y":273,"x":-22},"because":"d209"}
+{"t":117,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d210","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":117,"agent":"Agent1","kind":"act","id":"a210","intent":"MoveTo","detail":{"y":273,"x":-47},"because":"d210"}
+{"t":117,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d211","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":117,"agent":"Agent1","kind":"act","id":"a211","intent":"MoveTo","detail":{"y":273,"x":-101},"because":"d211"}
+{"t":117,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d212","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":117,"agent":"Agent1","kind":"act","id":"a212","intent":"MoveTo","detail":{"y":273,"x":-52},"because":"d212"}
+{"t":117,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d213","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":117,"agent":"Agent1","kind":"act","id":"a213","intent":"MoveTo","detail":{"y":273,"x":-44},"because":"d213"}
+{"t":117,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d214","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":117,"agent":"Agent1","kind":"act","id":"a214","intent":"MoveTo","detail":{"y":273,"x":12},"because":"d214"}
+{"t":117,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d215","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":117,"agent":"Agent1","kind":"act","id":"a215","intent":"MoveTo","detail":{"y":273,"x":-63},"because":"d215"}
+{"t":117,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d216","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":117,"agent":"Agent1","kind":"act","id":"a216","intent":"MoveTo","detail":{"y":273,"x":-9},"because":"d216"}
+{"t":117,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d217","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":117,"agent":"Agent1","kind":"act","id":"a217","intent":"MoveTo","detail":{"y":273,"x":-4},"because":"d217"}
+{"t":117,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d218","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":117,"agent":"Agent1","kind":"act","id":"a218","intent":"MoveTo","detail":{"y":273,"x":11},"because":"d218"}
+{"t":117,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d219","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":117,"agent":"Agent1","kind":"act","id":"a219","intent":"MoveTo","detail":{"y":273,"x":36},"because":"d219"}
+{"t":117,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"wander","id":"d220","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":117,"agent":"Agent1","kind":"act","id":"a220","intent":"MoveTo","detail":{"y":273,"x":20},"because":"d220"}
+{"t":117,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"walk to a way out","id":"d221","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":117,"agent":"Agent1","kind":"act","id":"a221","intent":"MoveTo","detail":{"y":210,"x":630},"because":"d221"}
+{"t":117,"agent":"Agent1","kind":"deliberate","used":["b11","b6","b5"],"goal":"see where this goes","id":"d222","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":117,"agent":"Agent1","kind":"act","id":"a222","intent":"EnterPortal","detail":{"portal":"out00"},"because":"d222"}
+{"t":118,"agent":"Agent1","kind":"observe","obs":{"type":"MapEntered","detail":"MapEntered[tick=118, mapId=30000, spawnPoint=3]"},"id":"e117"}
+{"t":118,"agent":"Agent1","kind":"believe","provenance":"first_hand","id":"b12","confidence":0.5,"corroborated":false,"from":["e117"],"triple":["self","in_map","map:30000"]}
+{"t":118,"agent":"Agent1","kind":"revise","supersededBy":"b12","heldFor":22,"id":"b10","triple":["self","in_map","map:20000"]}
+{"t":119,"agent":"Agent1","kind":"observe","obs":{"type":"Unrecognised","detail":"Unrecognised[tick=119, opcode=138, opcodeName=FIELD_EFFECT, bytes=23]"},"id":"e118"}
+{"t":120,"agent":"Agent1","kind":"observe","obs":{"type":"NpcAppeared","detail":"NpcAppeared[tick=120, objectId=1000000002, npcId=2102, position=java.awt.Point[x=-59,y=95]]"},"id":"e119"}
+{"t":120,"agent":"Agent1","kind":"believe","provenance":"first_hand","id":"b13","confidence":0.5,"corroborated":false,"from":["e119"],"triple":["npc:2102","present_in","map:30000"]}
+{"t":121,"agent":"Agent1","kind":"observe","obs":{"type":"Unrecognised","detail":"Unrecognised[tick=121, opcode=259, opcodeName=SPAWN_NPC_REQUEST_CONTROLLER, bytes=21]"},"id":"e120"}
+{"t":122,"agent":"Agent1","kind":"observe","obs":{"type":"NpcAppeared","detail":"NpcAppeared[tick=122, objectId=1000000002, npcId=2102, position=java.awt.Point[x=-59,y=95]]"},"id":"e121"}
+{"t":122,"agent":"Agent1","kind":"believe","provenance":"first_hand","id":"b13","confidence":0.75,"corroborated":true,"from":["e119","e121"],"triple":["npc:2102","present_in","map:30000"]}
+{"t":123,"agent":"Agent1","kind":"observe","obs":{"type":"Unrecognised","detail":"Unrecognised[tick=123, opcode=259, opcodeName=SPAWN_NPC_REQUEST_CONTROLLER, bytes=21]"},"id":"e122"}
+{"t":124,"agent":"Agent1","kind":"observe","obs":{"type":"Unrecognised","detail":"Unrecognised[tick=124, opcode=35, opcodeName=FORCED_STAT_RESET, bytes=0]"},"id":"e123"}
+{"t":125,"agent":"Agent1","kind":"observe","obs":{"type":"Unrecognised","detail":"Unrecognised[tick=125, opcode=140, opcodeName=FIELD_OBSTACLE_ONOFF_LIST, bytes=4]"},"id":"e124"}
+{"t":125,"agent":"Agent1","kind":"deliberate","used":["b13","b11","b6"],"goal":"wander","id":"d223","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":125,"agent":"Agent1","kind":"act","id":"a223","intent":"MoveTo","detail":{"y":210,"x":671},"because":"d223"}
+{"t":125,"agent":"Agent1","kind":"deliberate","used":["b13","b11","b6"],"goal":"wander","id":"d224","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":125,"agent":"Agent1","kind":"act","id":"a224","intent":"MoveTo","detail":{"y":210,"x":734},"because":"d224"}
+{"t":125,"agent":"Agent1","kind":"deliberate","used":["b13","b11","b6"],"goal":"wander","id":"d225","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":125,"agent":"Agent1","kind":"act","id":"a225","intent":"MoveTo","detail":{"y":210,"x":719},"because":"d225"}
+{"t":125,"agent":"Agent1","kind":"deliberate","used":["b13","b11","b6"],"goal":"wander","id":"d226","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":125,"agent":"Agent1","kind":"act","id":"a226","intent":"MoveTo","detail":{"y":210,"x":776},"because":"d226"}
+{"t":125,"agent":"Agent1","kind":"deliberate","used":["b13","b11","b6"],"goal":"wander","id":"d227","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":125,"agent":"Agent1","kind":"act","id":"a227","intent":"MoveTo","detail":{"y":210,"x":847},"because":"d227"}
+{"t":125,"agent":"Agent1","kind":"deliberate","used":["b13","b11","b6"],"goal":"wander","id":"d228","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":125,"agent":"Agent1","kind":"act","id":"a228","intent":"MoveTo","detail":{"y":210,"x":859},"because":"d228"}
+{"t":125,"agent":"Agent1","kind":"deliberate","used":["b13","b11","b6"],"goal":"wander","id":"d229","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":125,"agent":"Agent1","kind":"act","id":"a229","intent":"MoveTo","detail":{"y":210,"x":843},"because":"d229"}
+{"t":125,"agent":"Agent1","kind":"deliberate","used":["b13","b11","b6"],"goal":"wander","id":"d230","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":125,"agent":"Agent1","kind":"act","id":"a230","intent":"MoveTo","detail":{"y":210,"x":860},"because":"d230"}
+{"t":125,"agent":"Agent1","kind":"deliberate","used":["b13","b11","b6"],"goal":"wander","id":"d231","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":125,"agent":"Agent1","kind":"act","id":"a231","intent":"MoveTo","detail":{"y":210,"x":786},"because":"d231"}
+{"t":125,"agent":"Agent1","kind":"deliberate","used":["b13","b11","b6"],"goal":"wander","id":"d232","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":125,"agent":"Agent1","kind":"act","id":"a232","intent":"MoveTo","detail":{"y":210,"x":709},"because":"d232"}
+{"t":125,"agent":"Agent1","kind":"deliberate","used":["b13","b11","b6"],"goal":"wander","id":"d233","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":125,"agent":"Agent1","kind":"act","id":"a233","intent":"MoveTo","detail":{"y":210,"x":782},"because":"d233"}
+{"t":125,"agent":"Agent1","kind":"deliberate","used":["b13","b11","b6"],"goal":"wander","id":"d234","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":125,"agent":"Agent1","kind":"act","id":"a234","intent":"MoveTo","detail":{"y":210,"x":777},"because":"d234"}
+{"t":125,"agent":"Agent1","kind":"deliberate","used":["b13","b11","b6"],"goal":"wander","id":"d235","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":125,"agent":"Agent1","kind":"act","id":"a235","intent":"MoveTo","detail":{"y":210,"x":723},"because":"d235"}
+{"t":125,"agent":"Agent1","kind":"deliberate","used":["b13","b11","b6"],"goal":"wander","id":"d236","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":125,"agent":"Agent1","kind":"act","id":"a236","intent":"MoveTo","detail":{"y":210,"x":750},"because":"d236"}
+{"t":125,"agent":"Agent1","kind":"deliberate","used":["b13","b11","b6"],"goal":"wander","id":"d237","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":125,"agent":"Agent1","kind":"act","id":"a237","intent":"MoveTo","detail":{"y":210,"x":783},"because":"d237"}
+{"t":125,"agent":"Agent1","kind":"deliberate","used":["b13","b11","b6"],"goal":"wander","id":"d238","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":125,"agent":"Agent1","kind":"act","id":"a238","intent":"MoveTo","detail":{"y":210,"x":728},"because":"d238"}
+{"t":125,"agent":"Agent1","kind":"deliberate","used":["b13","b11","b6"],"goal":"wander","id":"d239","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":125,"agent":"Agent1","kind":"act","id":"a239","intent":"MoveTo","detail":{"y":210,"x":738},"because":"d239"}
+{"t":125,"agent":"Agent1","kind":"deliberate","used":["b13","b11","b6"],"goal":"wander","id":"d240","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":125,"agent":"Agent1","kind":"act","id":"a240","intent":"MoveTo","detail":{"y":210,"x":713},"because":"d240"}
+{"t":125,"agent":"Agent1","kind":"deliberate","used":["b13","b11","b6"],"goal":"wander","id":"d241","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":125,"agent":"Agent1","kind":"act","id":"a241","intent":"MoveTo","detail":{"y":210,"x":721},"because":"d241"}
+{"t":125,"agent":"Agent1","kind":"deliberate","used":["b13","b11","b6"],"goal":"walk to a way out","id":"d242","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":125,"agent":"Agent1","kind":"act","id":"a242","intent":"MoveTo","detail":{"y":94,"x":1046},"because":"d242"}
+{"t":125,"agent":"Agent1","kind":"deliberate","used":["b13","b11","b6"],"goal":"see where this goes","id":"d243","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":125,"agent":"Agent1","kind":"act","id":"a243","intent":"EnterPortal","detail":{"portal":"out00"},"because":"d243"}
+{"t":126,"agent":"Agent1","kind":"observe","obs":{"type":"MapEntered","detail":"MapEntered[tick=126, mapId=40000, spawnPoint=1]"},"id":"e125"}
+{"t":126,"agent":"Agent1","kind":"believe","provenance":"first_hand","id":"b14","confidence":0.5,"corroborated":false,"from":["e125"],"triple":["self","in_map","map:40000"]}
+{"t":126,"agent":"Agent1","kind":"revise","supersededBy":"b14","heldFor":8,"id":"b12","triple":["self","in_map","map:30000"]}
+{"t":127,"agent":"Agent1","kind":"observe","obs":{"type":"Unrecognised","detail":"Unrecognised[tick=127, opcode=138, opcodeName=FIELD_EFFECT, bytes=23]"},"id":"e126"}
+{"t":128,"agent":"Agent1","kind":"observe","obs":{"type":"NpcAppeared","detail":"NpcAppeared[tick=128, objectId=1000000005, npcId=2002, position=java.awt.Point[x=896,y=155]]"},"id":"e127"}
+{"t":128,"agent":"Agent1","kind":"believe","provenance":"first_hand","id":"b15","confidence":0.5,"corroborated":false,"from":["e127"],"triple":["npc:2002","present_in","map:40000"]}
+{"t":129,"agent":"Agent1","kind":"observe","obs":{"type":"Unrecognised","detail":"Unrecognised[tick=129, opcode=259, opcodeName=SPAWN_NPC_REQUEST_CONTROLLER, bytes=21]"},"id":"e128"}
+{"t":130,"agent":"Agent1","kind":"observe","obs":{"type":"NpcAppeared","detail":"NpcAppeared[tick=130, objectId=1000000006, npcId=2004, position=java.awt.Point[x=-58,y=215]]"},"id":"e129"}
+{"t":130,"agent":"Agent1","kind":"believe","provenance":"first_hand","id":"b16","confidence":0.5,"corroborated":false,"from":["e129"],"triple":["npc:2004","present_in","map:40000"]}
+{"t":131,"agent":"Agent1","kind":"observe","obs":{"type":"Unrecognised","detail":"Unrecognised[tick=131, opcode=259, opcodeName=SPAWN_NPC_REQUEST_CONTROLLER, bytes=21]"},"id":"e130"}
+{"t":132,"agent":"Agent1","kind":"observe","obs":{"type":"MonsterAppeared","detail":"MonsterAppeared[tick=132, objectId=1000000002, monsterId=9300018, position=java.awt.Point[x=505,y=154]]"},"id":"e131"}
+{"t":132,"agent":"Agent1","kind":"believe","provenance":"first_hand","id":"b17","confidence":0.5,"corroborated":false,"from":["e131"],"triple":["monster:9300018","present_in","map:40000"]}
+{"t":133,"agent":"Agent1","kind":"observe","obs":{"type":"MonsterAppeared","detail":"MonsterAppeared[tick=133, objectId=1000000002, monsterId=9300018, position=java.awt.Point[x=505,y=154]]"},"id":"e132"}
+{"t":133,"agent":"Agent1","kind":"believe","provenance":"first_hand","id":"b17","confidence":0.75,"corroborated":true,"from":["e131","e132"],"triple":["monster:9300018","present_in","map:40000"]}
+{"t":134,"agent":"Agent1","kind":"observe","obs":{"type":"MonsterAppeared","detail":"MonsterAppeared[tick=134, objectId=1000000003, monsterId=9300018, position=java.awt.Point[x=322,y=154]]"},"id":"e133"}
+{"t":134,"agent":"Agent1","kind":"believe","provenance":"first_hand","id":"b17","confidence":0.875,"corroborated":true,"from":["e131","e132","e133"],"triple":["monster:9300018","present_in","map:40000"]}
+{"t":135,"agent":"Agent1","kind":"observe","obs":{"type":"MonsterAppeared","detail":"MonsterAppeared[tick=135, objectId=1000000003, monsterId=9300018, position=java.awt.Point[x=322,y=154]]"},"id":"e134"}
+{"t":135,"agent":"Agent1","kind":"believe","provenance":"first_hand","id":"b17","confidence":0.938,"corroborated":true,"from":["e131","e132","e133","e134"],"triple":["monster:9300018","present_in","map:40000"]}
+{"t":136,"agent":"Agent1","kind":"observe","obs":{"type":"MonsterAppeared","detail":"MonsterAppeared[tick=136, objectId=1000000004, monsterId=9300018, position=java.awt.Point[x=711,y=154]]"},"id":"e135"}
+{"t":136,"agent":"Agent1","kind":"believe","provenance":"first_hand","id":"b17","confidence":0.969,"corroborated":true,"from":["e131","e132","e133","e134","e135"],"triple":["monster:9300018","present_in","map:40000"]}
+{"t":137,"agent":"Agent1","kind":"observe","obs":{"type":"MonsterAppeared","detail":"MonsterAppeared[tick=137, objectId=1000000004, monsterId=9300018, position=java.awt.Point[x=711,y=154]]"},"id":"e136"}
+{"t":137,"agent":"Agent1","kind":"believe","provenance":"first_hand","id":"b17","confidence":0.984,"corroborated":true,"from":["e131","e132","e133","e134","e135","e136"],"triple":["monster:9300018","present_in","map:40000"]}
+{"t":138,"agent":"Agent1","kind":"observe","obs":{"type":"NpcAppeared","detail":"NpcAppeared[tick=138, objectId=1000000005, npcId=2002, position=java.awt.Point[x=896,y=155]]"},"id":"e137"}
+{"t":138,"agent":"Agent1","kind":"believe","provenance":"first_hand","id":"b15","confidence":0.75,"corroborated":true,"from":["e127","e137"],"triple":["npc:2002","present_in","map:40000"]}
+{"t":139,"agent":"Agent1","kind":"observe","obs":{"type":"Unrecognised","detail":"Unrecognised[tick=139, opcode=259, opcodeName=SPAWN_NPC_REQUEST_CONTROLLER, bytes=21]"},"id":"e138"}
+{"t":140,"agent":"Agent1","kind":"observe","obs":{"type":"NpcAppeared","detail":"NpcAppeared[tick=140, objectId=1000000006, npcId=2004, position=java.awt.Point[x=-58,y=215]]"},"id":"e139"}
+{"t":140,"agent":"Agent1","kind":"believe","provenance":"first_hand","id":"b16","confidence":0.75,"corroborated":true,"from":["e129","e139"],"triple":["npc:2004","present_in","map:40000"]}
+{"t":141,"agent":"Agent1","kind":"observe","obs":{"type":"Unrecognised","detail":"Unrecognised[tick=141, opcode=259, opcodeName=SPAWN_NPC_REQUEST_CONTROLLER, bytes=21]"},"id":"e140"}
+{"t":142,"agent":"Agent1","kind":"observe","obs":{"type":"Unrecognised","detail":"Unrecognised[tick=142, opcode=35, opcodeName=FORCED_STAT_RESET, bytes=0]"},"id":"e141"}
+{"t":143,"agent":"Agent1","kind":"observe","obs":{"type":"Unrecognised","detail":"Unrecognised[tick=143, opcode=140, opcodeName=FIELD_OBSTACLE_ONOFF_LIST, bytes=4]"},"id":"e142"}
+{"t":143,"agent":"Agent1","kind":"deliberate","used":["b17","b16","b15"],"goal":"get closer to the thing I can see","id":"d244","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":143,"agent":"Agent1","kind":"act","id":"a244","intent":"MoveTo","detail":{"y":154,"x":711},"because":"d244"}
+{"t":144,"agent":"Agent1","kind":"observe","obs":{"type":"Unrecognised","detail":"Unrecognised[tick=144, opcode=238, opcodeName=SPAWN_MONSTER_CONTROL, bytes=5]"},"id":"e143"}
+{"t":145,"agent":"Agent1","kind":"observe","obs":{"type":"MonsterDied","detail":"MonsterDied[tick=145, objectId=1000000002]"},"id":"e144"}
+{"t":146,"agent":"Agent1","kind":"observe","obs":{"type":"MonsterDied","detail":"MonsterDied[tick=146, objectId=1000000002]"},"id":"e145"}
+{"t":147,"agent":"Agent1","kind":"observe","obs":{"type":"Unrecognised","detail":"Unrecognised[tick=147, opcode=238, opcodeName=SPAWN_MONSTER_CONTROL, bytes=5]"},"id":"e146"}
+{"t":148,"agent":"Agent1","kind":"observe","obs":{"type":"MonsterAppeared","detail":"MonsterAppeared[tick=148, objectId=1000000002, monsterId=9300018, position=java.awt.Point[x=505,y=154]]"},"id":"e147"}
+{"t":148,"agent":"Agent1","kind":"believe","provenance":"first_hand","id":"b17","confidence":0.99,"corroborated":true,"from":["e131","e132","e133","e134","e135","e136","e147"],"triple":["monster:9300018","present_in","map:40000"]}
+{"t":149,"agent":"Agent1","kind":"observe","obs":{"type":"MonsterAppeared","detail":"MonsterAppeared[tick=149, objectId=1000000002, monsterId=9300018, position=java.awt.Point[x=505,y=154]]"},"id":"e148"}
+{"t":149,"agent":"Agent1","kind":"believe","provenance":"first_hand","id":"b17","confidence":0.99,"corroborated":true,"from":["e131","e132","e133","e134","e135","e136","e147","e148"],"triple":["monster:9300018","present_in","map:40000"]}
+{"t":150,"agent":"Agent1","kind":"observe","obs":{"type":"Unrecognised","detail":"Unrecognised[tick=150, opcode=238, opcodeName=SPAWN_MONSTER_CONTROL, bytes=5]"},"id":"e149"}
+{"t":151,"agent":"Agent1","kind":"observe","obs":{"type":"MonsterDied","detail":"MonsterDied[tick=151, objectId=1000000003]"},"id":"e150"}
+{"t":152,"agent":"Agent1","kind":"observe","obs":{"type":"MonsterDied","detail":"MonsterDied[tick=152, objectId=1000000003]"},"id":"e151"}
+{"t":153,"agent":"Agent1","kind":"observe","obs":{"type":"Unrecognised","detail":"Unrecognised[tick=153, opcode=238, opcodeName=SPAWN_MONSTER_CONTROL, bytes=5]"},"id":"e152"}
+{"t":154,"agent":"Agent1","kind":"observe","obs":{"type":"MonsterAppeared","detail":"MonsterAppeared[tick=154, objectId=1000000003, monsterId=9300018, position=java.awt.Point[x=322,y=154]]"},"id":"e153"}
+{"t":154,"agent":"Agent1","kind":"believe","provenance":"first_hand","id":"b17","confidence":0.99,"corroborated":true,"from":["e131","e132","e133","e134","e135","e136","e147","e148","e153"],"triple":["monster:9300018","present_in","map:40000"]}
+{"t":155,"agent":"Agent1","kind":"observe","obs":{"type":"MonsterAppeared","detail":"MonsterAppeared[tick=155, objectId=1000000003, monsterId=9300018, position=java.awt.Point[x=322,y=154]]"},"id":"e154"}
+{"t":155,"agent":"Agent1","kind":"believe","provenance":"first_hand","id":"b17","confidence":0.99,"corroborated":true,"from":["e131","e132","e133","e134","e135","e136","e147","e148","e153","e154"],"triple":["monster:9300018","present_in","map:40000"]}
+{"t":156,"agent":"Agent1","kind":"observe","obs":{"type":"Unrecognised","detail":"Unrecognised[tick=156, opcode=238, opcodeName=SPAWN_MONSTER_CONTROL, bytes=5]"},"id":"e155"}
+{"t":157,"agent":"Agent1","kind":"observe","obs":{"type":"MonsterDied","detail":"MonsterDied[tick=157, objectId=1000000004]"},"id":"e156"}
+{"t":158,"agent":"Agent1","kind":"observe","obs":{"type":"MonsterDied","detail":"MonsterDied[tick=158, objectId=1000000004]"},"id":"e157"}
+{"t":159,"agent":"Agent1","kind":"observe","obs":{"type":"Unrecognised","detail":"Unrecognised[tick=159, opcode=238, opcodeName=SPAWN_MONSTER_CONTROL, bytes=5]"},"id":"e158"}
+{"t":160,"agent":"Agent1","kind":"observe","obs":{"type":"MonsterAppeared","detail":"MonsterAppeared[tick=160, objectId=1000000004, monsterId=9300018, position=java.awt.Point[x=711,y=154]]"},"id":"e159"}
+{"t":160,"agent":"Agent1","kind":"believe","provenance":"first_hand","id":"b17","confidence":0.99,"corroborated":true,"from":["e131","e132","e133","e134","e135","e136","e147","e148","e153","e154","e159"],"triple":["monster:9300018","present_in","map:40000"]}
+{"t":161,"agent":"Agent1","kind":"observe","obs":{"type":"MonsterAppeared","detail":"MonsterAppeared[tick=161, objectId=1000000004, monsterId=9300018, position=java.awt.Point[x=711,y=154]]"},"id":"e160"}
+{"t":161,"agent":"Agent1","kind":"believe","provenance":"first_hand","id":"b17","confidence":0.99,"corroborated":true,"from":["e131","e132","e133","e134","e135","e136","e147","e148","e153","e154","e159","e160"],"triple":["monster:9300018","present_in","map:40000"]}
+{"t":161,"agent":"Agent1","kind":"deliberate","used":["b17","b16","b15"],"goal":"hit what is in front of me","id":"d245","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":161,"agent":"Agent1","kind":"act","id":"a245","intent":"Attack","detail":{"target":1000000004},"because":"d245"}
+{"t":162,"agent":"Agent1","kind":"observe","obs":{"type":"Unrecognised","detail":"Unrecognised[tick=162, opcode=250, opcodeName=SHOW_MONSTER_HP, bytes=5]"},"id":"e161"}
+{"t":162,"agent":"Agent1","kind":"deliberate","used":["b17","b16","b15"],"goal":"hit what is in front of me","id":"d246","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":162,"agent":"Agent1","kind":"act","id":"a246","intent":"Attack","detail":{"target":1000000004},"because":"d246"}
+{"t":163,"agent":"Agent1","kind":"observe","obs":{"type":"Unrecognised","detail":"Unrecognised[tick=163, opcode=250, opcodeName=SHOW_MONSTER_HP, bytes=5]"},"id":"e162"}
+{"t":163,"agent":"Agent1","kind":"deliberate","used":["b17","b16","b15"],"goal":"hit what is in front of me","id":"d247","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":163,"agent":"Agent1","kind":"act","id":"a247","intent":"Attack","detail":{"target":1000000004},"because":"d247"}
+{"t":164,"agent":"Agent1","kind":"observe","obs":{"type":"Unrecognised","detail":"Unrecognised[tick=164, opcode=250, opcodeName=SHOW_MONSTER_HP, bytes=5]"},"id":"e163"}
+{"t":164,"agent":"Agent1","kind":"deliberate","used":["b17","b16","b15"],"goal":"hit what is in front of me","id":"d248","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":164,"agent":"Agent1","kind":"act","id":"a248","intent":"Attack","detail":{"target":1000000004},"because":"d248"}
+{"t":165,"agent":"Agent1","kind":"observe","obs":{"type":"Unrecognised","detail":"Unrecognised[tick=165, opcode=250, opcodeName=SHOW_MONSTER_HP, bytes=5]"},"id":"e164"}
+{"t":165,"agent":"Agent1","kind":"deliberate","used":["b17","b16","b15"],"goal":"hit what is in front of me","id":"d249","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":165,"agent":"Agent1","kind":"act","id":"a249","intent":"Attack","detail":{"target":1000000004},"because":"d249"}
+{"t":166,"agent":"Agent1","kind":"observe","obs":{"type":"Unrecognised","detail":"Unrecognised[tick=166, opcode=250, opcodeName=SHOW_MONSTER_HP, bytes=5]"},"id":"e165"}
+{"t":166,"agent":"Agent1","kind":"deliberate","used":["b17","b16","b15"],"goal":"hit what is in front of me","id":"d250","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":166,"agent":"Agent1","kind":"act","id":"a250","intent":"Attack","detail":{"target":1000000004},"because":"d250"}
+{"t":167,"agent":"Agent1","kind":"observe","obs":{"type":"Unrecognised","detail":"Unrecognised[tick=167, opcode=250, opcodeName=SHOW_MONSTER_HP, bytes=5]"},"id":"e166"}
+{"t":167,"agent":"Agent1","kind":"deliberate","used":["b17","b16","b15"],"goal":"hit what is in front of me","id":"d251","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":167,"agent":"Agent1","kind":"act","id":"a251","intent":"Attack","detail":{"target":1000000004},"because":"d251"}
+{"t":168,"agent":"Agent1","kind":"observe","obs":{"type":"Unrecognised","detail":"Unrecognised[tick=168, opcode=250, opcodeName=SHOW_MONSTER_HP, bytes=5]"},"id":"e167"}
+{"t":168,"agent":"Agent1","kind":"deliberate","used":["b17","b16","b15"],"goal":"hit what is in front of me","id":"d252","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":168,"agent":"Agent1","kind":"act","id":"a252","intent":"Attack","detail":{"target":1000000004},"because":"d252"}
+{"t":169,"agent":"Agent1","kind":"observe","obs":{"type":"Unrecognised","detail":"Unrecognised[tick=169, opcode=250, opcodeName=SHOW_MONSTER_HP, bytes=5]"},"id":"e168"}
+{"t":170,"agent":"Agent1","kind":"observe","obs":{"type":"StatsChanged","detail":"StatsChanged[tick=170, stats={EXP=10}]"},"id":"e169"}
+{"t":170,"agent":"Agent1","kind":"believe","provenance":"first_hand","id":"b18","confidence":0.5,"corroborated":false,"from":["e169"],"triple":["self","exp","10"]}
+{"t":171,"agent":"Agent1","kind":"observe","obs":{"type":"Unrecognised","detail":"Unrecognised[tick=171, opcode=39, opcodeName=SHOW_STATUS_INFO, bytes=34]"},"id":"e170"}
+{"t":172,"agent":"Agent1","kind":"observe","obs":{"type":"Unrecognised","detail":"Unrecognised[tick=172, opcode=238, opcodeName=SPAWN_MONSTER_CONTROL, bytes=5]"},"id":"e171"}
+{"t":173,"agent":"Agent1","kind":"observe","obs":{"type":"MonsterDied","detail":"MonsterDied[tick=173, objectId=1000000004]"},"id":"e172"}
+{"t":173,"agent":"Agent1","kind":"deliberate","used":["b17","b16","b15"],"goal":"get closer to the thing I can see","id":"d253","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":173,"agent":"Agent1","kind":"act","id":"a253","intent":"MoveTo","detail":{"y":154,"x":505},"because":"d253"}
+{"t":173,"agent":"Agent1","kind":"deliberate","used":["b17","b16","b15"],"goal":"hit what is in front of me","id":"d254","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":173,"agent":"Agent1","kind":"act","id":"a254","intent":"Attack","detail":{"target":1000000002},"because":"d254"}
+{"t":174,"agent":"Agent1","kind":"observe","obs":{"type":"Unrecognised","detail":"Unrecognised[tick=174, opcode=250, opcodeName=SHOW_MONSTER_HP, bytes=5]"},"id":"e173"}
+{"t":174,"agent":"Agent1","kind":"deliberate","used":["b17","b16","b15"],"goal":"hit what is in front of me","id":"d255","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":174,"agent":"Agent1","kind":"act","id":"a255","intent":"Attack","detail":{"target":1000000002},"because":"d255"}
+{"t":175,"agent":"Agent1","kind":"observe","obs":{"type":"Unrecognised","detail":"Unrecognised[tick=175, opcode=250, opcodeName=SHOW_MONSTER_HP, bytes=5]"},"id":"e174"}
+{"t":175,"agent":"Agent1","kind":"deliberate","used":["b17","b16","b15"],"goal":"hit what is in front of me","id":"d256","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":175,"agent":"Agent1","kind":"act","id":"a256","intent":"Attack","detail":{"target":1000000002},"because":"d256"}
+{"t":176,"agent":"Agent1","kind":"observe","obs":{"type":"Unrecognised","detail":"Unrecognised[tick=176, opcode=250, opcodeName=SHOW_MONSTER_HP, bytes=5]"},"id":"e175"}
+{"t":176,"agent":"Agent1","kind":"deliberate","used":["b17","b16","b15"],"goal":"hit what is in front of me","id":"d257","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":176,"agent":"Agent1","kind":"act","id":"a257","intent":"Attack","detail":{"target":1000000002},"because":"d257"}
+{"t":177,"agent":"Agent1","kind":"observe","obs":{"type":"Unrecognised","detail":"Unrecognised[tick=177, opcode=250, opcodeName=SHOW_MONSTER_HP, bytes=5]"},"id":"e176"}
+{"t":177,"agent":"Agent1","kind":"deliberate","used":["b17","b16","b15"],"goal":"hit what is in front of me","id":"d258","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":177,"agent":"Agent1","kind":"act","id":"a258","intent":"Attack","detail":{"target":1000000002},"because":"d258"}
+{"t":178,"agent":"Agent1","kind":"observe","obs":{"type":"Unrecognised","detail":"Unrecognised[tick=178, opcode=250, opcodeName=SHOW_MONSTER_HP, bytes=5]"},"id":"e177"}
+{"t":179,"agent":"Agent1","kind":"observe","obs":{"type":"MonsterAppeared","detail":"MonsterAppeared[tick=179, objectId=1000000008, monsterId=9300018, position=java.awt.Point[x=711,y=154]]"},"id":"e178"}
+{"t":179,"agent":"Agent1","kind":"believe","provenance":"first_hand","id":"b17","confidence":0.99,"corroborated":true,"from":["e131","e132","e133","e134","e135","e136","e147","e148","e153","e154","e159","e160","e178"],"triple":["monster:9300018","present_in","map:40000"]}
+{"t":180,"agent":"Agent1","kind":"observe","obs":{"type":"MonsterAppeared","detail":"MonsterAppeared[tick=180, objectId=1000000008, monsterId=9300018, position=java.awt.Point[x=711,y=154]]"},"id":"e179"}
+{"t":180,"agent":"Agent1","kind":"believe","provenance":"first_hand","id":"b17","confidence":0.99,"corroborated":true,"from":["e131","e132","e133","e134","e135","e136","e147","e148","e153","e154","e159","e160","e178","e179"],"triple":["monster:9300018","present_in","map:40000"]}
+{"t":180,"agent":"Agent1","kind":"deliberate","used":["b17","b16","b15"],"goal":"hit what is in front of me","id":"d259","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":180,"agent":"Agent1","kind":"act","id":"a259","intent":"Attack","detail":{"target":1000000002},"because":"d259"}
+{"t":181,"agent":"Agent1","kind":"observe","obs":{"type":"Unrecognised","detail":"Unrecognised[tick=181, opcode=250, opcodeName=SHOW_MONSTER_HP, bytes=5]"},"id":"e180"}
+{"t":181,"agent":"Agent1","kind":"deliberate","used":["b17","b16","b15"],"goal":"hit what is in front of me","id":"d260","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":181,"agent":"Agent1","kind":"act","id":"a260","intent":"Attack","detail":{"target":1000000002},"because":"d260"}
+{"t":182,"agent":"Agent1","kind":"observe","obs":{"type":"Unrecognised","detail":"Unrecognised[tick=182, opcode=250, opcodeName=SHOW_MONSTER_HP, bytes=5]"},"id":"e181"}
+{"t":182,"agent":"Agent1","kind":"deliberate","used":["b17","b16","b15"],"goal":"hit what is in front of me","id":"d261","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":182,"agent":"Agent1","kind":"act","id":"a261","intent":"Attack","detail":{"target":1000000002},"because":"d261"}
+{"t":183,"agent":"Agent1","kind":"observe","obs":{"type":"Unrecognised","detail":"Unrecognised[tick=183, opcode=250, opcodeName=SHOW_MONSTER_HP, bytes=5]"},"id":"e182"}
+{"t":184,"agent":"Agent1","kind":"observe","obs":{"type":"StatsChanged","detail":"StatsChanged[tick=184, stats={EXP=20}]"},"id":"e183"}
+{"t":184,"agent":"Agent1","kind":"believe","provenance":"first_hand","id":"b19","confidence":0.5,"corroborated":false,"from":["e183"],"triple":["self","exp","20"]}
+{"t":184,"agent":"Agent1","kind":"revise","supersededBy":"b19","heldFor":14,"id":"b18","triple":["self","exp","10"]}
+{"t":185,"agent":"Agent1","kind":"observe","obs":{"type":"Unrecognised","detail":"Unrecognised[tick=185, opcode=39, opcodeName=SHOW_STATUS_INFO, bytes=34]"},"id":"e184"}
+{"t":186,"agent":"Agent1","kind":"observe","obs":{"type":"StatsChanged","detail":"StatsChanged[tick=186, stats={LUK=4, INT=4, DEX=5, AVAILABLEAP=0, STR=17}]"},"id":"e185"}
+{"t":186,"agent":"Agent1","kind":"believe","provenance":"first_hand","id":"b20","confidence":0.5,"corroborated":false,"from":["e185"],"triple":["self","luk","4"]}
+{"t":186,"agent":"Agent1","kind":"believe","provenance":"first_hand","id":"b21","confidence":0.5,"corroborated":false,"from":["e185"],"triple":["self","int","4"]}
+{"t":186,"agent":"Agent1","kind":"believe","provenance":"first_hand","id":"b22","confidence":0.5,"corroborated":false,"from":["e185"],"triple":["self","dex","5"]}
+{"t":186,"agent":"Agent1","kind":"believe","provenance":"first_hand","id":"b23","confidence":0.5,"corroborated":false,"from":["e185"],"triple":["self","availableap","0"]}
+{"t":186,"agent":"Agent1","kind":"believe","provenance":"first_hand","id":"b24","confidence":0.5,"corroborated":false,"from":["e185"],"triple":["self","str","17"]}
+{"t":187,"agent":"Agent1","kind":"observe","obs":{"type":"StatsChanged","detail":"StatsChanged[tick=187, stats={LEVEL=2, DEX=5, MAXHP=64, HP=64, STR=17, MAXMP=17, MP=17, AVAILABLEAP=0, AVAILABLESP=0, EXP=5}]"},"id":"e186"}
+{"t":187,"agent":"Agent1","kind":"believe","provenance":"first_hand","id":"b25","confidence":0.5,"corroborated":false,"from":["e186"],"triple":["self","level","2"]}
+{"t":187,"agent":"Agent1","kind":"revise","supersededBy":"b25","heldFor":185,"id":"b1","triple":["self","level","1"]}
+{"t":187,"agent":"Agent1","kind":"believe","provenance":"first_hand","id":"b22","confidence":0.75,"corroborated":true,"from":["e185","e186"],"triple":["self","dex","5"]}
+{"t":187,"agent":"Agent1","kind":"believe","provenance":"first_hand","id":"b26","confidence":0.5,"corroborated":false,"from":["e186"],"triple":["self","maxhp","64"]}
+{"t":187,"agent":"Agent1","kind":"believe","provenance":"first_hand","id":"b27","confidence":0.5,"corroborated":false,"from":["e186"],"triple":["self","hp","64"]}
+{"t":187,"agent":"Agent1","kind":"believe","provenance":"first_hand","id":"b24","confidence":0.75,"corroborated":true,"from":["e185","e186"],"triple":["self","str","17"]}
+{"t":187,"agent":"Agent1","kind":"believe","provenance":"first_hand","id":"b28","confidence":0.5,"corroborated":false,"from":["e186"],"triple":["self","maxmp","17"]}
+{"t":187,"agent":"Agent1","kind":"believe","provenance":"first_hand","id":"b29","confidence":0.5,"corroborated":false,"from":["e186"],"triple":["self","mp","17"]}
+{"t":187,"agent":"Agent1","kind":"believe","provenance":"first_hand","id":"b23","confidence":0.75,"corroborated":true,"from":["e185","e186"],"triple":["self","availableap","0"]}
+{"t":187,"agent":"Agent1","kind":"believe","provenance":"first_hand","id":"b30","confidence":0.5,"corroborated":false,"from":["e186"],"triple":["self","availablesp","0"]}
+{"t":187,"agent":"Agent1","kind":"believe","provenance":"first_hand","id":"b31","confidence":0.5,"corroborated":false,"from":["e186"],"triple":["self","exp","5"]}
+{"t":187,"agent":"Agent1","kind":"revise","supersededBy":"b31","heldFor":3,"id":"b19","triple":["self","exp","20"]}
+{"t":188,"agent":"Agent1","kind":"observe","obs":{"type":"Unrecognised","detail":"Unrecognised[tick=188, opcode=238, opcodeName=SPAWN_MONSTER_CONTROL, bytes=5]"},"id":"e187"}
+{"t":189,"agent":"Agent1","kind":"observe","obs":{"type":"MonsterDied","detail":"MonsterDied[tick=189, objectId=1000000002]"},"id":"e188"}
+{"t":189,"agent":"Agent1","kind":"deliberate","used":["b17","b16","b15"],"goal":"get closer to the thing I can see","id":"d262","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":189,"agent":"Agent1","kind":"act","id":"a262","intent":"MoveTo","detail":{"y":154,"x":322},"because":"d262"}
+{"t":189,"agent":"Agent1","kind":"deliberate","used":["b17","b16","b15"],"goal":"hit what is in front of me","id":"d263","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":189,"agent":"Agent1","kind":"act","id":"a263","intent":"Attack","detail":{"target":1000000003},"because":"d263"}
+{"t":190,"agent":"Agent1","kind":"observe","obs":{"type":"Unrecognised","detail":"Unrecognised[tick=190, opcode=250, opcodeName=SHOW_MONSTER_HP, bytes=5]"},"id":"e189"}
+{"t":190,"agent":"Agent1","kind":"deliberate","used":["b17","b16","b15"],"goal":"hit what is in front of me","id":"d264","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":190,"agent":"Agent1","kind":"act","id":"a264","intent":"Attack","detail":{"target":1000000003},"because":"d264"}
+{"t":191,"agent":"Agent1","kind":"observe","obs":{"type":"Unrecognised","detail":"Unrecognised[tick=191, opcode=250, opcodeName=SHOW_MONSTER_HP, bytes=5]"},"id":"e190"}
+{"t":191,"agent":"Agent1","kind":"deliberate","used":["b17","b16","b15"],"goal":"hit what is in front of me","id":"d265","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":191,"agent":"Agent1","kind":"act","id":"a265","intent":"Attack","detail":{"target":1000000003},"because":"d265"}
+{"t":192,"agent":"Agent1","kind":"observe","obs":{"type":"Unrecognised","detail":"Unrecognised[tick=192, opcode=250, opcodeName=SHOW_MONSTER_HP, bytes=5]"},"id":"e191"}
+{"t":192,"agent":"Agent1","kind":"deliberate","used":["b17","b16","b15"],"goal":"hit what is in front of me","id":"d266","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":192,"agent":"Agent1","kind":"act","id":"a266","intent":"Attack","detail":{"target":1000000003},"because":"d266"}
+{"t":193,"agent":"Agent1","kind":"observe","obs":{"type":"Unrecognised","detail":"Unrecognised[tick=193, opcode=250, opcodeName=SHOW_MONSTER_HP, bytes=5]"},"id":"e192"}
+{"t":193,"agent":"Agent1","kind":"deliberate","used":["b17","b16","b15"],"goal":"hit what is in front of me","id":"d267","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":193,"agent":"Agent1","kind":"act","id":"a267","intent":"Attack","detail":{"target":1000000003},"because":"d267"}
+{"t":194,"agent":"Agent1","kind":"observe","obs":{"type":"Unrecognised","detail":"Unrecognised[tick=194, opcode=250, opcodeName=SHOW_MONSTER_HP, bytes=5]"},"id":"e193"}
+{"t":194,"agent":"Agent1","kind":"deliberate","used":["b17","b16","b15"],"goal":"hit what is in front of me","id":"d268","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":194,"agent":"Agent1","kind":"act","id":"a268","intent":"Attack","detail":{"target":1000000003},"because":"d268"}
+{"t":195,"agent":"Agent1","kind":"observe","obs":{"type":"Unrecognised","detail":"Unrecognised[tick=195, opcode=250, opcodeName=SHOW_MONSTER_HP, bytes=5]"},"id":"e194"}
+{"t":195,"agent":"Agent1","kind":"deliberate","used":["b17","b16","b15"],"goal":"hit what is in front of me","id":"d269","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":195,"agent":"Agent1","kind":"act","id":"a269","intent":"Attack","detail":{"target":1000000003},"because":"d269"}
+{"t":196,"agent":"Agent1","kind":"observe","obs":{"type":"Unrecognised","detail":"Unrecognised[tick=196, opcode=250, opcodeName=SHOW_MONSTER_HP, bytes=5]"},"id":"e195"}
+{"t":196,"agent":"Agent1","kind":"deliberate","used":["b17","b16","b15"],"goal":"hit what is in front of me","id":"d270","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":196,"agent":"Agent1","kind":"act","id":"a270","intent":"Attack","detail":{"target":1000000003},"because":"d270"}
+{"t":197,"agent":"Agent1","kind":"observe","obs":{"type":"Unrecognised","detail":"Unrecognised[tick=197, opcode=250, opcodeName=SHOW_MONSTER_HP, bytes=5]"},"id":"e196"}
+{"t":198,"agent":"Agent1","kind":"observe","obs":{"type":"StatsChanged","detail":"StatsChanged[tick=198, stats={EXP=15}]"},"id":"e197"}
+{"t":198,"agent":"Agent1","kind":"believe","provenance":"first_hand","id":"b32","confidence":0.5,"corroborated":false,"from":["e197"],"triple":["self","exp","15"]}
+{"t":198,"agent":"Agent1","kind":"revise","supersededBy":"b32","heldFor":11,"id":"b31","triple":["self","exp","5"]}
+{"t":199,"agent":"Agent1","kind":"observe","obs":{"type":"Unrecognised","detail":"Unrecognised[tick=199, opcode=39, opcodeName=SHOW_STATUS_INFO, bytes=34]"},"id":"e198"}
+{"t":200,"agent":"Agent1","kind":"observe","obs":{"type":"Unrecognised","detail":"Unrecognised[tick=200, opcode=238, opcodeName=SPAWN_MONSTER_CONTROL, bytes=5]"},"id":"e199"}
+{"t":201,"agent":"Agent1","kind":"observe","obs":{"type":"MonsterDied","detail":"MonsterDied[tick=201, objectId=1000000003]"},"id":"e200"}
+{"t":201,"agent":"Agent1","kind":"deliberate","used":["b17","b16","b15"],"goal":"get closer to the thing I can see","id":"d271","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":201,"agent":"Agent1","kind":"act","id":"a271","intent":"MoveTo","detail":{"y":154,"x":711},"because":"d271"}
+{"t":201,"agent":"Agent1","kind":"deliberate","used":["b17","b16","b15"],"goal":"hit what is in front of me","id":"d272","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":201,"agent":"Agent1","kind":"act","id":"a272","intent":"Attack","detail":{"target":1000000008},"because":"d272"}
+{"t":202,"agent":"Agent1","kind":"observe","obs":{"type":"Unrecognised","detail":"Unrecognised[tick=202, opcode=250, opcodeName=SHOW_MONSTER_HP, bytes=5]"},"id":"e201"}
+{"t":202,"agent":"Agent1","kind":"deliberate","used":["b17","b16","b15"],"goal":"hit what is in front of me","id":"d273","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":202,"agent":"Agent1","kind":"act","id":"a273","intent":"Attack","detail":{"target":1000000008},"because":"d273"}
+{"t":203,"agent":"Agent1","kind":"observe","obs":{"type":"Unrecognised","detail":"Unrecognised[tick=203, opcode=250, opcodeName=SHOW_MONSTER_HP, bytes=5]"},"id":"e202"}
+{"t":203,"agent":"Agent1","kind":"deliberate","used":["b17","b16","b15"],"goal":"hit what is in front of me","id":"d274","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":203,"agent":"Agent1","kind":"act","id":"a274","intent":"Attack","detail":{"target":1000000008},"because":"d274"}
+{"t":204,"agent":"Agent1","kind":"observe","obs":{"type":"Unrecognised","detail":"Unrecognised[tick=204, opcode=250, opcodeName=SHOW_MONSTER_HP, bytes=5]"},"id":"e203"}
+{"t":205,"agent":"Agent1","kind":"observe","obs":{"type":"MonsterAppeared","detail":"MonsterAppeared[tick=205, objectId=1000000011, monsterId=9300018, position=java.awt.Point[x=505,y=154]]"},"id":"e204"}
+{"t":205,"agent":"Agent1","kind":"believe","provenance":"first_hand","id":"b17","confidence":0.99,"corroborated":true,"from":["e131","e132","e133","e134","e135","e136","e147","e148","e153","e154","e159","e160","e178","e179","e204"],"triple":["monster:9300018","present_in","map:40000"]}
+{"t":206,"agent":"Agent1","kind":"observe","obs":{"type":"MonsterAppeared","detail":"MonsterAppeared[tick=206, objectId=1000000011, monsterId=9300018, position=java.awt.Point[x=505,y=154]]"},"id":"e205"}
+{"t":206,"agent":"Agent1","kind":"believe","provenance":"first_hand","id":"b17","confidence":0.99,"corroborated":true,"from":["e131","e132","e133","e134","e135","e136","e147","e148","e153","e154","e159","e160","e178","e179","e204","e205"],"triple":["monster:9300018","present_in","map:40000"]}
+{"t":207,"agent":"Agent1","kind":"observe","obs":{"type":"MonsterAppeared","detail":"MonsterAppeared[tick=207, objectId=1000000012, monsterId=9300018, position=java.awt.Point[x=322,y=154]]"},"id":"e206"}
+{"t":207,"agent":"Agent1","kind":"believe","provenance":"first_hand","id":"b17","confidence":0.99,"corroborated":true,"from":["e131","e132","e133","e134","e135","e136","e147","e148","e153","e154","e159","e160","e178","e179","e204","e205","e206"],"triple":["monster:9300018","present_in","map:40000"]}
+{"t":208,"agent":"Agent1","kind":"observe","obs":{"type":"MonsterAppeared","detail":"MonsterAppeared[tick=208, objectId=1000000012, monsterId=9300018, position=java.awt.Point[x=322,y=154]]"},"id":"e207"}
+{"t":208,"agent":"Agent1","kind":"believe","provenance":"first_hand","id":"b17","confidence":0.99,"corroborated":true,"from":["e131","e132","e133","e134","e135","e136","e147","e148","e153","e154","e159","e160","e178","e179","e204","e205","e206","e207"],"triple":["monster:9300018","present_in","map:40000"]}
+{"t":208,"agent":"Agent1","kind":"deliberate","used":["b17","b16","b15"],"goal":"hit what is in front of me","id":"d275","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":208,"agent":"Agent1","kind":"act","id":"a275","intent":"Attack","detail":{"target":1000000008},"because":"d275"}
+{"t":209,"agent":"Agent1","kind":"observe","obs":{"type":"Unrecognised","detail":"Unrecognised[tick=209, opcode=250, opcodeName=SHOW_MONSTER_HP, bytes=5]"},"id":"e208"}
+{"t":209,"agent":"Agent1","kind":"deliberate","used":["b17","b16","b15"],"goal":"hit what is in front of me","id":"d276","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":209,"agent":"Agent1","kind":"act","id":"a276","intent":"Attack","detail":{"target":1000000008},"because":"d276"}
+{"t":210,"agent":"Agent1","kind":"observe","obs":{"type":"Unrecognised","detail":"Unrecognised[tick=210, opcode=250, opcodeName=SHOW_MONSTER_HP, bytes=5]"},"id":"e209"}
+{"t":210,"agent":"Agent1","kind":"deliberate","used":["b17","b16","b15"],"goal":"hit what is in front of me","id":"d277","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":210,"agent":"Agent1","kind":"act","id":"a277","intent":"Attack","detail":{"target":1000000008},"because":"d277"}
+{"t":211,"agent":"Agent1","kind":"observe","obs":{"type":"Unrecognised","detail":"Unrecognised[tick=211, opcode=250, opcodeName=SHOW_MONSTER_HP, bytes=5]"},"id":"e210"}
+{"t":211,"agent":"Agent1","kind":"deliberate","used":["b17","b16","b15"],"goal":"hit what is in front of me","id":"d278","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":211,"agent":"Agent1","kind":"act","id":"a278","intent":"Attack","detail":{"target":1000000008},"because":"d278"}
+{"t":212,"agent":"Agent1","kind":"observe","obs":{"type":"Unrecognised","detail":"Unrecognised[tick=212, opcode=250, opcodeName=SHOW_MONSTER_HP, bytes=5]"},"id":"e211"}
+{"t":212,"agent":"Agent1","kind":"deliberate","used":["b17","b16","b15"],"goal":"hit what is in front of me","id":"d279","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":212,"agent":"Agent1","kind":"act","id":"a279","intent":"Attack","detail":{"target":1000000008},"because":"d279"}
+{"t":213,"agent":"Agent1","kind":"observe","obs":{"type":"Unrecognised","detail":"Unrecognised[tick=213, opcode=250, opcodeName=SHOW_MONSTER_HP, bytes=5]"},"id":"e212"}
+{"t":214,"agent":"Agent1","kind":"observe","obs":{"type":"StatsChanged","detail":"StatsChanged[tick=214, stats={EXP=25}]"},"id":"e213"}
+{"t":214,"agent":"Agent1","kind":"believe","provenance":"first_hand","id":"b33","confidence":0.5,"corroborated":false,"from":["e213"],"triple":["self","exp","25"]}
+{"t":214,"agent":"Agent1","kind":"revise","supersededBy":"b33","heldFor":16,"id":"b32","triple":["self","exp","15"]}
+{"t":215,"agent":"Agent1","kind":"observe","obs":{"type":"Unrecognised","detail":"Unrecognised[tick=215, opcode=39, opcodeName=SHOW_STATUS_INFO, bytes=34]"},"id":"e214"}
+{"t":216,"agent":"Agent1","kind":"observe","obs":{"type":"Unrecognised","detail":"Unrecognised[tick=216, opcode=238, opcodeName=SPAWN_MONSTER_CONTROL, bytes=5]"},"id":"e215"}
+{"t":217,"agent":"Agent1","kind":"observe","obs":{"type":"MonsterDied","detail":"MonsterDied[tick=217, objectId=1000000008]"},"id":"e216"}
+{"t":217,"agent":"Agent1","kind":"deliberate","used":["b17","b16","b15"],"goal":"get closer to the thing I can see","id":"d280","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":217,"agent":"Agent1","kind":"act","id":"a280","intent":"MoveTo","detail":{"y":154,"x":505},"because":"d280"}
+{"t":217,"agent":"Agent1","kind":"deliberate","used":["b17","b16","b15"],"goal":"hit what is in front of me","id":"d281","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":217,"agent":"Agent1","kind":"act","id":"a281","intent":"Attack","detail":{"target":1000000011},"because":"d281"}
+{"t":218,"agent":"Agent1","kind":"observe","obs":{"type":"Unrecognised","detail":"Unrecognised[tick=218, opcode=250, opcodeName=SHOW_MONSTER_HP, bytes=5]"},"id":"e217"}
+{"t":218,"agent":"Agent1","kind":"deliberate","used":["b17","b16","b15"],"goal":"hit what is in front of me","id":"d282","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":218,"agent":"Agent1","kind":"act","id":"a282","intent":"Attack","detail":{"target":1000000011},"because":"d282"}
+{"t":219,"agent":"Agent1","kind":"observe","obs":{"type":"Unrecognised","detail":"Unrecognised[tick=219, opcode=250, opcodeName=SHOW_MONSTER_HP, bytes=5]"},"id":"e218"}
+{"t":219,"agent":"Agent1","kind":"deliberate","used":["b17","b16","b15"],"goal":"hit what is in front of me","id":"d283","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":219,"agent":"Agent1","kind":"act","id":"a283","intent":"Attack","detail":{"target":1000000011},"because":"d283"}
+{"t":220,"agent":"Agent1","kind":"observe","obs":{"type":"Unrecognised","detail":"Unrecognised[tick=220, opcode=250, opcodeName=SHOW_MONSTER_HP, bytes=5]"},"id":"e219"}
+{"t":220,"agent":"Agent1","kind":"deliberate","used":["b17","b16","b15"],"goal":"hit what is in front of me","id":"d284","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":220,"agent":"Agent1","kind":"act","id":"a284","intent":"Attack","detail":{"target":1000000011},"because":"d284"}
+{"t":221,"agent":"Agent1","kind":"observe","obs":{"type":"Unrecognised","detail":"Unrecognised[tick=221, opcode=250, opcodeName=SHOW_MONSTER_HP, bytes=5]"},"id":"e220"}
+{"t":221,"agent":"Agent1","kind":"deliberate","used":["b17","b16","b15"],"goal":"hit what is in front of me","id":"d285","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":221,"agent":"Agent1","kind":"act","id":"a285","intent":"Attack","detail":{"target":1000000011},"because":"d285"}
+{"t":222,"agent":"Agent1","kind":"observe","obs":{"type":"Unrecognised","detail":"Unrecognised[tick=222, opcode=250, opcodeName=SHOW_MONSTER_HP, bytes=5]"},"id":"e221"}
+{"t":222,"agent":"Agent1","kind":"deliberate","used":["b17","b16","b15"],"goal":"hit what is in front of me","id":"d286","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":222,"agent":"Agent1","kind":"act","id":"a286","intent":"Attack","detail":{"target":1000000011},"because":"d286"}
+{"t":223,"agent":"Agent1","kind":"observe","obs":{"type":"Unrecognised","detail":"Unrecognised[tick=223, opcode=250, opcodeName=SHOW_MONSTER_HP, bytes=5]"},"id":"e222"}
+{"t":223,"agent":"Agent1","kind":"deliberate","used":["b17","b16","b15"],"goal":"hit what is in front of me","id":"d287","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":223,"agent":"Agent1","kind":"act","id":"a287","intent":"Attack","detail":{"target":1000000011},"because":"d287"}
+{"t":224,"agent":"Agent1","kind":"observe","obs":{"type":"Unrecognised","detail":"Unrecognised[tick=224, opcode=250, opcodeName=SHOW_MONSTER_HP, bytes=5]"},"id":"e223"}
+{"t":224,"agent":"Agent1","kind":"deliberate","used":["b17","b16","b15"],"goal":"hit what is in front of me","id":"d288","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":224,"agent":"Agent1","kind":"act","id":"a288","intent":"Attack","detail":{"target":1000000011},"because":"d288"}
+{"t":225,"agent":"Agent1","kind":"observe","obs":{"type":"Unrecognised","detail":"Unrecognised[tick=225, opcode=250, opcodeName=SHOW_MONSTER_HP, bytes=5]"},"id":"e224"}
+{"t":226,"agent":"Agent1","kind":"observe","obs":{"type":"StatsChanged","detail":"StatsChanged[tick=226, stats={EXP=35}]"},"id":"e225"}
+{"t":226,"agent":"Agent1","kind":"believe","provenance":"first_hand","id":"b34","confidence":0.5,"corroborated":false,"from":["e225"],"triple":["self","exp","35"]}
+{"t":226,"agent":"Agent1","kind":"revise","supersededBy":"b34","heldFor":12,"id":"b33","triple":["self","exp","25"]}
+{"t":227,"agent":"Agent1","kind":"observe","obs":{"type":"Unrecognised","detail":"Unrecognised[tick=227, opcode=39, opcodeName=SHOW_STATUS_INFO, bytes=34]"},"id":"e226"}
+{"t":228,"agent":"Agent1","kind":"observe","obs":{"type":"StatsChanged","detail":"StatsChanged[tick=228, stats={LUK=4, INT=4, DEX=5, AVAILABLEAP=0, STR=22}]"},"id":"e227"}
+{"t":228,"agent":"Agent1","kind":"believe","provenance":"first_hand","id":"b20","confidence":0.75,"corroborated":true,"from":["e185","e227"],"triple":["self","luk","4"]}
+{"t":228,"agent":"Agent1","kind":"believe","provenance":"first_hand","id":"b21","confidence":0.75,"corroborated":true,"from":["e185","e227"],"triple":["self","int","4"]}
+{"t":228,"agent":"Agent1","kind":"believe","provenance":"first_hand","id":"b22","confidence":0.875,"corroborated":true,"from":["e185","e186","e227"],"triple":["self","dex","5"]}
+{"t":228,"agent":"Agent1","kind":"believe","provenance":"first_hand","id":"b23","confidence":0.875,"corroborated":true,"from":["e185","e186","e227"],"triple":["self","availableap","0"]}
+{"t":228,"agent":"Agent1","kind":"believe","provenance":"first_hand","id":"b35","confidence":0.5,"corroborated":false,"from":["e227"],"triple":["self","str","22"]}
+{"t":229,"agent":"Agent1","kind":"observe","obs":{"type":"StatsChanged","detail":"StatsChanged[tick=229, stats={LEVEL=3, DEX=5, MAXHP=77, HP=77, STR=22, MAXMP=28, MP=28, AVAILABLEAP=0, AVAILABLESP=0, EXP=1}]"},"id":"e228"}
+{"t":229,"agent":"Agent1","kind":"believe","provenance":"first_hand","id":"b36","confidence":0.5,"corroborated":false,"from":["e228"],"triple":["self","level","3"]}
+{"t":229,"agent":"Agent1","kind":"revise","supersededBy":"b36","heldFor":42,"id":"b25","triple":["self","level","2"]}
+{"t":229,"agent":"Agent1","kind":"believe","provenance":"first_hand","id":"b22","confidence":0.938,"corroborated":true,"from":["e185","e186","e227","e228"],"triple":["self","dex","5"]}
+{"t":229,"agent":"Agent1","kind":"believe","provenance":"first_hand","id":"b37","confidence":0.5,"corroborated":false,"from":["e228"],"triple":["self","maxhp","77"]}
+{"t":229,"agent":"Agent1","kind":"revise","supersededBy":"b37","heldFor":42,"id":"b26","triple":["self","maxhp","64"]}
+{"t":229,"agent":"Agent1","kind":"believe","provenance":"first_hand","id":"b38","confidence":0.5,"corroborated":false,"from":["e228"],"triple":["self","hp","77"]}
+{"t":229,"agent":"Agent1","kind":"revise","supersededBy":"b38","heldFor":42,"id":"b27","triple":["self","hp","64"]}
+{"t":229,"agent":"Agent1","kind":"believe","provenance":"first_hand","id":"b35","confidence":0.75,"corroborated":true,"from":["e227","e228"],"triple":["self","str","22"]}
+{"t":229,"agent":"Agent1","kind":"believe","provenance":"first_hand","id":"b39","confidence":0.5,"corroborated":false,"from":["e228"],"triple":["self","maxmp","28"]}
+{"t":229,"agent":"Agent1","kind":"revise","supersededBy":"b39","heldFor":42,"id":"b28","triple":["self","maxmp","17"]}
+{"t":229,"agent":"Agent1","kind":"believe","provenance":"first_hand","id":"b40","confidence":0.5,"corroborated":false,"from":["e228"],"triple":["self","mp","28"]}
+{"t":229,"agent":"Agent1","kind":"revise","supersededBy":"b40","heldFor":42,"id":"b29","triple":["self","mp","17"]}
+{"t":229,"agent":"Agent1","kind":"believe","provenance":"first_hand","id":"b23","confidence":0.938,"corroborated":true,"from":["e185","e186","e227","e228"],"triple":["self","availableap","0"]}
+{"t":229,"agent":"Agent1","kind":"believe","provenance":"first_hand","id":"b30","confidence":0.75,"corroborated":true,"from":["e186","e228"],"triple":["self","availablesp","0"]}
+{"t":229,"agent":"Agent1","kind":"believe","provenance":"first_hand","id":"b41","confidence":0.5,"corroborated":false,"from":["e228"],"triple":["self","exp","1"]}
+{"t":229,"agent":"Agent1","kind":"revise","supersededBy":"b41","heldFor":3,"id":"b34","triple":["self","exp","35"]}
+{"t":230,"agent":"Agent1","kind":"observe","obs":{"type":"Unrecognised","detail":"Unrecognised[tick=230, opcode=238, opcodeName=SPAWN_MONSTER_CONTROL, bytes=5]"},"id":"e229"}
+{"t":231,"agent":"Agent1","kind":"observe","obs":{"type":"MonsterDied","detail":"MonsterDied[tick=231, objectId=1000000011]"},"id":"e230"}
+{"t":231,"agent":"Agent1","kind":"deliberate","used":["b17","b16","b15"],"goal":"get closer to the thing I can see","id":"d289","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":231,"agent":"Agent1","kind":"act","id":"a289","intent":"MoveTo","detail":{"y":154,"x":322},"because":"d289"}
+{"t":231,"agent":"Agent1","kind":"deliberate","used":["b17","b16","b15"],"goal":"hit what is in front of me","id":"d290","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":231,"agent":"Agent1","kind":"act","id":"a290","intent":"Attack","detail":{"target":1000000012},"because":"d290"}
+{"t":232,"agent":"Agent1","kind":"observe","obs":{"type":"Unrecognised","detail":"Unrecognised[tick=232, opcode=250, opcodeName=SHOW_MONSTER_HP, bytes=5]"},"id":"e231"}
+{"t":232,"agent":"Agent1","kind":"deliberate","used":["b17","b16","b15"],"goal":"hit what is in front of me","id":"d291","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":232,"agent":"Agent1","kind":"act","id":"a291","intent":"Attack","detail":{"target":1000000012},"because":"d291"}
+{"t":233,"agent":"Agent1","kind":"observe","obs":{"type":"Unrecognised","detail":"Unrecognised[tick=233, opcode=250, opcodeName=SHOW_MONSTER_HP, bytes=5]"},"id":"e232"}
+{"t":234,"agent":"Agent1","kind":"observe","obs":{"type":"MonsterAppeared","detail":"MonsterAppeared[tick=234, objectId=1000000015, monsterId=9300018, position=java.awt.Point[x=505,y=154]]"},"id":"e233"}
+{"t":234,"agent":"Agent1","kind":"believe","provenance":"first_hand","id":"b17","confidence":0.99,"corroborated":true,"from":["e131","e132","e133","e134","e135","e136","e147","e148","e153","e154","e159","e160","e178","e179","e204","e205","e206","e207","e233"],"triple":["monster:9300018","present_in","map:40000"]}
+{"t":235,"agent":"Agent1","kind":"observe","obs":{"type":"MonsterAppeared","detail":"MonsterAppeared[tick=235, objectId=1000000015, monsterId=9300018, position=java.awt.Point[x=505,y=154]]"},"id":"e234"}
+{"t":235,"agent":"Agent1","kind":"believe","provenance":"first_hand","id":"b17","confidence":0.99,"corroborated":true,"from":["e131","e132","e133","e134","e135","e136","e147","e148","e153","e154","e159","e160","e178","e179","e204","e205","e206","e207","e233","e234"],"triple":["monster:9300018","present_in","map:40000"]}
+{"t":236,"agent":"Agent1","kind":"observe","obs":{"type":"MonsterAppeared","detail":"MonsterAppeared[tick=236, objectId=1000000016, monsterId=9300018, position=java.awt.Point[x=711,y=154]]"},"id":"e235"}
+{"t":236,"agent":"Agent1","kind":"believe","provenance":"first_hand","id":"b17","confidence":0.99,"corroborated":true,"from":["e131","e132","e133","e134","e135","e136","e147","e148","e153","e154","e159","e160","e178","e179","e204","e205","e206","e207","e233","e234","e235"],"triple":["monster:9300018","present_in","map:40000"]}
+{"t":237,"agent":"Agent1","kind":"observe","obs":{"type":"MonsterAppeared","detail":"MonsterAppeared[tick=237, objectId=1000000016, monsterId=9300018, position=java.awt.Point[x=711,y=154]]"},"id":"e236"}
+{"t":237,"agent":"Agent1","kind":"believe","provenance":"first_hand","id":"b17","confidence":0.99,"corroborated":true,"from":["e131","e132","e133","e134","e135","e136","e147","e148","e153","e154","e159","e160","e178","e179","e204","e205","e206","e207","e233","e234","e235","e236"],"triple":["monster:9300018","present_in","map:40000"]}
+{"t":237,"agent":"Agent1","kind":"deliberate","used":["b17","b16","b15"],"goal":"hit what is in front of me","id":"d292","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":237,"agent":"Agent1","kind":"act","id":"a292","intent":"Attack","detail":{"target":1000000012},"because":"d292"}
+{"t":238,"agent":"Agent1","kind":"observe","obs":{"type":"Unrecognised","detail":"Unrecognised[tick=238, opcode=250, opcodeName=SHOW_MONSTER_HP, bytes=5]"},"id":"e237"}
+{"t":238,"agent":"Agent1","kind":"deliberate","used":["b17","b16","b15"],"goal":"hit what is in front of me","id":"d293","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":238,"agent":"Agent1","kind":"act","id":"a293","intent":"Attack","detail":{"target":1000000012},"because":"d293"}
+{"t":239,"agent":"Agent1","kind":"observe","obs":{"type":"Unrecognised","detail":"Unrecognised[tick=239, opcode=250, opcodeName=SHOW_MONSTER_HP, bytes=5]"},"id":"e238"}
+{"t":239,"agent":"Agent1","kind":"deliberate","used":["b17","b16","b15"],"goal":"hit what is in front of me","id":"d294","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":239,"agent":"Agent1","kind":"act","id":"a294","intent":"Attack","detail":{"target":1000000012},"because":"d294"}
+{"t":240,"agent":"Agent1","kind":"observe","obs":{"type":"Unrecognised","detail":"Unrecognised[tick=240, opcode=250, opcodeName=SHOW_MONSTER_HP, bytes=5]"},"id":"e239"}
+{"t":240,"agent":"Agent1","kind":"deliberate","used":["b17","b16","b15"],"goal":"hit what is in front of me","id":"d295","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":240,"agent":"Agent1","kind":"act","id":"a295","intent":"Attack","detail":{"target":1000000012},"because":"d295"}
+{"t":241,"agent":"Agent1","kind":"observe","obs":{"type":"Unrecognised","detail":"Unrecognised[tick=241, opcode=250, opcodeName=SHOW_MONSTER_HP, bytes=5]"},"id":"e240"}
+{"t":241,"agent":"Agent1","kind":"deliberate","used":["b17","b16","b15"],"goal":"hit what is in front of me","id":"d296","considered":["PickUp","Attack","MoveTo","EnterPortal","Wait"]}
+{"t":241,"agent":"Agent1","kind":"act","id":"a296","intent":"Attack","detail":{"target":1000000012},"because":"d296"}
