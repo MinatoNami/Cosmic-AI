@@ -98,8 +98,34 @@ public class ReflexPolicy implements Policy {
      */
     private int lookingUpFor;
 
-    /** Long enough to cross a map and talk to somebody, at 600ms a decision. */
-    private static final int LOOK_UP_DECISIONS = 50;
+    /**
+     * How much being neglected counts for.
+     *
+     * Has to be able to out-argue a good option at close range, or a neglected one never wins
+     * and this is a ladder again with extra arithmetic. An agent standing on a monster scores
+     * about 1.1 for fighting; a door nobody has taken for an attention span scores its own
+     * appeal plus this.
+     */
+    private static final double NEGLECT_MATTERS = 1.5;
+
+    /**
+     * Added to the door already being walked to.
+     *
+     * Large, deliberately. Re-deciding every tick once took an agent one step towards a door
+     * and then somewhere else, over and over: 199 decisions in a two-minute run, all of them
+     * MoveTo, and it never left the starting town. Committing until arrival is the difference
+     * between wandering and going somewhere.
+     */
+    private static final double COMMITTED = 2.0;
+
+    /** There is always something to do, even if it is only walking about. */
+    private static final double WANDERING_IS_BETTER_THAN_NOTHING = 0.05;
+
+    /** Enough that something at your feet outranks a fight, whatever your disposition. */
+    private static final double UNDERFOOT = 0.8;
+
+    /** When each kind of thing was last done, for working out what is being neglected. */
+    private final Map<String, Integer> lastChosenAt = new HashMap<>();
 
     /**
      * The door just walked through, held until the next map arrives so the agent can find out
@@ -149,6 +175,7 @@ public class ReflexPolicy implements Policy {
             committedPortal = null;     // the old map's doors are gone
         }
         decisionsHere++;
+        decisionsMade++;
 
         if (world.level() > lastLevel) {
             lastLevel = world.level();
@@ -156,129 +183,206 @@ public class ReflexPolicy implements Policy {
         } else {
             decisionsSinceProgress++;
         }
-        // Two ways to have outstayed a map. Stopping getting anywhere is one. The other is
-        // simply having been here a very long time, which matters because the first test
-        // never fires for an agent that is doing well: it levels, the counter resets, and it
-        // happily grinds the same field for its entire life because that field works.
+
         Set<Integer> unfinished = startedQuests(mind);
 
-        // An agent with a quest in hand stays put. It has no idea what the quest asked for -
-        // that is deliberately not readable - but whatever it was, killing and looting where
-        // it is standing is the likeliest thing to advance it, and wandering off is the
-        // likeliest thing to strand it. So having unfinished business doubles its patience.
-        int ceiling = disposition.patience() * LIFETIMES_BEFORE_MOVING_ON
-                * (unfinished.isEmpty() ? 1 : 2);
-        boolean outstayed = (decisionsSinceProgress > disposition.patience() && unfinished.isEmpty())
-                || decisionsHere > ceiling;
-
-        // Head down too long. Loot and monsters starve everything below them, so every so
-        // often the agent looks up - and stays looked up long enough to get somewhere, because
-        // an NPC or a door is many decisions away and a glance only ever produced one step
-        // towards one.
-        if (lookingUpFor == 0 && headDownFor >= disposition.attentionSpan()) {
-            lookingUpFor = LOOK_UP_DECISIONS;
-            headDownFor = 0;
-        }
-        boolean lookUp = lookingUpFor > 0;
-        if (lookUp) {
-            lookingUpFor--;
-        }
+        // Stopped getting anywhere. An agent holding a quest is exempt: it has no idea what the
+        // quest asked for - that is deliberately unreadable - but whatever it was, staying is
+        // likelier to advance it than leaving.
+        boolean stale = unfinished.isEmpty() && decisionsSinceProgress > disposition.patience();
 
         List<String> consulted = mind.recall("map monster danger", tick, 3)
                 .stream().map(Belief::ref).toList();
         Point self = world.selfPosition();
 
-        // An agent that has outstayed a map stops taking its bait - all of it. Suppressing
-        // monsters alone was not enough: killing things makes drops, so it would stand in the
-        // resulting pile picking items up forever and never fall through to the door. In
-        // forty-five seconds an agent managed forty pickups, thirty-two attacks, and nothing
-        // else whatsoever.
-        Optional<WorldModel.Entity> drop = outstayed || lookUp
-                ? Optional.empty() : world.nearestDrop();
-        if (drop.isPresent() && drop.get().position().distance(self) < disposition.scavengeRange()) {
-            headDownFor++;
-            return new Decision(new Intent.PickUp(drop.get().objectId(), drop.get().position()),
-                    "take what is at my feet", consulted, options());
+        List<Choice> choices = new ArrayList<>();
+        lootNearby(choices, world, self);
+        somethingToFight(choices, world, self);
+        unfinishedBusiness(choices, world, self, unfinished);
+        someoneToTalkTo(choices, world, self);
+        awayOutOfHere(choices, world, mind, self, stale);
+        choices.add(new Choice("wander", new Intent.MoveTo(
+                new Point(self.x + random.nextInt(2 * WANDER_STEP) - WANDER_STEP, self.y)),
+                "wander", WANDERING_IS_BETTER_THAN_NOTHING, null));
+
+        Choice best = choices.stream().max(Comparator.comparingDouble(Choice::score)).orElseThrow();
+        lastChosenAt.put(best.kind(), decisionsMade);
+        if (best.onChosen() != null) {
+            best.onChosen().run();
         }
+        return new Decision(best.intent(), best.goal(), consulted, roadsNotTaken(choices, best));
+    }
 
-        // An agent that has stopped getting anywhere here stops taking the bait, so the ladder
-        // falls through to the door rather than to the next monster.
-        Optional<WorldModel.Entity> monster = outstayed || lookUp
-                ? Optional.empty() : world.nearestMonster();
-        if (monster.isPresent() && monster.get().position().distance(self) < disposition.pursuitRange()) {
-            WorldModel.Entity target = monster.get();
-            headDownFor++;
-            if (target.position().distance(self) < MELEE_RANGE) {
-                return new Decision(new Intent.Attack(target.objectId(), target.position()),
-                        "hit what is in front of me", consulted, options());
+    /**
+     * One thing the agent could do now, and how much it wants to.
+     *
+     * @param kind     what sort of thing this is, for working out what has been neglected
+     * @param onChosen bookkeeping to run only if this is the one picked, so scoring an option
+     *                 never has a side effect
+     */
+    private record Choice(String kind, Intent intent, String goal, double score, Runnable onChosen) {
+    }
+
+    /**
+     * How long since the agent last did something of this kind, as a fraction of its attention
+     * span, capped at one.
+     *
+     * This is what makes starvation impossible rather than merely unlikely. The ladder this
+     * replaced tried loot, then monsters, then NPCs, then doors and stopped at the first match,
+     * so the top two starved the rest whenever there was anything to hit - and they fed each
+     * other, because killing makes drops and drops outrank monsters. Eighty-eight per cent of
+     * one agent's decisions went on those two rungs. Here an option nobody has taken for a
+     * while simply climbs until it wins, with no timers and nothing to tune.
+     */
+    private double neglect(String kind) {
+        int since = decisionsMade - lastChosenAt.getOrDefault(kind, 0);
+        return Math.min(1.0, (double) since / Math.max(1, disposition.attentionSpan()));
+    }
+
+    /** 1 when standing on it, 0 at the edge of what the agent would cross for it. */
+    private static double nearness(double distance, double range) {
+        return distance >= range ? 0 : 1 - distance / range;
+    }
+
+    private void lootNearby(List<Choice> choices, WorldModel world, Point self) {
+        world.nearestDrop().ifPresent(drop -> {
+            double near = nearness(drop.position().distance(self), disposition.scavengeRange());
+            if (near <= 0) {
+                return;
             }
-            return new Decision(new Intent.MoveTo(target.position()),
-                    "get closer to the thing I can see", consulted, options());
-        }
+            // Underfoot beats everything, for anyone. Scoring greed against aggression alone
+            // had a fighter step over the thing it had just knocked loose to go and hit
+            // something else, which no player does: picking it up costs one decision.
+            double underfoot = drop.position().distance(self) < MELEE_RANGE ? UNDERFOOT : 0;
+            choices.add(new Choice("loot",
+                    new Intent.PickUp(drop.objectId(), drop.position()),
+                    "take what is at my feet",
+                    (0.2 + disposition.greed()) * near + underfoot
+                            + NEGLECT_MATTERS * neglect("loot"), null));
+        });
+    }
 
-        // Unfinished business first. An agent has no idea what a quest asked for, so it goes
-        // back and offers; the server says yes or nothing happens, and the state change is
-        // how it finds out that whatever it did in between was the thing.
-        decisionsMade++;
-        Set<Integer> started = unfinished;
-        Optional<Errand> errand = errandFor(world, started);
-        if (errand.isPresent()) {
-            WorldModel.Entity host = errand.get().npc();
-            if (host.position().distance(self) >= NPC_RANGE) {
-                return new Decision(new Intent.MoveTo(host.position()),
-                        "go back to the one I owe something", consulted, options());
+    private void somethingToFight(List<Choice> choices, WorldModel world, Point self) {
+        world.nearestMonster().ifPresent(monster -> {
+            double distance = monster.position().distance(self);
+            double near = nearness(distance, disposition.pursuitRange());
+            if (near <= 0) {
+                return;
             }
-            lastHandIn.put(errand.get().questId(), decisionsMade);
-            return new Decision(
-                    new Intent.CompleteQuest(errand.get().questId(), host.typeId(), host.position()),
-                    "see if what I owe is done", consulted, options());
-        }
+            double score = (0.2 + disposition.aggression()) * near + NEGLECT_MATTERS * neglect("fight");
+            Intent intent = distance < MELEE_RANGE
+                    ? new Intent.Attack(monster.objectId(), monster.position())
+                    : new Intent.MoveTo(monster.position());
+            String goal = distance < MELEE_RANGE
+                    ? "hit what is in front of me"
+                    : "get closer to the thing I can see";
+            choices.add(new Choice("fight", intent, goal, score, null));
+        });
+    }
 
-        // Bother an NPC now and then. An agent has no idea what a quest is; it sees that this
-        // one has something on offer and finds out by taking it.
-        decisionsSinceTalk++;
-        Optional<WorldModel.Entity> npc = world.nearestNpc();
-        if (npc.isPresent() && decisionsSinceTalk >= disposition.talkInterval()) {
-            WorldModel.Entity target = npc.get();
-            if (target.position().distance(self) >= NPC_RANGE) {
-                return new Decision(new Intent.MoveTo(target.position()),
-                        "go and see what that one wants", consulted, options());
+    /**
+     * Something owed to an NPC in sight.
+     *
+     * Scored high and rising with neglect, because an agent has no idea what a quest asked for
+     * and the only way to find out whether it is done is to go back and offer.
+     */
+    private void unfinishedBusiness(List<Choice> choices, WorldModel world, Point self,
+                                    Set<Integer> unfinished) {
+        errandFor(world, unfinished).ifPresent(errand -> {
+            WorldModel.Entity host = errand.npc();
+            double distance = host.position().distance(self);
+            double score = 0.8 + NEGLECT_MATTERS * neglect("errand");
+            if (distance >= NPC_RANGE) {
+                choices.add(new Choice("errand", new Intent.MoveTo(host.position()),
+                        "go back to the one I owe something", score, null));
+                return;
             }
+            choices.add(new Choice("errand",
+                    new Intent.CompleteQuest(errand.questId(), host.typeId(), host.position()),
+                    "see if what I owe is done", score,
+                    () -> lastHandIn.put(errand.questId(), decisionsMade)));
+        });
+    }
 
-            decisionsSinceTalk = 0;
-            Optional<Integer> quest = QuestBoard.offeredBy(target.typeId()).stream()
+    private void someoneToTalkTo(List<Choice> choices, WorldModel world, Point self) {
+        world.nearestNpc().ifPresent(npc -> {
+            double distance = npc.position().distance(self);
+            Optional<Integer> offer = QuestBoard.offeredBy(npc.typeId()).stream()
                     .filter(q -> !questsTried.contains(q))
                     .findFirst();
-            if (quest.isPresent()) {
-                questsTried.add(quest.get());
-                return new Decision(
-                        new Intent.StartQuest(quest.get(), target.typeId(), target.position()),
-                        "take whatever this one is offering", consulted, options());
+            // Something on offer is worth crossing a map for; a chat is worth a wander.
+            double appeal = offer.isPresent() ? 0.7 : 0.2 + disposition.curiosity() * 0.3;
+            double score = appeal + NEGLECT_MATTERS * neglect("talk");
+
+            if (distance >= NPC_RANGE) {
+                choices.add(new Choice("talk", new Intent.MoveTo(npc.position()),
+                        "go and see what that one wants", score, null));
+                return;
             }
-            return new Decision(new Intent.TalkTo(target.objectId(), target.typeId(), target.position()),
-                    "say hello and see what happens", consulted, options());
-        }
-
-        // Nothing here. Head for a door, and keep heading for it until we arrive.
-        if (committedPortal == null && (outstayed || decisionsHere % disposition.portalReluctance() == 0)) {
-            committedPortal = chooseDoor(world.portals(), mind, world.mapId(),
-                    "player:" + world.characterId());
-        }
-
-        if (committedPortal != null) {
-            if (committedPortal.position().distance(self) < PORTAL_RANGE) {
-                Intent enter = new Intent.EnterPortal(committedPortal.name(), committedPortal.position());
-                portalJustTaken = portalRef(world.mapId(), committedPortal.name());
-                committedPortal = null;
-                lookingUpFor = 0;       // errand done, back to work
-                return new Decision(enter, "see where this goes", consulted, options());
+            if (offer.isPresent()) {
+                choices.add(new Choice("talk",
+                        new Intent.StartQuest(offer.get(), npc.typeId(), npc.position()),
+                        "take whatever this one is offering", score,
+                        () -> questsTried.add(offer.get())));
+                return;
             }
-            return new Decision(new Intent.MoveTo(committedPortal.position()),
-                    "walk to a way out", consulted, options());
+            choices.add(new Choice("talk",
+                    new Intent.TalkTo(npc.objectId(), npc.typeId(), npc.position()),
+                    "say hello and see what happens", score, null));
+        });
+    }
+
+    private void awayOutOfHere(List<Choice> choices, WorldModel world, Mind mind, Point self,
+                               boolean stale) {
+        // Picking a candidate is not the same as setting off for one. Committing here, while
+        // merely scoring the option, meant the commitment bonus applied on the very first
+        // decision an agent ever made and the door beat everything for the rest of its life -
+        // seven tests said so at once.
+        boolean alreadyOnTheWay = committedPortal != null;
+        WorldModel.PortalTarget door = alreadyOnTheWay ? committedPortal
+                : chooseDoor(world.portals(), mind, world.mapId(), "player:" + world.characterId());
+        if (door == null) {
+            return;
         }
 
-        Point wander = new Point(self.x + random.nextInt(2 * WANDER_STEP) - WANDER_STEP, self.y);
-        return new Decision(new Intent.MoveTo(wander), "wander", consulted, options());
+        // Wearing out a place makes the door more attractive; already being on the way makes it
+        // much more so, because a door abandoned halfway is a door never reached. That was
+        // learned the hard way: an agent once spent a two-minute run taking a single step
+        // towards a door and then thinking better of it, over and over.
+        double score = 0.15 + disposition.wanderlust() * 0.5
+                + Math.min(1.0, (double) decisionsHere / disposition.patience())
+                + (stale ? 1.0 : 0)
+                + NEGLECT_MATTERS * neglect("door")
+                + (alreadyOnTheWay ? COMMITTED : 0);
+
+        if (door.position().distance(self) < PORTAL_RANGE) {
+            choices.add(new Choice("door",
+                    new Intent.EnterPortal(door.name(), door.position()),
+                    "see where this goes", score,
+                    () -> {
+                        portalJustTaken = portalRef(world.mapId(), door.name());
+                        committedPortal = null;
+                    }));
+            return;
+        }
+        choices.add(new Choice("door", new Intent.MoveTo(door.position()),
+                "walk to a way out", score, () -> committedPortal = door));
+    }
+
+    /**
+     * What else was on the table, for the trace.
+     *
+     * The format has carried a {@code considered} field since the beginning and it was always
+     * empty, because a ladder has nothing to say about the rungs it never reached. Scores do:
+     * this is the line that would have made "eighty-eight per cent of decisions went on
+     * fighting" obvious on sight rather than after a behavioural sample.
+     */
+    private static List<String> roadsNotTaken(List<Choice> choices, Choice taken) {
+        return choices.stream()
+                .filter(choice -> choice != taken)
+                .sorted(Comparator.comparingDouble(Choice::score).reversed())
+                .map(choice -> choice.kind() + "=" + Math.round(choice.score() * 100) / 100.0)
+                .toList();
     }
 
     /** A quest the agent has started and an NPC in sight who can take it back. */

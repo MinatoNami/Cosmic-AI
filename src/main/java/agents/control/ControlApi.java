@@ -155,10 +155,15 @@ public class ControlApi {
         }
         Path file = population.traceDirectory().resolve(name + ".jsonl");
         if (!Files.isRegularFile(file)) {
-            send(exchange, 404, Map.of("error", "no trace for " + name));
+            // Nothing written yet is not an error for something following along - an agent
+            // that has just woken up has a trace coming. Answering 404 here cost two
+            // measurements: the caller took the tail offset from a reply that carried no
+            // offset header, then asked for it back and got a parse failure, which reads
+            // exactly like an agent that did nothing at all.
+            emptyTrace(exchange, 0);
             return;
         }
-        long from = Long.parseLong(query(exchange.getRequestURI()).getOrDefault("from", "0"));
+        long from = offsetIn(exchange.getRequestURI());
         // from=-1 means "whatever happens from now on", which is what a page that has just
         // been opened wants: replaying a trace that has been growing for hours to find out
         // what is happening this second is work nobody asked for.
@@ -203,6 +208,33 @@ public class ControlApi {
         } else {
             exchange.close();
         }
+    }
+
+    /**
+     * The offset to read from, forgivingly.
+     *
+     * A missing, blank or unreadable offset means the beginning. It used to throw, which the
+     * JDK's server turns into an empty 500 - indistinguishable, to a caller counting events,
+     * from a quiet agent.
+     */
+    private static long offsetIn(URI uri) {
+        String asked = query(uri).get("from");
+        if (asked == null || asked.isBlank()) {
+            return 0;
+        }
+        try {
+            return Long.parseLong(asked.trim());
+        } catch (NumberFormatException e) {
+            return 0;
+        }
+    }
+
+    /** Nothing to hand over, and where to ask from next time. */
+    private static void emptyTrace(HttpExchange exchange, long next) throws IOException {
+        exchange.getResponseHeaders().add("Content-Type", "application/x-ndjson; charset=utf-8");
+        exchange.getResponseHeaders().add("X-Next-Offset", String.valueOf(next));
+        exchange.sendResponseHeaders(200, -1);
+        exchange.close();
     }
 
     /** The monitoring page and whatever it asks for beside it. */

@@ -14,8 +14,11 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.junit.jupiter.api.io.TempDir;
 
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.TimeUnit;
 
@@ -127,6 +130,42 @@ class MovementSoakTest {
         // it, and an agent that found nothing to hit has not failed at anything.
         assertTrue(swings.stream().allMatch(Watcher.Swing::wouldAnimate),
                 "swings went out that no client can draw: " + swings);
+
+        assertItDidMoreThanGrind(traces.resolve("soak.jsonl"));
+    }
+
+    /**
+     * An agent that fights must also do something that is not fighting.
+     *
+     * Loot and monsters sit at the top of the reflex ladder and feed each other - killing
+     * makes drops, and drops outrank monsters - so an agent with anything to hit can spend
+     * every decision it will ever make on those two rungs and never speak to an NPC, take a
+     * quest or use a door. It looks busy and thriving the whole time.
+     *
+     * <p>Phrased as an implication rather than a share, because a town has nothing to hit and
+     * an agent that spent the window walking has not failed at anything. And because the
+     * first attempt at fixing this passed a unit test asserting it looked up "at least once",
+     * which it did: once, for a single decision, achieving nothing. 88% of decisions before,
+     * 87% after. Only counting what it did over minutes showed that up.
+     */
+    private static void assertItDidMoreThanGrind(Path trace) throws Exception {
+        Map<String, Integer> intents = new HashMap<>();
+        for (String line : Files.readAllLines(trace)) {
+            int at = line.indexOf("\"intent\":\"");
+            if (line.contains("\"kind\":\"act\"") && at >= 0) {
+                String rest = line.substring(at + 10);
+                intents.merge(rest.substring(0, rest.indexOf('"')), 1, Integer::sum);
+            }
+        }
+
+        int grinding = intents.getOrDefault("Attack", 0) + intents.getOrDefault("PickUp", 0);
+        int everythingElse = intents.values().stream().mapToInt(Integer::intValue).sum() - grinding;
+
+        if (grinding > 0) {
+            assertTrue(everythingElse > 0,
+                    "every single decision went on fighting and looting - nothing below those "
+                            + "rungs can ever run: " + intents);
+        }
     }
 
     private static InWorld login(String host, int port, String account, String character)

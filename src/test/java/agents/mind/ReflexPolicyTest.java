@@ -13,6 +13,7 @@ import java.nio.file.Path;
 import java.util.Random;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -62,8 +63,10 @@ class ReflexPolicyTest {
 
         Intent intent = wanderer.decide(mind, world, 2).intent();
 
+        // Where it goes instead is its own business - wandering, or off to a door. The claim
+        // is only that it does not cross the map for a fight. It used to have to be a wander,
+        // because nothing else could win; now heading for the exit is an honest answer too.
         Point destination = assertInstanceOf(Intent.MoveTo.class, intent).destination();
-        assertEquals(0, destination.y);
         org.junit.jupiter.api.Assertions.assertNotEquals(new Point(400, 0), destination,
                 "a wanderer has better things to do than chase something that far away");
     }
@@ -139,7 +142,12 @@ class ReflexPolicyTest {
         Policy.Decision decision = policy.decide(mind, world, 2);
 
         assertEquals("hit what is in front of me", decision.goal());
-        assertTrue(decision.considered().contains("Attack"));
+        // considered used to be the fixed list of intents the policy knows about, which told a
+        // reader nothing. It now holds what else was actually on the table and what each was
+        // worth, which is the thing the field was added for.
+        assertFalse(decision.considered().isEmpty(), "the trace should say what else was going");
+        assertTrue(decision.considered().stream().anyMatch(option -> option.contains("=")),
+                "each option should carry its score: " + decision.considered());
     }
 
     /**
