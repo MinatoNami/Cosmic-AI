@@ -226,6 +226,58 @@ Two bugs found on the way:
   agent formed `player:2 said ...` about itself - noise, and worse, it looked like learning
   something from someone else.
 
+## Stage 8 — a population that differs, and quests ✅
+
+**Dispositions.** Agents get one of four inclinations - wanderer, fighter, forager, talker -
+which scale the reflex ladder's thresholds rather than changing its rules. They are
+inclinations, not goals: a wanderer does not know exploring is good, it just takes doors
+sooner.
+
+Six minutes, four agents:
+
+```
+[Agent0] wanderer  map 50000, level 9  |  157 beliefs
+[Agent1] fighter   map 40000, level 9  |   96 beliefs
+[Agent2] forager   map 50000, level 7  |  182 beliefs
+[Agent3] talker    map 50000, level 7  |  200 beliefs
+```
+
+Different maps, different levels, belief counts from 96 to 200. That divergence is the
+precondition for the next part.
+
+**Knowledge transfer is now observable.** Agent0, standing in map 50000, came to believe:
+
+```
+heard: npc:2002 present_in map:40000
+heard: npc:2004 present_in map:40000
+```
+
+It has never been in map 40000 in this run. Agent1, the fighter who stayed there, told it.
+That is a belief about a place the agent has not seen, acquired entirely through the game.
+
+Two things made it work where stage 7 failed. Agents now differ, so they have something to
+tell each other. And a claim goes out as map chat *and* as a whisper to everyone the agent
+has met - map chat only reaches the map, and agents that have diverged are by definition
+somewhere else. Acquaintances come from the agent's own `player:N named X` beliefs.
+
+**Quests.** Agents talk to NPCs and start what is offered. `Quest.wz/Check.img` says which
+NPC starts which quest - the marker a client draws over an NPC's head - and nothing deeper
+is read: what a quest asks for and what it gives stay unknown until the agent does it.
+Dialogue is answered without being understood, using the style byte that says whether a yes
+is wanted. Agent3 started quest 1036; earlier runs saw 1021 and 1031, and one agent picked
+up `quest:1031 state 1` as hearsay from another.
+
+Three bugs the runs surfaced:
+
+- **Drops were never removed from the world model**, so an agent could reach for something
+  already gone forever. One forager spent a whole run at level 1 doing 486 pickups and 4
+  moves. Decoding `REMOVE_ITEM_FROM_MAP` fixed it; the same agent now reaches level 6.
+- **Claims nested.** An agent announced `player:4 said "..."` as a claim, which another
+  heard and re-announced, producing `player:6 said !know player:4 said !know ...`. What
+  someone said is a fact about a speaker, not about the world, and is no longer announced.
+- **A wanderer chasing a monster across the map** was the old fixed pursuit range; it is now
+  a disposition, which is what makes the population diverge at all.
+
 ## Open questions
 
 - **Tick rate.** How often does an agent decide? Too fast burns tokens, too slow looks

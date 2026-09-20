@@ -64,6 +64,11 @@ public class BeliefFormer {
                     triples.add(Triple.firstHand("monster:" + monster.monsterId(), "present_in", mapRef(currentMap)));
             case Observation.DropAppeared drop ->
                     triples.add(Triple.firstHand(itemRef(drop), "dropped_in", mapRef(currentMap)));
+            case Observation.DialogueShown dialogue ->
+                    triples.add(Triple.firstHand("npc:" + dialogue.npcId(), "talks_in", mapRef(currentMap)));
+            case Observation.QuestStateChanged quest ->
+                    triples.add(Triple.firstHand("quest:" + quest.questId(), "state",
+                            String.valueOf(quest.state())));
             case Observation.ChatHeard chat -> {
                 if (chat.speakerId() != selfCharacterId) {
                     triples.add(Triple.firstHand("player:" + chat.speakerId(), "said", chat.text()));

@@ -23,7 +23,7 @@ class ReflexPolicyTest {
 
     private Mind mind;
     private WorldModel world;
-    private final Policy policy = new ReflexPolicy(new Random(1));
+    private final Policy policy = new ReflexPolicy(new Random(1), Disposition.FIGHTER);
 
     @BeforeEach
     void setUp() {
@@ -49,6 +49,23 @@ class ReflexPolicyTest {
         Intent intent = policy.decide(mind, world, 2).intent();
 
         assertEquals(new Point(400, 0), assertInstanceOf(Intent.MoveTo.class, intent).destination());
+    }
+
+    /**
+     * The whole point of dispositions: put the same monster in front of two agents and they
+     * do different things, so they end up knowing different things.
+     */
+    @Test
+    void aWandererWillNotCrossTheMapForAFight() {
+        world.update(new Observation.MonsterAppeared(2, 9001, 100100, new Point(400, 0)));
+        Policy wanderer = new ReflexPolicy(new Random(1), Disposition.WANDERER);
+
+        Intent intent = wanderer.decide(mind, world, 2).intent();
+
+        Point destination = assertInstanceOf(Intent.MoveTo.class, intent).destination();
+        assertEquals(0, destination.y);
+        org.junit.jupiter.api.Assertions.assertNotEquals(new Point(400, 0), destination,
+                "a wanderer has better things to do than chase something that far away");
     }
 
     @Test

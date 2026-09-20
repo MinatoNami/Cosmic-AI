@@ -28,7 +28,8 @@ public class SemanticMemory {
      * wrongly-deleted one.
      */
     private static final Set<String> FUNCTIONAL_PREDICATES = Set.of(
-            "named", "level", "in_map", "hp", "maxhp", "mp", "maxmp", "exp", "meso", "job");
+            "named", "level", "in_map", "hp", "maxhp", "mp", "maxmp", "exp", "meso", "job",
+            "state");
 
     private final List<Belief> beliefs = new ArrayList<>();
 

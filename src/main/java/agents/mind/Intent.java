@@ -70,6 +70,28 @@ public sealed interface Intent {
         }
     }
 
+    /** Walk up to an NPC and say hello, without knowing what it is for. */
+    record TalkTo(int objectId, int npcId, Point position) implements Intent {
+        public String name() {
+            return "TalkTo";
+        }
+
+        public Map<String, Object> detail() {
+            return Map.of("npc", npcId);
+        }
+    }
+
+    /** Ask an NPC to start something. What it involves is not known until it starts. */
+    record StartQuest(int questId, int npcId, Point position) implements Intent {
+        public String name() {
+            return "StartQuest";
+        }
+
+        public Map<String, Object> detail() {
+            return Map.of("quest", questId, "npc", npcId);
+        }
+    }
+
     record Wait() implements Intent {
         public String name() {
             return "Wait";

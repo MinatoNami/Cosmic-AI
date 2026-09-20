@@ -63,6 +63,7 @@ public class WorldModel {
             case Observation.MonsterAppeared monster ->
                     monsters.put(monster.objectId(), new Entity(monster.objectId(), monster.monsterId(), monster.position()));
             case Observation.MonsterDied died -> monsters.remove(died.objectId());
+            case Observation.DropTaken taken -> drops.remove(taken.objectId());
             case Observation.NpcAppeared npc ->
                     npcs.put(npc.objectId(), new Entity(npc.objectId(), npc.npcId(), npc.position()));
             case Observation.DropAppeared drop ->
@@ -111,6 +112,10 @@ public class WorldModel {
         List<Entity> all = new ArrayList<>();
         candidates.forEach(all::add);
         return all.stream().min(Comparator.comparingDouble(e -> e.position().distance(self)));
+    }
+
+    public Optional<Entity> nearestNpc() {
+        return nearest(npcs.values());
     }
 
     /** Anything visible with this object id - a monster or a drop. */

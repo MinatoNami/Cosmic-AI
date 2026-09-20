@@ -2,6 +2,7 @@ package agents;
 
 import agents.memory.Belief;
 import agents.mind.ClaudeOracle;
+import agents.mind.Disposition;
 import agents.mind.LlmPolicy;
 import agents.mind.Policy;
 import agents.mind.ReflexPolicy;
@@ -65,13 +66,14 @@ public class Launcher {
             String name = "Agent" + i;
             try {
                 Random random = new Random(name.hashCode());
+                Disposition disposition = Disposition.forAgent(i);
                 LoginFlow flow = new LoginFlow(host, port, WORLD, CHANNEL, random);
                 InWorld connection = flow.enterWorld(new Credentials(name.toLowerCase(), "agentpass"), name);
 
                 Mind mind = new Mind(name, Trace.toFile(traceDir.resolve(name + ".jsonl"), name));
-                Policy reflex = new ReflexPolicy(random);
+                Policy reflex = new ReflexPolicy(random, disposition);
                 Policy policy = useLlm ? new LlmPolicy(new ClaudeOracle(), reflex) : reflex;
-                Agent agent = new Agent(connection, mind, policy);
+                Agent agent = new Agent(connection, mind, policy, disposition);
 
                 agents.add(agent);
                 Thread thread = new Thread(agent, name);

@@ -262,6 +262,21 @@ public final class ClientPackets {
         return p;
     }
 
+    /**
+     * Asks an NPC to start a quest. The server checks that the quest is startable and that
+     * we are standing near the NPC, so an agent has to walk over first.
+     *
+     * @param action 1 for a plain quest, 4 for one driven by a script
+     * @see net.server.channel.handlers.QuestActionHandler
+     */
+    public static Packet questAction(int action, int questId, int npcId) {
+        OutPacket p = packet(RecvOpcode.QUEST_ACTION);
+        p.writeByte(action);
+        p.writeShort(questId);
+        p.writeInt(npcId);
+        return p;
+    }
+
     /** Advances or answers an open NPC dialogue. */
     public static Packet npcTalkMore(byte lastMessageType, byte action, int selection) {
         OutPacket p = packet(RecvOpcode.NPC_TALK_MORE);

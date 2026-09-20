@@ -77,6 +77,10 @@ public class ObservationDecoder {
         if (opcode == SendOpcode.DROP_ITEM_FROM_MAPOBJECT.getValue()) {
             return decodeDrop(tick, p);
         }
+        if (opcode == SendOpcode.REMOVE_ITEM_FROM_MAP.getValue()) {
+            p.readByte();                               // how it went: expired, picked up
+            return new Observation.DropTaken(tick, p.readInt());
+        }
         if (opcode == SendOpcode.CHATTEXT.getValue()) {
             return decodeChat(tick, p);
         }
@@ -85,6 +89,12 @@ public class ObservationDecoder {
         }
         if (opcode == SendOpcode.WHISPER.getValue()) {
             return decodeWhisper(tick, p);
+        }
+        if (opcode == SendOpcode.NPC_TALK.getValue()) {
+            return decodeDialogue(tick, p);
+        }
+        if (opcode == SendOpcode.SHOW_STATUS_INFO.getValue()) {
+            return decodeStatusInfo(tick, p);
         }
         return null;
     }
@@ -234,6 +244,40 @@ public class ObservationDecoder {
         String text = p.readString();
         return new Observation.ChatHeard(tick, speakerId, text);
     }
+
+    /**
+     * What an NPC said, and what kind of answer it wants.
+     *
+     * The style is worth keeping even though the agent cannot read the text: it is the
+     * difference between something that needs a yes and something that just needs
+     * acknowledging, which is enough to hold a conversation without understanding it.
+     *
+     * @see tools.PacketCreator#getNPCTalk
+     */
+    private Observation decodeDialogue(long tick, InPacket p) {
+        p.readByte();                                   // always 4
+        int npcId = p.readInt();
+        int style = p.readUnsignedByte();
+        p.readByte();                                   // speaker
+        return new Observation.DialogueShown(tick, npcId, p.readString(), style);
+    }
+
+    /**
+     * SHOW_STATUS_INFO carries several unrelated updates, told apart by a leading byte. Only
+     * the quest one is decoded; the rest are item and meso gains we do not read yet.
+     *
+     * @see tools.PacketCreator#updateQuest
+     */
+    private Observation decodeStatusInfo(long tick, InPacket p) {
+        if (p.readUnsignedByte() != STATUS_INFO_QUEST) {
+            return null;
+        }
+        int questId = p.readShort() & 0xFFFF;
+        int state = p.readUnsignedByte();
+        return new Observation.QuestStateChanged(tick, questId, state);
+    }
+
+    private static final int STATUS_INFO_QUEST = 1;
 
     /**
      * The whisper opcode carries several unrelated things - delivery receipts, /find results

@@ -1,5 +1,6 @@
 package agents;
 
+import agents.mind.Disposition;
 import agents.mind.IntentExecutor;
 import agents.mind.Policy;
 import agents.protocol.ClientPackets;
@@ -43,18 +44,15 @@ public class Agent implements Runnable {
     private final IntentExecutor executor;
     private volatile boolean running = true;
 
-    /**
-     * How often to say something worth hearing. Agents share nothing in memory, so a belief
-     * only reaches another agent by being said out loud - but a channel full of chatter
-     * helps nobody, so this is rare.
-     */
-    private static final int SHARE_EVERY = 25;
+    private final Disposition disposition;
     private int steps;
+    private int nextToShare;
 
-    public Agent(InWorld connection, Mind mind, Policy policy) {
+    public Agent(InWorld connection, Mind mind, Policy policy, Disposition disposition) {
         this.connection = connection;
         this.mind = mind;
         this.policy = policy;
+        this.disposition = disposition;
         this.executor = new IntentExecutor(connection.session());
     }
 
@@ -85,10 +83,11 @@ public class Agent implements Runnable {
             world.update(observation);
             mind.take(observation);
             acknowledgeArrival(observation);
+            answerNpc(observation);
             converse(observation);
         }
 
-        if (steps++ % SHARE_EVERY == SHARE_EVERY - 1) {
+        if (steps++ % disposition.shareInterval() == disposition.shareInterval() - 1) {
             share();
         }
 
@@ -100,6 +99,25 @@ public class Agent implements Runnable {
 
         executor.execute(decision.intent(), world);
     }
+
+    /**
+     * Keeps an NPC conversation going without understanding a word of it.
+     *
+     * The dialogue style says what kind of answer is wanted, which is enough: say yes to
+     * anything that asks, acknowledge anything that does not. An agent finds out what it
+     * agreed to by watching what changes afterwards.
+     */
+    private void answerNpc(Observation observation) {
+        if (!(observation instanceof Observation.DialogueShown dialogue)) {
+            return;
+        }
+        connection.session().send(ClientPackets.npcTalkMore(
+                (byte) dialogue.style(), NPC_YES_OR_NEXT, NO_SELECTION));
+    }
+
+    /** Action 1 means yes, or next, depending on what was asked. */
+    private static final byte NPC_YES_OR_NEXT = 1;
+    private static final int NO_SELECTION = -1;
 
     /**
      * Answers questions put to it, and picks up claims other agents make.
@@ -175,16 +193,36 @@ public class Agent implements Runnable {
         List<Belief> worthSaying = mind.semantic().liveBeliefs().stream()
                 .filter(b -> b.provenance() == Belief.Provenance.FIRST_HAND)
                 .filter(b -> !b.subject().equals("self"))
+                // "player:4 said ..." is a fact about a speaker, not about the world, and
+                // announcing one wraps a claim inside a claim - which then gets announced
+                // again. A run produced "player:6 said !know player:4 said !know ..." before
+                // this filter existed.
+                .filter(b -> !b.predicate().equals("said"))
                 .sorted(Comparator.comparingDouble(Belief::confidence).reversed())
                 .toList();
         if (worthSaying.isEmpty()) {
             return;
         }
         Belief belief = worthSaying.get(nextToShare++ % worthSaying.size());
-        connection.session().send(ClientPackets.chat(Claim.announce(belief), false));
+        String claim = Claim.announce(belief);
+
+        connection.session().send(ClientPackets.chat(claim, false));
+
+        // Map chat only carries as far as the map, and agents that have diverged are by
+        // definition somewhere else. Anyone it has met is reachable by name wherever they
+        // are, which is how news actually travels between people who have split up.
+        acquaintances().forEach(name ->
+                connection.session().send(ClientPackets.whisper(name, claim)));
     }
 
-    private int nextToShare;
+    /** Names of players it has seen, from its own beliefs. */
+    private List<String> acquaintances() {
+        return mind.semantic().liveBeliefs().stream()
+                .filter(b -> b.predicate().equals("named") && b.subject().startsWith("player:"))
+                .map(Belief::object)
+                .distinct()
+                .toList();
+    }
 
     /**
      * Confirms we have finished loading whatever map we were sent to. Without this the

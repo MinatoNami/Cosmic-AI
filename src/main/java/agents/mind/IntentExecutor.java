@@ -24,6 +24,14 @@ public class IntentExecutor {
      */
     private static final int CLAIMED_DAMAGE = 1;
 
+    /**
+     * Quests come in two flavours - script-driven and plain - and which one a quest is is
+     * not something an agent can tell from outside. Both are sent; the server ignores the
+     * one that does not apply, which is cheaper than knowing.
+     */
+    private static final int QUEST_START_SCRIPTED = 4;
+    private static final int QUEST_START_PLAIN = 1;
+
     private final MapleSession session;
 
     public IntentExecutor(MapleSession session) {
@@ -49,6 +57,18 @@ public class IntentExecutor {
             case Intent.EnterPortal portal -> {
                 moveTo(portal.position(), world);
                 session.send(ClientPackets.enterPortal(portal.portalName()));
+            }
+            case Intent.TalkTo talk -> {
+                moveTo(talk.position(), world);
+                session.send(ClientPackets.talkToNpc(talk.objectId()));
+            }
+            case Intent.StartQuest quest -> {
+                // The server refuses this unless we are standing near the NPC.
+                moveTo(quest.position(), world);
+                session.send(ClientPackets.questAction(QUEST_START_SCRIPTED,
+                        quest.questId(), quest.npcId()));
+                session.send(ClientPackets.questAction(QUEST_START_PLAIN,
+                        quest.questId(), quest.npcId()));
             }
             case Intent.Wait ignored -> {
             }

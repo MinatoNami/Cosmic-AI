@@ -54,6 +54,9 @@ public sealed interface Observation {
                         Point position) implements Observation {
     }
 
+    record DropTaken(long tick, int objectId) implements Observation {
+    }
+
     record ChatHeard(long tick, int speakerId, String text) implements Observation {
     }
 
@@ -62,6 +65,18 @@ public sealed interface Observation {
     }
 
     record NoticeShown(long tick, String text) implements Observation {
+    }
+
+    /**
+     * An NPC said something. {@code style} is how the client would render it - whether it
+     * wants a yes, a choice, or just an acknowledgement - which is all an agent needs to
+     * answer without understanding a word.
+     */
+    record DialogueShown(long tick, int npcId, String text, int style) implements Observation {
+    }
+
+    /** A quest changed state. 0 not started, 1 started, 2 completed. */
+    record QuestStateChanged(long tick, int questId, int state) implements Observation {
     }
 
     /**
