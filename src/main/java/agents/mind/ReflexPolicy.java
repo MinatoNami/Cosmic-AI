@@ -88,6 +88,20 @@ public class ReflexPolicy implements Policy {
     private int headDownFor;
 
     /**
+     * Decisions left in which the agent will ignore loot and monsters.
+     *
+     * A single decision's worth of looking up achieved nothing, and the measurement said so:
+     * the share of decisions spent fighting and looting went from 88% to 87%. Walking to an
+     * NPC or a door takes many decisions, so one glance produced one orphaned step towards a
+     * door the agent then spent another thirty decisions forgetting about. Looking up has to
+     * last long enough to finish the errand.
+     */
+    private int lookingUpFor;
+
+    /** Long enough to cross a map and talk to somebody, at 600ms a decision. */
+    private static final int LOOK_UP_DECISIONS = 50;
+
+    /**
      * The door just walked through, held until the next map arrives so the agent can find out
      * where it went.
      *
@@ -158,10 +172,17 @@ public class ReflexPolicy implements Policy {
                 || decisionsHere > ceiling;
 
         // Head down too long. Loot and monsters starve everything below them, so every so
-        // often the agent looks up and lets one decision reach the NPCs, the quests and the
-        // doors. Without this an agent never speaks to anyone, because there is always one
-        // more snail.
-        boolean lookUp = headDownFor >= disposition.attentionSpan();
+        // often the agent looks up - and stays looked up long enough to get somewhere, because
+        // an NPC or a door is many decisions away and a glance only ever produced one step
+        // towards one.
+        if (lookingUpFor == 0 && headDownFor >= disposition.attentionSpan()) {
+            lookingUpFor = LOOK_UP_DECISIONS;
+            headDownFor = 0;
+        }
+        boolean lookUp = lookingUpFor > 0;
+        if (lookUp) {
+            lookingUpFor--;
+        }
 
         List<String> consulted = mind.recall("map monster danger", tick, 3)
                 .stream().map(Belief::ref).toList();
@@ -198,9 +219,6 @@ public class ReflexPolicy implements Policy {
         // Unfinished business first. An agent has no idea what a quest asked for, so it goes
         // back and offers; the server says yes or nothing happens, and the state change is
         // how it finds out that whatever it did in between was the thing.
-        // Past the fighting, so the agent has looked up. Whatever it does now counts as
-        // having done something other than grind.
-        headDownFor = 0;
         decisionsMade++;
         Set<Integer> started = unfinished;
         Optional<Errand> errand = errandFor(world, started);
@@ -252,6 +270,7 @@ public class ReflexPolicy implements Policy {
                 Intent enter = new Intent.EnterPortal(committedPortal.name(), committedPortal.position());
                 portalJustTaken = portalRef(world.mapId(), committedPortal.name());
                 committedPortal = null;
+                lookingUpFor = 0;       // errand done, back to work
                 return new Decision(enter, "see where this goes", consulted, options());
             }
             return new Decision(new Intent.MoveTo(committedPortal.position()),
