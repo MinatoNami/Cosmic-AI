@@ -187,17 +187,41 @@ public final class ClientPackets {
      *
      * @see net.server.channel.handlers.AbstractDealDamageHandler#parseDamage
      */
-    public static Packet meleeAttack(int targetObjectId, Point targetPosition, int damage) {
+    /**
+     * Normal attack speed. The server's own AttackInfo defaults this to 4, which is the value
+     * it expects when nothing unusual is going on; we were sending 0.
+     */
+    private static final int ATTACK_SPEED = 4;
+
+    /**
+     * The action an onlooker's client plays for the swing.
+     *
+     * A guess pending a capture of what a real client sends for a plain attack - the action
+     * ids live in the client's own Character.wz, not in anything the server knows, so it
+     * cannot be derived from this codebase. Keep it well under 80: the server autobans on
+     * display values above that as a WZ edit.
+     */
+    private static final int ATTACK_STANCE = 1;
+
+    /**
+     * @param facingRight which way the attacker is turned, so onlookers see it swing at the
+     *                    thing rather than away from it
+     */
+    public static Packet meleeAttack(int targetObjectId, Point targetPosition, int damage,
+                                     boolean facingRight) {
         OutPacket p = packet(RecvOpcode.CLOSE_RANGE_ATTACK);
         p.writeByte(0);
         p.writeByte((1 << 4) | 1);      // one target, one damage line
         p.writeInt(0);                  // skill 0: a plain attack
         p.writeBytes(new byte[8]);
-        p.writeByte(0);                 // display
-        p.writeByte(0);                 // direction
-        p.writeByte(0);                 // stance
+        // These four are relayed untouched to everyone else in the map, and are the whole of
+        // what their clients use to draw the swing. All zeroes parses fine and renders as
+        // nothing, which is why the agents appeared to damage monsters by staring at them.
+        p.writeByte(0);                 // display: no special effect
+        p.writeByte(facingRight ? 0 : 1);   // direction: which way it is turned
+        p.writeByte(ATTACK_STANCE);     // stance: the action to play
         p.writeByte(0);
-        p.writeByte(0);                 // speed
+        p.writeByte(ATTACK_SPEED);      // speed: 0 is not a real attack speed
         p.writeBytes(new byte[4]);
 
         p.writeInt(targetObjectId);

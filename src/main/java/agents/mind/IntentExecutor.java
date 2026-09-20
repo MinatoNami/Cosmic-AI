@@ -49,7 +49,7 @@ public class IntentExecutor {
                 // something across the map.
                 moveTo(attack.position(), world);
                 session.send(ClientPackets.meleeAttack(attack.objectId(), attack.position(),
-                        CLAIMED_DAMAGE));
+                        CLAIMED_DAMAGE, attack.position().x >= world.selfPosition().x));
             }
             case Intent.PickUp pickUp -> {
                 moveTo(pickUp.position(), world);

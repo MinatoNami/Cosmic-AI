@@ -57,6 +57,7 @@ public class ControlApi {
         http.createContext("/api/start", this::start);
         http.createContext("/api/stop", this::stop);
         http.createContext("/api/reset", this::reset);
+        http.createContext("/api/beliefs/", this::beliefs);
         http.createContext("/api/trace/", this::trace);
         http.createContext("/", this::page);
         http.setExecutor(Executors.newFixedThreadPool(4));
@@ -134,6 +135,11 @@ public class ControlApi {
         }
     }
 
+    private void beliefs(HttpExchange exchange) throws IOException {
+        String name = exchange.getRequestURI().getPath().substring("/api/beliefs/".length());
+        send(exchange, 200, Map.of("agent", name, "beliefs", population.beliefs(name)));
+    }
+
     /**
      * Whatever an agent has written to its trace since the caller last asked.
      *
@@ -153,6 +159,12 @@ public class ControlApi {
             return;
         }
         long from = Long.parseLong(query(exchange.getRequestURI()).getOrDefault("from", "0"));
+        // from=-1 means "whatever happens from now on", which is what a page that has just
+        // been opened wants: replaying a trace that has been growing for hours to find out
+        // what is happening this second is work nobody asked for.
+        if (from < 0) {
+            from = Files.size(file);
+        }
         byte[] chunk;
         long next;
         try (RandomAccessFile reading = new RandomAccessFile(file.toFile(), "r")) {

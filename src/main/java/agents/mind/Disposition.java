@@ -64,6 +64,21 @@ public record Disposition(String name, double wanderlust, double aggression, dou
         return (int) Math.round(80 - sociability * 60);
     }
 
+    /**
+     * Decisions an agent will keep making in one map without getting anywhere before it
+     * starts looking for the door.
+     *
+     * This is what stops a fighter grinding the same field forever. Pursuit range is wide
+     * enough that there is nearly always another monster in sight, so the reflex ladder never
+     * falls through to the portal branch on its own - the agent is not stuck, it is being
+     * rationally short-sighted, which is worse. Aggression buys patience, because a fighter
+     * staying where the monsters are is the whole of its character; it just should not do so
+     * for the rest of its life.
+     */
+    public int patience() {
+        return (int) Math.round(140 + aggression * 360);
+    }
+
     /** Steps between bothering an NPC. */
     public int talkInterval() {
         return (int) Math.round(120 - curiosity * 90);

@@ -190,14 +190,17 @@ function renderAgents(agents) {
 function watch(name) {
   if (state.watching === name) return;
   state.watching = name;
-  state.offset = 0;
+  // -1 means "from here on". Replaying a trace that has been growing for hours to find out
+  // what is happening this second is work nobody asked for, and it gets slower every hour.
+  state.offset = -1;
   state.beliefs.clear();
   state.labels.clear();
   state.events = [];
   document.getElementById('watchedName').textContent = name;
   document.getElementById('graphLink').href = `/replay.html?trace=/api/trace/${name}`;
-  renderBeliefs();
+  renderBeliefs([]);
   renderEvents();
+  pollBeliefs();
 }
 
 /* Reads only what is new. The daemon answers with whole lines and the offset to ask from
@@ -213,7 +216,6 @@ async function pollTrace() {
     for (const line of text.split('\n')) {
       if (line.trim()) absorb(JSON.parse(line));
     }
-    renderBeliefs();
     renderEvents();
   } catch (e) { /* a torn poll is not worth a message; the next one will catch up */ }
 }
@@ -223,35 +225,34 @@ function absorb(event) {
     state.labels.set(event.ref, event.text);
     return;
   }
-  if (event.kind === 'believe') {
-    state.beliefs.set(event.id, {
-      triple: event.triple, confidence: event.confidence,
-      provenance: event.provenance, live: true, carried: !!event.carried,
-    });
-  } else if (event.kind === 'revise') {
-    const dying = state.beliefs.get(event.id);
-    if (dying) dying.live = false;
-  }
   if (['believe', 'revise', 'act', 'resume'].includes(event.kind)) {
     state.events.push(event);
     if (state.events.length > MOST_EVENTS) state.events.shift();
   }
 }
 
-function renderBeliefs() {
+/* Straight from the daemon's own memory rather than rebuilt from the trace, so opening the
+   page is instant however long the agent has been alive. */
+async function pollBeliefs() {
+  if (!state.watching) return;
+  try {
+    const held = await json(`/api/beliefs/${state.watching}`);
+    renderBeliefs(held.beliefs || []);
+  } catch (e) { /* the next poll will do */ }
+}
+
+function renderBeliefs(beliefs) {
   const pane = document.getElementById('beliefs');
-  const live = [...state.beliefs.values()].filter(b => b.live)
-    .sort((a, b) => b.confidence - a.confidence);
-  if (!live.length) {
+  if (!beliefs.length) {
     pane.innerHTML = '<div class="empty">nothing believed yet</div>';
     return;
   }
-  pane.innerHTML = live.map(b => `
-    <div class="belief ${b.provenance === 'hearsay' ? 'hearsay' : ''}">
+  pane.innerHTML = beliefs.map(b => `
+    <div class="belief ${b.provenance === 'hearsay' ? 'hearsay' : ''}" title="${b.evidence} episode(s) of evidence">
       <span class="conf">${b.confidence.toFixed(2)}</span>
-      <span class="subj">${escapeHtml(label(b.triple[0]))}</span>
-      <span class="pred">${escapeHtml(b.triple[1])}</span>
-      <span class="subj">${escapeHtml(label(b.triple[2]))}</span>
+      <span class="subj">${escapeHtml(b.subject)}</span>
+      <span class="pred">${escapeHtml(b.predicate)}</span>
+      <span class="subj">${escapeHtml(b.object)}</span>
     </div>`).join('');
 }
 
@@ -320,8 +321,10 @@ document.getElementById('reset').onclick = async () => {
 
 pollStatus();
 pollTrace();
+pollBeliefs();
 setInterval(pollStatus, 1500);
 setInterval(pollTrace, 1200);
+setInterval(pollBeliefs, 2500);
 </script>
 </body>
 </html>

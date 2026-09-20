@@ -243,6 +243,42 @@ public class Population {
         return all;
     }
 
+    /**
+     * What one agent currently believes, strongest first.
+     *
+     * Served from the daemon's own memory rather than derived from the trace, because a trace
+     * grows for the life of the agent and a page that rebuilt the belief set by replaying it
+     * would get slower every hour it ran. The trace remains the record of how the beliefs got
+     * there; this is only what they are now.
+     */
+    public synchronized List<BeliefView> beliefs(String agent) {
+        for (Running r : running) {
+            if (r.name().equals(agent)) {
+                return r.mind().semantic().liveBeliefs().stream()
+                        .sorted(java.util.Comparator.comparingDouble(
+                                agents.memory.Belief::confidence).reversed())
+                        .map(b -> new BeliefView(
+                                b.ref(),
+                                display(b.subject()), b.predicate(), display(b.object()),
+                                Math.round(b.confidence() * 1000) / 1000.0,
+                                b.provenance().name().toLowerCase(),
+                                b.supportedBy().size()))
+                        .toList();
+            }
+        }
+        return List.of();
+    }
+
+    public record BeliefView(String id, String subject, String predicate, String object,
+                             double confidence, String provenance, int evidence) {
+    }
+
+    /** Ids with their human names attached, for display only - see {@link Labels}. */
+    private static String display(String ref) {
+        String name = Labels.forRef(ref);
+        return name == null || name.isBlank() ? ref : name;
+    }
+
     public record AgentStatus(String name, String disposition, boolean alive, int mapId,
                               String mapName, int level, int hp, int maxHp, int episodes,
                               int beliefs, int liveBeliefs, long tick, String goal, String intent) {

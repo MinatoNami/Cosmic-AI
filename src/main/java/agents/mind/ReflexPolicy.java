@@ -58,6 +58,19 @@ public class ReflexPolicy implements Policy {
     private int lastMapId = -1;
 
     /**
+     * Decisions since anything went right, which is how an agent notices it has outstayed a
+     * place.
+     *
+     * Levelling is the only progress signal an agent gets for free - it is told its own level
+     * and nothing about what a map is worth - so "no level in a long time" stands in for "this
+     * has stopped paying". Crude, and honest about being crude: it is a conclusion drawn from
+     * the agent's own experience rather than a table of which map suits which level, which is
+     * knowledge it is supposed to have to earn.
+     */
+    private int decisionsSinceProgress;
+    private int lastLevel = -1;
+
+    /**
      * The portal currently being walked to.
      *
      * Without this the policy re-decided every tick, took one step towards a door and then
@@ -86,9 +99,18 @@ public class ReflexPolicy implements Policy {
         if (world.mapId() != lastMapId) {
             lastMapId = world.mapId();
             decisionsHere = 0;
+            decisionsSinceProgress = 0;
             committedPortal = null;     // the old map's doors are gone
         }
         decisionsHere++;
+
+        if (world.level() > lastLevel) {
+            lastLevel = world.level();
+            decisionsSinceProgress = 0;
+        } else {
+            decisionsSinceProgress++;
+        }
+        boolean outstayed = decisionsSinceProgress > disposition.patience();
 
         List<String> consulted = mind.recall("map monster danger", tick, 3)
                 .stream().map(Belief::ref).toList();
@@ -100,7 +122,9 @@ public class ReflexPolicy implements Policy {
                     "take what is at my feet", consulted, options());
         }
 
-        Optional<WorldModel.Entity> monster = world.nearestMonster();
+        // An agent that has stopped getting anywhere here stops taking the bait, so the ladder
+        // falls through to the door rather than to the next monster.
+        Optional<WorldModel.Entity> monster = outstayed ? Optional.empty() : world.nearestMonster();
         if (monster.isPresent() && monster.get().position().distance(self) < disposition.pursuitRange()) {
             WorldModel.Entity target = monster.get();
             if (target.position().distance(self) < MELEE_RANGE) {
@@ -155,7 +179,7 @@ public class ReflexPolicy implements Policy {
         }
 
         // Nothing here. Head for a door, and keep heading for it until we arrive.
-        if (committedPortal == null && decisionsHere % disposition.portalReluctance() == 0) {
+        if (committedPortal == null && (outstayed || decisionsHere % disposition.portalReluctance() == 0)) {
             List<WorldModel.PortalTarget> portals = world.portals();
             if (!portals.isEmpty()) {
                 committedPortal = portals.get(random.nextInt(portals.size()));
