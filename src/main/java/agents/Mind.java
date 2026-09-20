@@ -71,11 +71,13 @@ public class Mind implements AutoCloseable {
     /**
      * Writes a decision to the trace and keeps it to hand.
      *
+     * @param by the policy that made this one, which the agent knows and the mind does not
+     * @param fellBackBecause why the policy that was asked did not make it, or null
      * @return the action's ref, for anything that wants to point at it
      */
     public String decided(long tick, String goal, String intent, Map<String, Object> detail,
-                          List<String> usedBeliefs) {
-        String because = trace.deliberated(tick, goal, usedBeliefs, List.of());
+                          List<String> usedBeliefs, String by, String fellBackBecause) {
+        String because = trace.deliberated(tick, goal, usedBeliefs, List.of(), by, fellBackBecause);
         String actionRef = trace.acted(tick, intent, detail, because);
 
         decisions.addLast(new DecisionRecord(tick, actionRef, intent, goal, usedBeliefs));

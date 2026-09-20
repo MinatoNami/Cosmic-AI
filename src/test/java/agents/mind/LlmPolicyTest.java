@@ -19,6 +19,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -115,6 +116,54 @@ class LlmPolicyTest {
 
         assertFalse(decision.intent() instanceof Intent.Attack,
                 "an object the agent cannot see is not a target");
+        assertTrue(decision.decidedBy().startsWith("reflex:"), decision.decidedBy());
+        assertEquals("target gone", decision.fellBackBecause());
+    }
+
+    /**
+     * The measurement the rest of this is for. A fallback is indistinguishable from a
+     * deliberation once it reaches the world - same intent, same trace shape - so unless the
+     * decision says who made it, an agent whose every answer was dropped reads exactly like
+     * one the model is steering.
+     */
+    @Test
+    void creditsTheModelWithWhatItActuallyDecided() {
+        world.update(new Observation.MonsterAppeared(2, 9001, 100100, new Point(30, 0)));
+        LlmPolicy policy = policyReturning("GOAL: try hitting it\nINTENT: Attack 9001");
+
+        Policy.Decision decision = deliberate(policy, 2);
+
+        assertEquals("llm:stub", decision.decidedBy());
+        assertNull(decision.fellBackBecause(), "nothing fell back, so there is nothing to explain");
+    }
+
+    @Test
+    void saysWhenTheModelAnsweredWithNothing() {
+        LlmPolicy policy = new LlmPolicy(new Oracle() {
+            public String ask(String system, String user) {
+                return null;
+            }
+
+            public String name() {
+                return "silent";
+            }
+        }, reflex, 1);
+
+        assertEquals("model returned nothing", deliberate(policy, 1).fellBackBecause());
+    }
+
+    /**
+     * Most fallbacks are not failures: reflexes fill the gaps between asks by design, and a
+     * count that lumped those in with dropped answers would be useless for finding either.
+     */
+    @Test
+    void separatesTheGapsBetweenAsksFromDroppedAnswers() {
+        LlmPolicy policy = new LlmPolicy(new StubOracle("GOAL: x\nINTENT: Wait"), reflex, 4);
+        assertEquals("llm:stub", deliberate(policy, 1).decidedBy());
+
+        Policy.Decision next = policy.decide(mind, world, 2);
+
+        assertEquals("between asks", next.fellBackBecause());
     }
 
     @Test

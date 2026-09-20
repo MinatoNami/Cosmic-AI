@@ -93,6 +93,14 @@ public class LlmPolicy implements Policy {
     private String unreadReply;
     private int decisions;
 
+    /**
+     * Why the last answer was no use, waiting to be written to the trace.
+     *
+     * Read once and cleared: a failed answer explains exactly one fallback, and the decisions
+     * after it are back to the ordinary wait for the next ask.
+     */
+    private String unusedAnswer;
+
     public LlmPolicy(Oracle oracle, Policy fallback) {
         this(oracle, fallback, DEFAULT_DELIBERATE_EVERY);
     }
@@ -127,7 +135,7 @@ public class LlmPolicy implements Policy {
         }
 
         if (unreadReply == null) {
-            return fallback.decide(mind, world, tick);
+            return fellBack(mind, world, tick, whyNotTheModel());
         }
 
         Reply parsed = Reply.parse(unreadReply, world);
@@ -135,7 +143,7 @@ public class LlmPolicy implements Policy {
 
         Optional<Intent> intent = parsed.intent();
         if (intent.isEmpty()) {
-            return fallback.decide(mind, world, tick);
+            return fellBack(mind, world, tick, parsed.problem());
         }
 
         parsed.learned().forEach(triple ->
@@ -144,7 +152,28 @@ public class LlmPolicy implements Policy {
         return new Decision(intent.get(),
                 parsed.goal().orElse("(no goal given)"),
                 recalled.stream().map(Belief::ref).toList(),
-                List.of("MoveTo", "Attack", "PickUp", "Say", "EnterPortal", "Wait"));
+                List.of("MoveTo", "Attack", "PickUp", "Say", "EnterPortal", "Wait"))
+                .creditedTo(name(), null);
+    }
+
+    /** Reflexes decide this one, and the trace says so and why. */
+    private Decision fellBack(Mind mind, WorldModel world, long tick, String because) {
+        return fallback.decide(mind, world, tick).creditedTo(fallback.name(), because);
+    }
+
+    /**
+     * Why this decision is not the model's.
+     *
+     * Most of the time the honest answer is that nobody was asked: reflexes fill the gaps
+     * between asks by design, and counting those as failures would bury the ones that are.
+     */
+    private String whyNotTheModel() {
+        if (unusedAnswer != null) {
+            String because = unusedAnswer;
+            unusedAnswer = null;
+            return because;
+        }
+        return pending != null ? "still thinking" : "between asks";
     }
 
     /** Takes an answer if one has arrived, without ever waiting for one. */
@@ -152,10 +181,23 @@ public class LlmPolicy implements Policy {
         if (pending == null || !pending.isDone()) {
             return;
         }
-        String reply = pending.getNow(null);
+        String reply = null;
+        try {
+            reply = pending.getNow(null);
+        } catch (RuntimeException e) {
+            // Both oracles answer an unreachable server with null rather than an exception,
+            // so this is here for the next one. An oracle that throws should cost the agent a
+            // decision, not the run.
+            unusedAnswer = "asking failed";
+        }
         pending = null;
         if (reply != null && !reply.isBlank()) {
             unreadReply = reply;
+        } else if (unusedAnswer == null) {
+            // Null covers a timeout, a refused connection and a reasoning model that spent its
+            // whole budget thinking. Which one it was is in the log; that this decision was
+            // not the model's belongs in the trace.
+            unusedAnswer = "model returned nothing";
         }
     }
 
@@ -225,15 +267,30 @@ public class LlmPolicy implements Policy {
         return "llm:" + oracle.name();
     }
 
-    /** A parsed reply. Anything unrecognised is dropped rather than guessed at. */
-    record Reply(Optional<String> goal, Optional<Intent> intent, List<Triple> learned) {
+    /**
+     * A parsed reply. Anything unrecognised is dropped rather than guessed at, and
+     * {@code problem} says what was dropped, so a run of reflex decisions can be read back as
+     * the model missing rather than the model agreeing.
+     */
+    record Reply(Optional<String> goal, Optional<Intent> intent, List<Triple> learned, String problem) {
 
         record Triple(String subject, String predicate, String object) {
         }
 
+        /** An action line, or the few words explaining why it never became one. */
+        private record Resolved(Optional<Intent> intent, String problem) {
+            static Resolved to(Intent intent) {
+                return new Resolved(Optional.of(intent), null);
+            }
+
+            static Resolved not(String problem) {
+                return new Resolved(Optional.empty(), problem);
+            }
+        }
+
         static Reply parse(String text, WorldModel world) {
             Optional<String> goal = Optional.empty();
-            Optional<Intent> intent = Optional.empty();
+            Resolved resolved = Resolved.not("no INTENT line");
             List<Triple> learned = new ArrayList<>();
 
             for (String line : text.split("\n")) {
@@ -241,15 +298,15 @@ public class LlmPolicy implements Policy {
                 if (trimmed.startsWith("GOAL:")) {
                     goal = Optional.of(trimmed.substring(5).trim());
                 } else if (trimmed.startsWith("INTENT:")) {
-                    intent = parseIntent(trimmed.substring(7).trim(), world);
+                    resolved = parseIntent(trimmed.substring(7).trim(), world);
                 } else if (trimmed.startsWith("LEARNED:")) {
                     parseTriple(trimmed.substring(8).trim()).ifPresent(learned::add);
                 }
             }
-            return new Reply(goal, intent, learned);
+            return new Reply(goal, resolved.intent(), learned, resolved.problem());
         }
 
-        private static Optional<Intent> parseIntent(String text, WorldModel world) {
+        private static Resolved parseIntent(String text, WorldModel world) {
             String[] parts = text.split("\\s+", 2);
             String verb = parts[0];
             String rest = parts.length > 1 ? parts[1].trim() : "";
@@ -258,25 +315,31 @@ public class LlmPolicy implements Policy {
                 return switch (verb) {
                     case "MoveTo" -> {
                         String[] xy = rest.split("\\s+");
-                        yield xy.length < 2 ? Optional.empty()
-                                : Optional.of(new Intent.MoveTo(
+                        yield xy.length < 2 ? Resolved.not("MoveTo without a place")
+                                : Resolved.to(new Intent.MoveTo(
                                         new Point(Integer.parseInt(xy[0]), Integer.parseInt(xy[1]))));
                     }
                     // The model names what it wants to act on; where that thing is comes
                     // from the world model. An id the agent cannot currently see is dropped
-                    // rather than acted on at a guessed position.
+                    // rather than acted on at a guessed position - and counted, because an
+                    // answer that takes fifteen seconds to arrive about a monster that lives
+                    // five is the failure most worth being able to measure.
                     case "Attack" -> world.byObjectId(Integer.parseInt(rest))
-                            .map(e -> (Intent) new Intent.Attack(e.objectId(), e.position()));
+                            .map(e -> Resolved.to(new Intent.Attack(e.objectId(), e.position())))
+                            .orElseGet(() -> Resolved.not("target gone"));
                     case "PickUp" -> world.byObjectId(Integer.parseInt(rest))
-                            .map(e -> (Intent) new Intent.PickUp(e.objectId(), e.position()));
-                    case "Say" -> rest.isBlank() ? Optional.empty() : Optional.of(new Intent.Say(rest));
+                            .map(e -> Resolved.to(new Intent.PickUp(e.objectId(), e.position())))
+                            .orElseGet(() -> Resolved.not("target gone"));
+                    case "Say" -> rest.isBlank() ? Resolved.not("nothing to say")
+                            : Resolved.to(new Intent.Say(rest));
                     case "EnterPortal" -> world.portalNamed(rest)
-                            .map(p -> (Intent) new Intent.EnterPortal(p.name(), p.position()));
-                    case "Wait" -> Optional.of(new Intent.Wait());
-                    default -> Optional.empty();
+                            .map(portal -> Resolved.to(new Intent.EnterPortal(portal.name(), portal.position())))
+                            .orElseGet(() -> Resolved.not("no way out called that"));
+                    case "Wait" -> Resolved.to(new Intent.Wait());
+                    default -> Resolved.not("not an action");
                 };
             } catch (NumberFormatException e) {
-                return Optional.empty();
+                return Resolved.not("not a number");
             }
         }
 

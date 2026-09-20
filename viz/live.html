@@ -81,6 +81,9 @@
   .ev.believe .k { color: var(--accent); }
   .ev.revise .k { color: var(--dead); }
   .ev.act .k { color: var(--highlight); }
+  .ev .who { color: var(--ink-faint); }
+  .ev .who.model { color: var(--accent); }
+  .tally { font-family: var(--mono); font-size: 11px; color: var(--ink-faint); font-weight: normal; }
   .empty { color: var(--ink-faint); font-style: italic; padding: 8px 0; }
   @media (max-width: 820px) { main { grid-template-columns: 1fr; } }
 </style>
@@ -113,7 +116,11 @@
       <a id="graphLink" href="#" target="_blank" style="color: var(--accent); font-size: 12px;">full graph</a>
     </div>
     <div class="scroll" id="beliefs"><div class="empty">pick an agent</div></div>
-    <div class="pane-title">as it happens</div>
+    <div class="pane-title">
+      <span>as it happens</span>
+      <span class="spacer"></span>
+      <span id="tally" class="tally"></span>
+    </div>
     <div class="scroll" id="events" style="flex: 0 0 40%;"><div class="empty">nothing yet</div></div>
   </section>
 </main>
@@ -129,9 +136,15 @@ const state = {
   beliefs: new Map(),   // id -> {triple, confidence, provenance, live}
   labels: new Map(),    // ref -> human name
   events: [],
+  decisions: new Map(),  // deliberation id -> {by, fellBack}, so an action can say who chose it
+  decided: [],           // the last few, for the tally
 };
 
 const MOST_EVENTS = 300;
+
+/* Enough decisions to see a trend within a minute or two, few enough that a model answer
+   used ten minutes ago stops flattering the current numbers. */
+const DECISIONS_TALLIED = 200;
 
 async function json(url, options) {
   const response = await fetch(url, options);
@@ -196,6 +209,8 @@ function watch(name) {
   state.beliefs.clear();
   state.labels.clear();
   state.events = [];
+  state.decisions.clear();
+  state.decided = [];
   document.getElementById('watchedName').textContent = name;
   document.getElementById('graphLink').href = `/replay.html?trace=/api/trace/${name}`;
   renderBeliefs([]);
@@ -223,6 +238,18 @@ async function pollTrace() {
 function absorb(event) {
   if (event.kind === 'label') {
     state.labels.set(event.ref, event.text);
+    return;
+  }
+  /* Kept aside rather than shown: a deliberation on its own says nothing a reader wants,
+     but it is the only place that records who decided, which the action beside it needs. */
+  if (event.kind === 'deliberate') {
+    if (!event.by) return;      // a trace written before decisions were credited
+    state.decisions.set(event.id, { by: event.by, fellBack: event.fellBack });
+    if (state.decisions.size > MOST_EVENTS) {
+      state.decisions.delete(state.decisions.keys().next().value);
+    }
+    state.decided.push({ by: event.by, fellBack: event.fellBack });
+    if (state.decided.length > DECISIONS_TALLIED) state.decided.shift();
     return;
   }
   if (['believe', 'revise', 'act', 'resume'].includes(event.kind)) {
@@ -260,8 +287,10 @@ function renderEvents() {
   const pane = document.getElementById('events');
   if (!state.events.length) {
     pane.innerHTML = '<div class="empty">nothing yet</div>';
+    renderTally();
     return;
   }
+  renderTally();
   const atBottom = pane.scrollHeight - pane.scrollTop - pane.clientHeight < 40;
   pane.innerHTML = state.events.slice(-120).map(describe).join('');
   if (atBottom) pane.scrollTop = pane.scrollHeight;
@@ -270,7 +299,7 @@ function renderEvents() {
 function describe(event) {
   const t = `<span class="t">t${event.t}</span> `;
   if (event.kind === 'act') {
-    return `<div class="ev act">${t}<span class="k">does</span> ${escapeHtml(event.intent)} ${escapeHtml(JSON.stringify(event.detail || {}))}</div>`;
+    return `<div class="ev act">${t}<span class="k">does</span> ${escapeHtml(event.intent)} ${escapeHtml(JSON.stringify(event.detail || {}))}${credit(event.because)}</div>`;
   }
   if (event.kind === 'believe') {
     const how = event.carried ? 'remembers' : (event.corroborated ? 'confirms' : 'concludes');
@@ -283,6 +312,34 @@ function describe(event) {
     return `<div class="ev">${t}<span class="k">woke up</span> with ${event.beliefs} beliefs and ${event.episodes} episodes</div>`;
   }
   return '';
+}
+
+/* Who chose this action, and - when it was not the policy that was asked - why not. An
+   intent looks identical whichever layer produced it, so without this a run where every model
+   answer was dropped reads exactly like a run the model is steering. */
+function credit(deliberation) {
+  const decided = state.decisions.get(deliberation);
+  if (!decided) return '';
+  const model = !decided.fellBack;
+  const why = decided.fellBack ? ` · ${escapeHtml(decided.fellBack)}` : '';
+  return ` <span class="who ${model ? 'model' : ''}" title="${escapeHtml(decided.by)}">`
+    + `${model ? 'model' : 'reflex'}${why}</span>`;
+}
+
+function renderTally() {
+  const pane = document.getElementById('tally');
+  if (!state.decided.length) {
+    pane.textContent = '';
+    return;
+  }
+  const model = state.decided.filter(d => !d.fellBack).length;
+  const why = new Map();
+  for (const d of state.decided) {
+    if (d.fellBack) why.set(d.fellBack, (why.get(d.fellBack) || 0) + 1);
+  }
+  const reasons = [...why.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3)
+    .map(([reason, count]) => `${reason} ${count}`).join(' · ');
+  pane.textContent = `model decided ${model}/${state.decided.length}${reasons ? ` — ${reasons}` : ''}`;
 }
 
 function escapeHtml(value) {

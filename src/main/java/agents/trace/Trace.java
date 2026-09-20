@@ -112,15 +112,23 @@ public class Trace implements AutoCloseable {
 
     /**
      * @param used beliefs that informed the choice, by ref
+     * @param by the policy that actually chose
+     * @param fellBackBecause why the policy that was asked did not choose, or null if it did.
+     *                        Null fields are left out of the line, so an undivided run of
+     *                        deliberations stays as compact as it was before anything fell back.
      * @return the id to quote as {@code because} on whatever action follows
      */
-    public String deliberated(long tick, String goal, List<String> used, List<String> considered) {
+    public String deliberated(long tick, String goal, List<String> used, List<String> considered,
+                              String by, String fellBackBecause) {
         String id = "d" + nextDeliberationId++;
-        write("deliberate", tick, Map.of(
-                "id", id,
-                "goal", goal,
-                "used", used,
-                "considered", considered));
+        Map<String, Object> fields = new LinkedHashMap<>();
+        fields.put("id", id);
+        fields.put("goal", goal);
+        fields.put("used", used);
+        fields.put("considered", considered);
+        fields.put("by", by);
+        fields.put("fellBack", fellBackBecause);
+        write("deliberate", tick, fields);
         return id;
     }
 

@@ -142,8 +142,13 @@ public class Agent implements Runnable {
         long tick = perceiver.currentTick();
         Policy.Decision decision = policy.decide(mind, world, tick);
 
+        // A policy that decided for itself does not bother naming itself; one that handed
+        // the decision to its fallback does, and that difference is the whole point of
+        // recording it.
         mind.decided(tick, decision.goal(), decision.intent().name(),
-                decision.intent().detail(), decision.consultedBeliefs());
+                decision.intent().detail(), decision.consultedBeliefs(),
+                decision.decidedBy() != null ? decision.decidedBy() : policy.name(),
+                decision.fellBackBecause());
 
         executor.execute(decision.intent(), world);
     }

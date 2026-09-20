@@ -42,7 +42,25 @@ for 400 ticks, then stopped".
 ```
 
 **`deliberate`** — a decision point. `used` names the beliefs consulted, `considered` the
-options weighed.
+options weighed, and `by` the policy that actually chose. When the policy that was asked did
+not choose, `fellBack` says why in a few words.
+
+```json
+{"t":1125,"kind":"deliberate","id":"d980","goal":"hit what is in front of me","used":["b31"],
+ "considered":[],"by":"reflex:fighter","fellBack":"target gone"}
+```
+
+That last field is the difference between a trace you can ask "did the model help?" and one
+you cannot. An LLM policy answers with its fallback's decision far more often than with its
+own — a reply arrives fifteen seconds after the question, by which time the monster it names
+is dead — and the resulting action is indistinguishable from a deliberated one. Counting
+`fellBack` reasons separates the three ways that happens: `between asks` and `still thinking`
+are the design working (reflexes fill the gaps), while `target gone`, `model returned
+nothing`, `no INTENT line` and `not an action` are answers that were paid for and thrown
+away.
+
+`by` is absent from traces written before decisions were credited; readers treat that as
+unknown rather than as reflex.
 
 **`act`** — something the agent did. `because` points at the deliberation that produced it.
 
