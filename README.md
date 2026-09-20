@@ -105,6 +105,12 @@ You must rebuild images after any code changes:
 docker compose build
 ```
 
+## Development
+
+This project provides [Dev Container](https://code.visualstudio.com/docs/devcontainers/containers)
+that make setting up the development environment a breeze.
+You can check the settings in the [.devcontainer](./.devcontainer) folder.
+
 ## Deploying to Kubernetes
 
 See [charts/cosmic](./charts/cosmic).
