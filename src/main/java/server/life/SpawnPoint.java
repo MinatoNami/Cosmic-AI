@@ -40,6 +40,7 @@ public class SpawnPoint {
     private int mobInterval = 5000;
     private final AtomicInteger spawnedMonsters = new AtomicInteger(0);
     private final boolean immobile;
+    private final boolean boss;
     private boolean denySpawn = false;
 
     public SpawnPoint(final Monster monster, Point pos, boolean immobile, int mobTime, int mobInterval, int team) {
@@ -50,6 +51,7 @@ public class SpawnPoint {
         this.fh = monster.getFh();
         this.f = monster.getF();
         this.immobile = immobile;
+        this.boss = monster.isBoss();
         this.mobInterval = mobInterval;
         this.nextPossibleSpawn = Server.getInstance().getCurrentTime();
     }
@@ -71,8 +73,7 @@ public class SpawnPoint {
     }
 
     public boolean shouldSpawn(int maxSpawnedMonsters) {
-        Monster mob = LifeFactory.getMonster(monster);
-        int max = mob != null && mob.isBoss() ? 1 : maxSpawnedMonsters;
+        int max = boss ? 1 : maxSpawnedMonsters;    // bosses never stack on a spawn point, regardless of mob rate
         if (denySpawn || mobTime < 0 || spawnedMonsters.get() >= max) {
             return false;
         }
