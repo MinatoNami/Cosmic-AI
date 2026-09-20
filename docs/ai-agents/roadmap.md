@@ -45,13 +45,41 @@ scrolling server message writes a flag byte before the string and `serverNotice(
 not. The decoder reads the byte and reconstructs the string length if it turns out not to be
 the flag.
 
-## Stage 3 — memory and trace
+## Stage 3 — memory and trace ✅
 
 Episodic log, semantic belief graph with provenance, JSONL trace with `from`/`because`
-links.
+links. Format documented in `trace-format.md`.
 
-**Done when** you can ask, offline, "why did agent X attack that monster?" and follow the
-chain back to raw packets.
+A 30-second run of two agents produces 93 episodes and 12 beliefs each, and the chain walks
+back cleanly from any action:
+
+```
+ACTION a59: MoveTo {x:-526}
+  BECAUSE d59: goal='explore the map'
+    USED b6: npc:2007 present_in map:10000  conf=0.75 (first_hand)
+      FROM e14: NpcAppeared
+      FROM e20: NpcAppeared
+```
+
+Decisions taken here that are worth not re-litigating later:
+
+- **`BeliefFormer` restates and never infers.** It will not conclude that a monster is
+  dangerous or that an NPC sells something. Those are the conclusions the project exists to
+  watch an agent reach; a rule supplying them would make the demo look better and hollow out
+  the result. There is a test pinning the restraint.
+- **Positions get no beliefs.** They change several times a second; the episode is the right
+  home for them, not the long-term graph.
+- **Hearing a claim is a fact about the speaker**, recorded as `player:3 said "…"` rather
+  than as the claim itself. Turning hearsay into a belief about the world is a judgement,
+  and it belongs with the policy.
+- **Unknown predicates accumulate rather than replace.** Only a declared list is treated as
+  exclusive. A wrongly-kept belief is easy to spot; a wrongly-deleted one is not.
+- **Nothing in Java parses the trace back.** The consumer is the replay page, where JSON
+  parsing is free.
+
+Not yet exercised live: belief **revision**. Nothing an agent can reach in Amherst changes a
+functional value - no map changes without portals, no damage without monsters. Unit tests
+cover the mechanism; the first live revision arrives with stage 4.
 
 ## Stage 4 — reflex policy and the loop
 
