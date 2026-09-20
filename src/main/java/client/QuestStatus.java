@@ -167,10 +167,11 @@ public class QuestStatus {
 
         int current = Integer.parseInt(currentStr);
         int maxNeeded = this.getQuest().getMobAmountNeeded(id);
+        if (current >= maxNeeded) {
+            return false;
+        }
 
-        int multiplier = YamlConfig.config.server.QUEST_MOB_COUNT_MODIFIER;
-
-        int newCount = current + multiplier;
+        int newCount = current + YamlConfig.config.server.QUEST_MOB_COUNT_MODIFIER;
         if (newCount > maxNeeded) {
             newCount = maxNeeded;
         } else if (newCount < 0) {
