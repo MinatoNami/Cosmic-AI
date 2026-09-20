@@ -57,6 +57,10 @@ public sealed interface Observation {
     record ChatHeard(long tick, int speakerId, String text) implements Observation {
     }
 
+    /** A private message. Unlike map chat this carries a name, not a character id. */
+    record WhisperHeard(long tick, String speakerName, String text) implements Observation {
+    }
+
     record NoticeShown(long tick, String text) implements Observation {
     }
 

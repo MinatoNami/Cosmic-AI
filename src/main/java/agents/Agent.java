@@ -4,14 +4,19 @@ import agents.mind.IntentExecutor;
 import agents.mind.Policy;
 import agents.protocol.ClientPackets;
 import agents.net.LoginFlow.InWorld;
+import agents.memory.Belief;
 import agents.percept.Observation;
 import agents.percept.Perceiver;
+import agents.social.Claim;
+import agents.social.Conversation;
 import agents.world.WorldModel;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * One agent, living its own loop on its own thread.
@@ -37,6 +42,14 @@ public class Agent implements Runnable {
     private final WorldModel world = new WorldModel();
     private final IntentExecutor executor;
     private volatile boolean running = true;
+
+    /**
+     * How often to say something worth hearing. Agents share nothing in memory, so a belief
+     * only reaches another agent by being said out loud - but a channel full of chatter
+     * helps nobody, so this is rare.
+     */
+    private static final int SHARE_EVERY = 25;
+    private int steps;
 
     public Agent(InWorld connection, Mind mind, Policy policy) {
         this.connection = connection;
@@ -72,17 +85,106 @@ public class Agent implements Runnable {
             world.update(observation);
             mind.take(observation);
             acknowledgeArrival(observation);
+            converse(observation);
+        }
+
+        if (steps++ % SHARE_EVERY == SHARE_EVERY - 1) {
+            share();
         }
 
         long tick = perceiver.currentTick();
         Policy.Decision decision = policy.decide(mind, world, tick);
 
-        String because = mind.trace().deliberated(tick, decision.goal(),
-                decision.consultedBeliefs(), decision.considered());
-        mind.trace().acted(tick, decision.intent().name(), decision.intent().detail(), because);
+        mind.decided(tick, decision.goal(), decision.intent().name(),
+                decision.intent().detail(), decision.consultedBeliefs());
 
         executor.execute(decision.intent(), world);
     }
+
+    /**
+     * Answers questions put to it, and picks up claims other agents make.
+     *
+     * A question can arrive privately, or in map chat addressed by name - "Agent1: why" -
+     * so a person can talk to one agent without whispering.
+     */
+    private void converse(Observation observation) {
+        String text;
+        String replyTo;
+
+        if (observation instanceof Observation.WhisperHeard whisper) {
+            // A claim is a claim whichever way it arrives, and whispering one is how a
+            // person tells an agent something without shouting it at the whole map.
+            Optional<Claim> told = Claim.parse(whisper.text());
+            if (told.isPresent()) {
+                adopt(told.get());
+                connection.session().send(ClientPackets.whisper(whisper.speakerName(),
+                        "noted, though I have not seen that myself"));
+                return;
+            }
+            text = whisper.text();
+            replyTo = whisper.speakerName();
+        } else if (observation instanceof Observation.ChatHeard chat) {
+            if (chat.speakerId() == world.characterId()) {
+                return;     // our own voice coming back off the map
+            }
+            Claim.parse(chat.text()).ifPresent(this::adopt);
+            text = addressedToMe(chat.text());
+            replyTo = null;
+            if (text == null) {
+                return;
+            }
+        } else {
+            return;
+        }
+
+        Optional<String> answer = Conversation.answer(text, mind, world);
+        answer.ifPresent(reply -> {
+            if (replyTo != null) {
+                connection.session().send(ClientPackets.whisper(replyTo, reply));
+            } else {
+                connection.session().send(ClientPackets.chat(reply, false));
+            }
+        });
+    }
+
+    /** "Agent1: why" is for Agent1. Returns the question, or null if it was not for us. */
+    private String addressedToMe(String text) {
+        String prefix = mind.name() + ":";
+        return text.regionMatches(true, 0, prefix, 0, prefix.length())
+                ? text.substring(prefix.length()).trim()
+                : null;
+    }
+
+    /**
+     * Takes another agent's word for something - at hearsay confidence, grounded in the
+     * episode of hearing it, so the replay shows it as second-hand until the agent sees it
+     * for itself.
+     */
+    private void adopt(Claim claim) {
+        mind.hear(claim.subject(), claim.predicate(), claim.object(), perceiver.currentTick());
+    }
+
+    /**
+     * Says something it is sure of, in a form another agent can pick up.
+     *
+     * Rotates through what it knows rather than repeating its single best fact. Always
+     * announcing the same thing spreads one belief and nothing else, which is not how
+     * knowledge gets around.
+     */
+    private void share() {
+        List<Belief> worthSaying = mind.semantic().liveBeliefs().stream()
+                .filter(b -> b.provenance() == Belief.Provenance.FIRST_HAND)
+                .filter(b -> !b.subject().equals("self"))
+                .sorted(Comparator.comparingDouble(Belief::confidence).reversed())
+                .toList();
+        if (worthSaying.isEmpty()) {
+            return;
+        }
+        Belief belief = worthSaying.get(nextToShare++ % worthSaying.size());
+        connection.session().send(ClientPackets.chat(Claim.announce(belief), false));
+    }
+
+    private int nextToShare;
 
     /**
      * Confirms we have finished loading whatever map we were sent to. Without this the

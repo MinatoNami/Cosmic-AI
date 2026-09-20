@@ -83,6 +83,9 @@ public class ObservationDecoder {
         if (opcode == SendOpcode.SERVERMESSAGE.getValue()) {
             return decodeServerMessage(tick, p);
         }
+        if (opcode == SendOpcode.WHISPER.getValue()) {
+            return decodeWhisper(tick, p);
+        }
         return null;
     }
 
@@ -231,6 +234,26 @@ public class ObservationDecoder {
         String text = p.readString();
         return new Observation.ChatHeard(tick, speakerId, text);
     }
+
+    /**
+     * The whisper opcode carries several unrelated things - delivery receipts, /find results
+     * - told apart by a flag. Only an incoming message is an observation.
+     *
+     * @see tools.PacketCreator#getWhisperReceive
+     */
+    private Observation decodeWhisper(long tick, InPacket p) {
+        int flag = p.readUnsignedByte();
+        if ((flag & WHISPER_RECEIVE) == 0) {
+            return null;
+        }
+        String sender = p.readString();
+        p.readByte();                                   // channel
+        p.readByte();                                   // from an admin
+        return new Observation.WhisperHeard(tick, sender, p.readString());
+    }
+
+    /** @see tools.PacketCreator.WhisperFlag */
+    private static final int WHISPER_RECEIVE = 0x10;
 
     /** @see tools.PacketCreator#serverMessage */
     private Observation decodeServerMessage(long tick, InPacket p) {

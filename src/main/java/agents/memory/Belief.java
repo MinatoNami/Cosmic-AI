@@ -64,12 +64,13 @@ public record Belief(long id,
         return subject + " " + predicate + " " + object;
     }
 
-    public Belief corroboratedBy(long episodeId, long tick, double newConfidence) {
+    public Belief corroboratedBy(long episodeId, long tick, double newConfidence,
+                                 Provenance newProvenance) {
         List<Long> support = new java.util.ArrayList<>(supportedBy);
         if (!support.contains(episodeId)) {
             support.add(episodeId);
         }
-        return new Belief(id, subject, predicate, object, newConfidence, provenance,
+        return new Belief(id, subject, predicate, object, newConfidence, newProvenance,
                 support, firstSeen, tick, invalidatedAt, supersededBy);
     }
 

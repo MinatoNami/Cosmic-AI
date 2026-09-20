@@ -85,3 +85,25 @@ npc:2000 (Roger) present_in map:20000 (Maple Road: Snail Garden)
 The agent's own memory holds only the left-hand side of each pair. Names come from
 `String.wz` at write time and go into the trace as `label` events, which the replay page
 uses for display.
+
+## 6. Talking to them
+
+While a run is going, ask an agent a question:
+
+```bash
+java -cp "target/classes:$(cat target/cp.txt)" -Dwz-path=wz agents.Ask 127.0.0.1 8484 Agent0 why
+```
+
+It understands `why`, `where`, `who`, `know <thing>`, and `help`. `why` is the interesting
+one — it answers from the decision it recorded at the time, naming the beliefs it consulted.
+
+You can also tell an agent something it has not seen:
+
+```bash
+java -cp "target/classes:$(cat target/cp.txt)" -Dwz-path=wz agents.Ask 127.0.0.1 8484 Agent0 '!know monster:100100 lives_in map:104000000'
+```
+
+It takes your word at hearsay confidence and says so. If it later sees the same thing, the
+belief is promoted to first-hand.
+
+From a real client, whisper an agent the same questions, or say `Agent0: why` in map chat.

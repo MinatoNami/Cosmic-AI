@@ -238,6 +238,23 @@ public final class ClientPackets {
         return p;
     }
 
+    /**
+     * A private message to one player, by name. Works across maps, which is what makes it
+     * the right channel for a person asking an agent a question.
+     *
+     * @see net.server.channel.handlers.WhisperHandler
+     */
+    public static Packet whisper(String targetName, String message) {
+        OutPacket p = packet(RecvOpcode.WHISPER);
+        p.writeByte(WHISPER_REQUEST);
+        p.writeString(targetName);
+        p.writeString(message);
+        return p;
+    }
+
+    /** WhisperFlag.WHISPER | WhisperFlag.REQUEST */
+    private static final int WHISPER_REQUEST = 0x02 | 0x04;
+
     /** @see net.server.channel.handlers.NPCTalkHandler */
     public static Packet talkToNpc(int objectId) {
         OutPacket p = packet(RecvOpcode.NPC_TALK);

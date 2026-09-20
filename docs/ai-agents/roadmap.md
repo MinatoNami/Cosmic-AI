@@ -173,13 +173,58 @@ Decisions:
 - **It asks every eighth decision**, reflexes in between. Thinking ten times a second is
   both expensive and wrong — a walk half-completed should not be re-decided.
 
-## Stage 7 — interaction
+## Stage 7 — interaction ✅
 
-Whisper protocol (`why`, `what do you know about X`), agent-to-agent knowledge transfer
-with provenance, trust.
+Ask a running agent why it did something and it answers from the decision it recorded at
+the time:
 
-**Done when** you can ask an agent why it did something and get an answer grounded in its
-own trace, and when one agent teaching another visibly changes the second one's graph.
+```
+-> Agent0: why
+<- Agent0: Attack because hit what is in front of me; going on: monster:9300018 present_in map:40000
+-> Agent0: who
+<- Agent0: I am Agent0, level 4, and I know 13 things.
+-> Agent0: where
+<- Agent0: I am in map:40000 at 322,154
+```
+
+That is the point of the whole trace arrangement: an agent cannot give a reason it did not
+have, because there is nowhere for one to come from. It reads back `lastDecision()`, which
+is the same record that went to disk.
+
+Questions reach an agent by whisper, or in map chat addressed by name (`Agent1: why`).
+Answers come back the same way, so a person logged in with a real client can have the
+conversation in-game. `agents.Ask` does it from the command line for when you have no client
+to hand.
+
+**Knowledge between agents.** They share no memory, so a fact travels only by being said and
+heard: `!know monster:9300018 present_in map:40000`. What arrives becomes a belief with
+`HEARSAY` provenance at lower confidence, grounded in the episode of hearing it, so the
+replay shows who said it and when. Seeing the same thing later promotes it. Verified live by
+whispering an agent something it had not seen:
+
+```
+-> Agent0: !know monster:100100 lives_in map:104000000
+<- Agent0: noted, though I have not seen that myself
+```
+
+and the belief appears in its graph at confidence 0.25, marked hearsay.
+
+**A finding worth keeping.** Agent-to-agent transfer is hard to demonstrate with a
+homogeneous population: map chat is map-scoped, so only co-located agents hear each other,
+and agents running the same policy walk the same route and already know what each other
+announce. The mechanism is right and tested; showing it off needs agents that differ. Trust
+is not modelled beyond hearsay starting lower — but who said what is in the trace, so it can
+be computed later.
+
+Two bugs found on the way:
+
+- **Corroboration used the incoming provenance to rescore.** Being told something you had
+  seen yourself recomputed confidence on the hearsay curve. It now scores on the better of
+  the two, so hearing confirms rather than undermines, and seeing promotes what you were
+  only told.
+- **Agents recorded themselves as a source.** Map chat echoes your own messages back, so an
+  agent formed `player:2 said ...` about itself - noise, and worse, it looked like learning
+  something from someone else.
 
 ## Open questions
 

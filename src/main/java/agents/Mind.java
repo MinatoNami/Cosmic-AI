@@ -2,6 +2,7 @@ package agents;
 
 import agents.memory.Belief;
 import agents.memory.BeliefFormer;
+import agents.memory.DecisionRecord;
 import agents.memory.Episode;
 import agents.memory.EpisodicMemory;
 import agents.memory.Recall;
@@ -9,7 +10,11 @@ import agents.memory.SemanticMemory;
 import agents.percept.Observation;
 import agents.trace.Trace;
 
+import java.util.ArrayDeque;
+import java.util.Deque;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 
 /**
  * One agent's memory, and the path an observation takes through it.
@@ -23,7 +28,15 @@ public class Mind implements AutoCloseable {
     private final EpisodicMemory episodic = new EpisodicMemory();
     private final SemanticMemory semantic = new SemanticMemory();
     private final BeliefFormer former = new BeliefFormer();
+    private final Deque<DecisionRecord> decisions = new ArrayDeque<>();
     private final Trace trace;
+
+    /**
+     * How many decisions to keep to hand. Enough to answer "why did you do that" about
+     * something a person just watched, not so many that an agent carries its whole history
+     * in memory - the trace file has the rest.
+     */
+    private static final int DECISIONS_REMEMBERED = 20;
 
     public Mind(String name, Trace trace) {
         this.name = name;
@@ -54,6 +67,38 @@ public class Mind implements AutoCloseable {
     }
 
     /**
+     * Writes a decision to the trace and keeps it to hand.
+     *
+     * @return the action's ref, for anything that wants to point at it
+     */
+    public String decided(long tick, String goal, String intent, Map<String, Object> detail,
+                          List<String> usedBeliefs) {
+        String because = trace.deliberated(tick, goal, usedBeliefs, List.of());
+        String actionRef = trace.acted(tick, intent, detail, because);
+
+        decisions.addLast(new DecisionRecord(tick, actionRef, intent, goal, usedBeliefs));
+        while (decisions.size() > DECISIONS_REMEMBERED) {
+            decisions.removeFirst();
+        }
+        return actionRef;
+    }
+
+    public Optional<DecisionRecord> lastDecision() {
+        return Optional.ofNullable(decisions.peekLast());
+    }
+
+    /**
+     * Takes another agent's word for something.
+     *
+     * Grounded in the latest episode, which is the moment of hearing it, so the trace shows
+     * who said it and when. Hearsay starts at lower confidence than a sighting and is
+     * overtaken naturally if the agent later sees the same thing for itself.
+     */
+    public void hear(String subject, String predicate, String object, long tick) {
+        assertWithProvenance(subject, predicate, object, tick, Belief.Provenance.HEARSAY);
+    }
+
+    /**
      * Records something the agent worked out rather than saw.
      *
      * Grounded in the latest episode, which is where the agent was standing when it drew the
@@ -62,12 +107,17 @@ public class Mind implements AutoCloseable {
      * at which it was concluded. The INFERRED provenance carries the rest of the warning.
      */
     public void infer(String subject, String predicate, String object, long tick) {
+        assertWithProvenance(subject, predicate, object, tick, Belief.Provenance.INFERRED);
+    }
+
+    private void assertWithProvenance(String subject, String predicate, String object, long tick,
+                                      Belief.Provenance provenance) {
         if (episodic.size() == 0) {
             return;     // nothing perceived yet, so nothing to hang it on
         }
         long latestEpisode = episodic.size() - 1;
         SemanticMemory.Assertion assertion = semantic.assertTriple(subject, predicate, object,
-                latestEpisode, tick, Belief.Provenance.INFERRED);
+                latestEpisode, tick, provenance);
 
         trace.believed(assertion.belief(), !assertion.isNew());
         if (assertion.contradicted() != null) {

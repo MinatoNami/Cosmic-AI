@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class BeliefFormerTest {
@@ -72,6 +73,20 @@ class BeliefFormerTest {
         assertEquals(List.of(BeliefFormer.Triple.firstHand(
                         "player:3", "said", "the slimes are east")), triples,
                 "hearing a claim is a fact about the speaker, not yet a fact about the world");
+    }
+
+    /**
+     * Map chat echoes your own messages back. Recording "player:2 said ..." about yourself is
+     * noise, and worse, it makes an agent look like it learned something from someone else.
+     */
+    @Test
+    void doesNotRecordItselfAsASource() {
+        from(new Observation.SelfDescribed(1, 2, "Agent0", 1, 0, 10000));
+
+        assertTrue(from(new Observation.ChatHeard(2, 2, "!know monster:1 present_in map:2")).isEmpty(),
+                "an agent hearing its own voice has learned nothing");
+        assertFalse(from(new Observation.ChatHeard(3, 9, "!know monster:1 present_in map:2")).isEmpty(),
+                "someone else saying it is still worth recording");
     }
 
     @Test

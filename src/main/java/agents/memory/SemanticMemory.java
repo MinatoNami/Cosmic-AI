@@ -48,8 +48,12 @@ public class SemanticMemory {
 
         if (identical.isPresent()) {
             Belief existing = identical.get();
+            // Score on the better of the two sources. Being told something you already saw
+            // should not drag your confidence down onto the hearsay curve, and seeing
+            // something you had only been told should promote it.
+            Provenance best = stronger(existing.provenance(), provenance);
             Belief corroborated = existing.corroboratedBy(episodeId, tick,
-                    confidenceFor(existing.supportedBy().size() + 1, provenance));
+                    confidenceFor(existing.supportedBy().size() + 1, best), best);
             replace(existing, corroborated);
             return new Assertion(corroborated, null, false);
         }
@@ -97,6 +101,11 @@ public class SemanticMemory {
         };
         double doubt = Math.pow(1 - base, supportCount);
         return Math.min(0.99, 1 - doubt);
+    }
+
+    /** FIRST_HAND beats INFERRED beats HEARSAY. */
+    private static Provenance stronger(Provenance a, Provenance b) {
+        return a.ordinal() <= b.ordinal() ? a : b;
     }
 
     private void replace(Belief old, Belief updated) {

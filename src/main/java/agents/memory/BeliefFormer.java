@@ -26,6 +26,13 @@ public class BeliefFormer {
      */
     private int currentMap = -1;
 
+    /**
+     * The agent's own character id, so it does not record itself as a source. Map chat comes
+     * back off the server including your own messages, and "player:2 said ..." about yourself
+     * is noise that also makes an agent look like it learned something from someone else.
+     */
+    private int selfCharacterId = -1;
+
     public List<Triple> beliefsFrom(Episode episode) {
         List<Triple> triples = new ArrayList<>();
         Observation observation = episode.observation();
@@ -33,6 +40,7 @@ public class BeliefFormer {
         switch (observation) {
             case Observation.SelfDescribed self -> {
                 currentMap = self.mapId();
+                selfCharacterId = self.characterId();
                 triples.add(Triple.firstHand("self", "named", self.name()));
                 triples.add(Triple.firstHand("self", "level", String.valueOf(self.level())));
                 triples.add(Triple.firstHand("self", "job", String.valueOf(self.job())));
@@ -56,8 +64,11 @@ public class BeliefFormer {
                     triples.add(Triple.firstHand("monster:" + monster.monsterId(), "present_in", mapRef(currentMap)));
             case Observation.DropAppeared drop ->
                     triples.add(Triple.firstHand(itemRef(drop), "dropped_in", mapRef(currentMap)));
-            case Observation.ChatHeard chat ->
+            case Observation.ChatHeard chat -> {
+                if (chat.speakerId() != selfCharacterId) {
                     triples.add(Triple.firstHand("player:" + chat.speakerId(), "said", chat.text()));
+                }
+            }
 
             // Deliberately produce nothing:
             //  - ThingMoved changes many times a second, so a position is working state for a
