@@ -6,6 +6,7 @@ import agents.world.QuestBoard;
 import agents.world.WorldModel;
 
 import java.awt.Point;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -78,6 +79,16 @@ public class ReflexPolicy implements Policy {
     private int lastLevel = -1;
 
     /**
+     * The door just walked through, held until the next map arrives so the agent can find out
+     * where it went.
+     *
+     * A portal tells you its name and nothing else - the client is not told where one leads,
+     * which is why the prompt says "you do not know where it goes". Taking one and seeing
+     * where you end up is the only way to find out, and it is worth writing down.
+     */
+    private String portalJustTaken;
+
+    /**
      * The portal currently being walked to.
      *
      * Without this the policy re-decided every tick, took one step towards a door and then
@@ -104,6 +115,11 @@ public class ReflexPolicy implements Policy {
     @Override
     public Decision decide(Mind mind, WorldModel world, long tick) {
         if (world.mapId() != lastMapId) {
+            if (portalJustTaken != null && lastMapId >= 0) {
+                // Learned the hard way, which is the only way available: that door goes here.
+                mind.infer(portalJustTaken, "leads_to", "map:" + world.mapId(), tick);
+                portalJustTaken = null;
+            }
             lastMapId = world.mapId();
             decisionsHere = 0;
             decisionsSinceProgress = 0;
@@ -192,15 +208,13 @@ public class ReflexPolicy implements Policy {
 
         // Nothing here. Head for a door, and keep heading for it until we arrive.
         if (committedPortal == null && (outstayed || decisionsHere % disposition.portalReluctance() == 0)) {
-            List<WorldModel.PortalTarget> portals = world.portals();
-            if (!portals.isEmpty()) {
-                committedPortal = portals.get(random.nextInt(portals.size()));
-            }
+            committedPortal = chooseDoor(world.portals(), mind, world.mapId());
         }
 
         if (committedPortal != null) {
             if (committedPortal.position().distance(self) < PORTAL_RANGE) {
                 Intent enter = new Intent.EnterPortal(committedPortal.name(), committedPortal.position());
+                portalJustTaken = portalRef(world.mapId(), committedPortal.name());
                 committedPortal = null;
                 return new Decision(enter, "see where this goes", consulted, options());
             }
@@ -261,5 +275,67 @@ public class ReflexPolicy implements Policy {
     @Override
     public String name() {
         return "reflex:" + disposition.name();
+    }
+
+    /**
+     * Picks a door, preferring the ones that lead somewhere new.
+     *
+     * Three tiers, in order: a door never taken from here, a door known to lead somewhere this
+     * agent has never been, and finally anything at all. That ordering is the whole of the
+     * urge to explore - no map of the world, no notion of where it ought to go, just a
+     * preference for doors whose far side it cannot yet describe. An agent that has walked
+     * every door in a map and found nothing new will still leave, because the last tier keeps
+     * it moving.
+     */
+    private WorldModel.PortalTarget chooseDoor(List<WorldModel.PortalTarget> portals, Mind mind,
+                                               int mapId) {
+        if (portals.isEmpty()) {
+            return null;
+        }
+        Set<String> beenThere = mapsVisited(mind);
+
+        List<WorldModel.PortalTarget> untried = new ArrayList<>();
+        List<WorldModel.PortalTarget> towardsSomewhereNew = new ArrayList<>();
+        for (WorldModel.PortalTarget portal : portals) {
+            Optional<String> leadsTo = destinationOf(mind, portalRef(mapId, portal.name()));
+            if (leadsTo.isEmpty()) {
+                untried.add(portal);
+            } else if (!beenThere.contains(leadsTo.get())) {
+                towardsSomewhereNew.add(portal);
+            }
+        }
+
+        List<WorldModel.PortalTarget> preferred = !untried.isEmpty() ? untried
+                : !towardsSomewhereNew.isEmpty() ? towardsSomewhereNew
+                : portals;
+        return preferred.get(random.nextInt(preferred.size()));
+    }
+
+    /**
+     * Every map this agent has ever stood in, from its own memory.
+     *
+     * Invalidated beliefs count: "I was in map 40000" stops being true when it leaves and
+     * stays true as a thing that happened, which is exactly the distinction beliefs keep by
+     * never being deleted.
+     */
+    private static Set<String> mapsVisited(Mind mind) {
+        Set<String> maps = new HashSet<>();
+        for (Belief belief : mind.semantic().all()) {
+            if (belief.subject().equals("self") && belief.predicate().equals("in_map")) {
+                maps.add(belief.object());
+            }
+        }
+        return maps;
+    }
+
+    private static Optional<String> destinationOf(Mind mind, String portal) {
+        return mind.semantic().liveBeliefs().stream()
+                .filter(b -> b.subject().equals(portal) && b.predicate().equals("leads_to"))
+                .map(Belief::object)
+                .findFirst();
+    }
+
+    private static String portalRef(int mapId, String name) {
+        return "portal:" + mapId + "/" + name;
     }
 }

@@ -13,7 +13,22 @@ import java.awt.Point;
  * melee swing looks like on the wire stays here.
  */
 public class IntentExecutor {
-    private static final short MOVE_DURATION_MS = 300;
+    /**
+     * How fast a character walks, in pixels per second. Roughly what the game gives a
+     * beginner at base speed.
+     */
+    private static final double WALK_PIXELS_PER_SECOND = 125;
+
+    /**
+     * How far one step may carry the agent.
+     *
+     * The agent decides every 600ms, so this is about what a walking character covers between
+     * decisions. Without a cap, a move packet described the whole journey as a single
+     * fragment - five hundred pixels in three hundred milliseconds, which is not walking, it
+     * is teleporting, and that is what onlookers saw. The server takes the destination either
+     * way and never complains.
+     */
+    private static final double STEP_PIXELS = 75;
     /**
      * Walking, per docs/moveactions.txt. These were 4 and 5, which that same file lists as
      * <em>standing</em> right and left - so every agent broadcast "I am standing still" on
@@ -91,10 +106,31 @@ public class IntentExecutor {
         }
     }
 
+    /**
+     * Walks one step towards somewhere, rather than arriving instantly.
+     *
+     * Anything further than a step away takes several decisions to reach, which is the point:
+     * the agent is walking there, and anyone watching sees it walk. The world model is told
+     * where the step actually ended rather than where the agent was aiming, so it never
+     * believes itself somewhere it has not got to yet.
+     */
     private void moveTo(Point destination, WorldModel world) {
         Point from = world.selfPosition();
-        byte stance = destination.x >= from.x ? STANCE_WALKING_RIGHT : STANCE_WALKING_LEFT;
-        session.send(ClientPackets.move(from, destination, (short) 0, stance, MOVE_DURATION_MS));
-        world.movedTo(destination);
+        double distance = from.distance(destination);
+
+        Point step = destination;
+        if (distance > STEP_PIXELS) {
+            double fraction = STEP_PIXELS / distance;
+            step = new Point(
+                    (int) Math.round(from.x + (destination.x - from.x) * fraction),
+                    (int) Math.round(from.y + (destination.y - from.y) * fraction));
+        }
+
+        byte stance = step.x >= from.x ? STANCE_WALKING_RIGHT : STANCE_WALKING_LEFT;
+        short duration = (short) Math.max(1,
+                Math.round(from.distance(step) / WALK_PIXELS_PER_SECOND * 1000));
+
+        session.send(ClientPackets.move(from, step, (short) 0, stance, duration));
+        world.movedTo(step);
     }
 }
