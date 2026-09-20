@@ -138,8 +138,12 @@ public class Population {
                 }
 
                 Policy reflex = new ReflexPolicy(random, disposition);
+                // Spread the asking evenly around the cycle rather than having everyone ask
+                // on their first decision: one laptop model, three prompts at once, is how
+                // three deliberations ran out of token budget together.
+                int phase = count <= 1 ? 0 : (i * LOCAL_DELIBERATE_EVERY) / count;
                 Policy policy = oracle == null ? reflex
-                        : new LlmPolicy(oracle, reflex, LOCAL_DELIBERATE_EVERY);
+                        : new LlmPolicy(oracle, reflex, LOCAL_DELIBERATE_EVERY, phase);
                 Agent agent = new Agent(connection, mind, policy, disposition);
                 agent.resumeAt(resumedAt);
 

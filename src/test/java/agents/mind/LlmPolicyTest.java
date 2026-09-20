@@ -18,6 +18,7 @@ import java.util.Random;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -218,5 +219,53 @@ class LlmPolicyTest {
 
         assertTrue(tookMillis < 1_000, "deciding took " + tookMillis + "ms; it must not block");
         assertInstanceOf(Intent.MoveTo.class, decision.intent());
+    }
+
+    /**
+     * Three agents starting together used to ask on the same decision, so one laptop model
+     * got three prompts in the same instant and all three ran out of token budget together.
+     */
+    @Test
+    void agentsGivenDifferentPhasesDoNotAskOnTheSameDecision() {
+        CountingOracle first = new CountingOracle();
+        CountingOracle second = new CountingOracle();
+        Policy a = new LlmPolicy(first, new ReflexPolicy(new Random(1)), 4, 0);
+        Policy b = new LlmPolicy(second, new ReflexPolicy(new Random(1)), 4, 2);
+
+        List<Integer> whenFirstAsked = new ArrayList<>();
+        List<Integer> whenSecondAsked = new ArrayList<>();
+        for (int decision = 0; decision < 8; decision++) {
+            int before = first.asks;
+            a.decide(mind, world, decision);
+            if (first.asks > before) {
+                whenFirstAsked.add(decision);
+            }
+            before = second.asks;
+            b.decide(mind, world, decision);
+            if (second.asks > before) {
+                whenSecondAsked.add(decision);
+            }
+        }
+
+        assertFalse(whenFirstAsked.isEmpty(), "the unphased policy never asked at all");
+        assertFalse(whenSecondAsked.isEmpty(), "the phased policy never asked at all");
+        assertNotEquals(whenFirstAsked, whenSecondAsked,
+                "both asked on the same decisions: " + whenFirstAsked);
+    }
+
+    /** Counts calls, so a test can see which decision triggered one. */
+    private static class CountingOracle implements Oracle {
+        private int asks;
+
+        @Override
+        public String ask(String system, String user) {
+            asks++;
+            return null;
+        }
+
+        @Override
+        public String name() {
+            return "counting";
+        }
     }
 }

@@ -98,9 +98,22 @@ public class LlmPolicy implements Policy {
     }
 
     public LlmPolicy(Oracle oracle, Policy fallback, int deliberateEvery) {
+        this(oracle, fallback, deliberateEvery, 0);
+    }
+
+    /**
+     * @param phase where in the cycle this policy starts counting, so a population does not
+     *              ask all at once. Every agent starts its first decision at the same moment
+     *              and asks every {@code deliberateEvery} decisions after, which put three
+     *              agents in lockstep: one local model receiving three prompts in the same
+     *              instant, three times a minute, and idle in between. Spreading them costs
+     *              nothing and is the difference between a queue and a stampede.
+     */
+    public LlmPolicy(Oracle oracle, Policy fallback, int deliberateEvery, int phase) {
         this.oracle = oracle;
         this.fallback = fallback;
         this.deliberateEvery = Math.max(1, deliberateEvery);
+        this.decisions = Math.floorMod(phase, this.deliberateEvery);
     }
 
     @Override
