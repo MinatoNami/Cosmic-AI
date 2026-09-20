@@ -161,7 +161,7 @@ worlds:
 
 server:
     #Database Configuration
-    DB_HOST: "${DB_HOST:db}"
+    DB_HOST: "${DB_HOST:localhost}"    #docker compose sets this to "db" through .env
     DB_PORT: "${DB_PORT:3306}"
     DB_NAME: "${DB_NAME:cosmic}"
     DB_USER: "${DB_USER:root}"
