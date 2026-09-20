@@ -235,14 +235,10 @@ class LlmPolicyTest {
         List<Integer> whenFirstAsked = new ArrayList<>();
         List<Integer> whenSecondAsked = new ArrayList<>();
         for (int decision = 0; decision < 8; decision++) {
-            int before = first.asks;
-            a.decide(mind, world, decision);
-            if (first.asks > before) {
+            if (asked(a, first, decision)) {
                 whenFirstAsked.add(decision);
             }
-            before = second.asks;
-            b.decide(mind, world, decision);
-            if (second.asks > before) {
+            if (asked(b, second, decision)) {
                 whenSecondAsked.add(decision);
             }
         }
@@ -251,6 +247,27 @@ class LlmPolicyTest {
         assertFalse(whenSecondAsked.isEmpty(), "the phased policy never asked at all");
         assertNotEquals(whenFirstAsked, whenSecondAsked,
                 "both asked on the same decisions: " + whenFirstAsked);
+    }
+
+    /**
+     * Makes one decision and says whether it asked the model.
+     *
+     * The policy hands the question to a background thread, so the count rises shortly after
+     * decide() returns rather than during it - waiting briefly is the difference between
+     * testing the behaviour and testing which thread won.
+     */
+    private boolean asked(Policy policy, CountingOracle oracle, int decision) {
+        int before = oracle.asks;
+        policy.decide(mind, world, decision);
+        for (int waited = 0; waited < 100 && oracle.asks == before; waited++) {
+            try {
+                Thread.sleep(2);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                break;
+            }
+        }
+        return oracle.asks > before;
     }
 
     /** Counts calls, so a test can see which decision triggered one. */

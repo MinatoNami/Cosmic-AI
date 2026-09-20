@@ -2,6 +2,7 @@ package agents.mind;
 
 import agents.net.MapleSession;
 import agents.protocol.ClientPackets;
+import agents.world.MapGeometry;
 import agents.world.WorldModel;
 
 import java.awt.Point;
@@ -125,6 +126,12 @@ public class IntentExecutor {
                     (int) Math.round(from.x + (destination.x - from.x) * fraction),
                     (int) Math.round(from.y + (destination.y - from.y) * fraction));
         }
+
+        // Put the step on the floor. Interpolating straight from here to there walks through
+        // whatever happens to be in between, which is how an agent ends up strolling through
+        // a platform: nothing was stopping it, because nothing knew the platform was there.
+        int ground = MapGeometry.groundUnder(world.mapId(), step.x, from.y);
+        step = new Point(step.x, ground);
 
         byte stance = step.x >= from.x ? STANCE_WALKING_RIGHT : STANCE_WALKING_LEFT;
         short duration = (short) Math.max(1,

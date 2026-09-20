@@ -41,7 +41,7 @@ public class ReflexPolicy implements Policy {
      * else is going on. A hard ceiling rather than another judgement call: somewhere has to
      * say "you have seen this place" or a successful agent never sees anywhere else.
      */
-    private static final int LIFETIMES_BEFORE_MOVING_ON = 3;
+    private static final int LIFETIMES_BEFORE_MOVING_ON = 2;
     private static final int PORTAL_RANGE = 40;
     private static final int WANDER_STEP = 80;
     private static final int NPC_RANGE = 60;
@@ -144,7 +144,12 @@ public class ReflexPolicy implements Policy {
                 .stream().map(Belief::ref).toList();
         Point self = world.selfPosition();
 
-        Optional<WorldModel.Entity> drop = world.nearestDrop();
+        // An agent that has outstayed a map stops taking its bait - all of it. Suppressing
+        // monsters alone was not enough: killing things makes drops, so it would stand in the
+        // resulting pile picking items up forever and never fall through to the door. In
+        // forty-five seconds an agent managed forty pickups, thirty-two attacks, and nothing
+        // else whatsoever.
+        Optional<WorldModel.Entity> drop = outstayed ? Optional.empty() : world.nearestDrop();
         if (drop.isPresent() && drop.get().position().distance(self) < disposition.scavengeRange()) {
             return new Decision(new Intent.PickUp(drop.get().objectId(), drop.get().position()),
                     "take what is at my feet", consulted, options());

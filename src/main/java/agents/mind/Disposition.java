@@ -76,7 +76,7 @@ public record Disposition(String name, double wanderlust, double aggression, dou
      * for the rest of its life.
      */
     public int patience() {
-        return (int) Math.round(140 + aggression * 360);
+        return (int) Math.round(120 + aggression * 240);
     }
 
     /** Steps between bothering an NPC. */
