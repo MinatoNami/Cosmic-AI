@@ -146,7 +146,7 @@ public class Agent implements Runnable {
         // the decision to its fallback does, and that difference is the whole point of
         // recording it.
         mind.decided(tick, decision.goal(), decision.intent().name(),
-                decision.intent().detail(), decision.consultedBeliefs(),
+                decision.intent().detail(), decision.consultedBeliefs(), decision.considered(),
                 decision.decidedBy() != null ? decision.decidedBy() : policy.name(),
                 decision.fellBackBecause());
 

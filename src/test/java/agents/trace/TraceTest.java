@@ -46,7 +46,7 @@ class TraceTest {
         Path file = directory.resolve(by.replace(':', '-') + ".jsonl");
         Mind mind = new Mind("Test", Trace.toFile(file, "Test"));
         mind.decided(7, "hit what is in front of me", "Attack", Map.of("target", 9001),
-                List.of(), by, fellBackBecause);
+                List.of(), List.of("door=0.42", "wander=0.05"), by, fellBackBecause);
         mind.flush();
 
         return Files.readAllLines(file).stream()

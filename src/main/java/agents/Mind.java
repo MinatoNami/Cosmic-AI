@@ -86,8 +86,9 @@ public class Mind implements AutoCloseable {
      * @return the action's ref, for anything that wants to point at it
      */
     public String decided(long tick, String goal, String intent, Map<String, Object> detail,
-                          List<String> usedBeliefs, String by, String fellBackBecause) {
-        String because = trace.deliberated(tick, goal, usedBeliefs, List.of(), by, fellBackBecause);
+                          List<String> usedBeliefs, List<String> considered,
+                          String by, String fellBackBecause) {
+        String because = trace.deliberated(tick, goal, usedBeliefs, considered, by, fellBackBecause);
         String actionRef = trace.acted(tick, intent, detail, because);
 
         decisions.addLast(new DecisionRecord(tick, actionRef, intent, goal, usedBeliefs));

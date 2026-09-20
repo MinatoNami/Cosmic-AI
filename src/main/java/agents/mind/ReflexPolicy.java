@@ -116,7 +116,7 @@ public class ReflexPolicy implements Policy {
      * MoveTo, and it never left the starting town. Committing until arrival is the difference
      * between wandering and going somewhere.
      */
-    private static final double COMMITTED = 2.0;
+    private static final double COMMITTED = 0.4;
 
     /** There is always something to do, even if it is only walking about. */
     private static final double WANDERING_IS_BETTER_THAN_NOTHING = 0.05;
@@ -400,8 +400,13 @@ public class ReflexPolicy implements Policy {
         // much more so, because a door abandoned halfway is a door never reached. That was
         // learned the hard way: an agent once spent a two-minute run taking a single step
         // towards a door and then thinking better of it, over and over.
-        double score = 0.15 + disposition.wanderlust() * 0.5
-                + Math.min(1.0, (double) decisionsHere / disposition.patience())
+        // Scaled by how long the agent has been here, rather than offered at full strength on
+        // arrival. Flat wanderlust made a door outscore a monster from the first decision in
+        // every map, and the agent stopped fighting altogether: three minutes of measurement
+        // came back 91% walking, 9% doors, and no combat whatsoever. A door is worth taking
+        // when you have worn a place out, not the moment you get there.
+        double wornOut = Math.min(1.0, (double) decisionsHere / disposition.patience());
+        double score = (0.3 + disposition.wanderlust()) * wornOut
                 + (stale ? 1.0 : 0)
                 + NEGLECT_MATTERS * neglect("door") + urgeFor("door")
                 + (alreadyOnTheWay ? COMMITTED : 0);
