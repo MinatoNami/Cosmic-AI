@@ -130,24 +130,28 @@ public class IntentExecutor {
             return;
         }
 
-        Point step = destination;
-        if (distance > STEP_PIXELS) {
-            double fraction = STEP_PIXELS / distance;
-            step = new Point(
-                    (int) Math.round(from.x + (destination.x - from.x) * fraction),
-                    (int) Math.round(from.y + (destination.y - from.y) * fraction));
+        // Walking is horizontal. The floor decides the height, the target decides only which
+        // way to set off - which is both what a character does and the way out of a trap the
+        // previous version fell into: interpolating towards something above or below moved
+        // mostly in y, the snap to the floor pulled that straight back, and the step landed
+        // where it started. An observer watching one of these saw a move packet to an
+        // identical point, one millisecond long, several times a second, forever.
+        int dx = destination.x - from.x;
+        if (Math.abs(dx) < ARRIVED_PIXELS) {
+            // Directly above or below. No amount of walking closes that, and saying so once is
+            // better than saying nothing several times a second.
+            return;
+        }
 
-            // Put the step on the floor, but only while still on the way. Interpolating
-            // straight from here to there walks through whatever is in between, which is how
-            // an agent strolls through a platform - nothing was stopping it, because nothing
-            // knew the platform was there.
-            //
-            // The last step is left exactly where it was aimed. Snapping that one too meant an
-            // agent could never arrive anywhere whose height differed from the floor beneath
-            // it: it reached the right x, got pulled back down, and the arrival check - which
-            // measures both axes - never came true. An observer watching one of these saw
-            // fifty-seven moves to the same point, one millisecond apart, forever.
-            step = new Point(step.x, MapGeometry.groundUnder(world.mapId(), step.x, from.y));
+        Point step;
+        if (Math.abs(dx) <= STEP_PIXELS) {
+            // The last step lands exactly where it was aimed, height included, or an agent
+            // could never arrive anywhere that is not at floor level and the arrival checks -
+            // which measure both axes - would never come true.
+            step = destination;
+        } else {
+            int towards = from.x + (int) Math.copySign(STEP_PIXELS, dx);
+            step = new Point(towards, MapGeometry.groundUnder(world.mapId(), towards, from.y));
         }
 
         byte stance = step.x >= from.x ? STANCE_WALKING_RIGHT : STANCE_WALKING_LEFT;
