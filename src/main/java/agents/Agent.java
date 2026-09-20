@@ -280,11 +280,19 @@ public class Agent implements Runnable {
                 .filter(b -> !b.predicate().equals("said"))
                 .sorted(Comparator.comparingDouble(Belief::confidence).reversed())
                 .toList();
-        if (worthSaying.isEmpty()) {
+        // Every other turn, say where you are instead of what you know - and say it even when
+        // there is nothing else worth saying, which is the case for a freshly reset agent that
+        // most needs to be found. Two agents that never mention their own whereabouts can only
+        // ever meet by accident. It goes out as the speaker's player id rather than as "self",
+        // because a listener can do nothing with somebody else's "self".
+        boolean sayWhereIAm = nextToShare++ % 2 == 1
+                && world.characterId() > 0 && world.mapId() > 0;
+        if (!sayWhereIAm && worthSaying.isEmpty()) {
             return;
         }
-        Belief belief = worthSaying.get(nextToShare++ % worthSaying.size());
-        String claim = Claim.announce(belief);
+        String claim = sayWhereIAm
+                ? Claim.announce("player:" + world.characterId(), "in_map", "map:" + world.mapId())
+                : Claim.announce(worthSaying.get((nextToShare / 2) % worthSaying.size()));
 
         long now = System.currentTimeMillis();
         voice.announce(claim, now);

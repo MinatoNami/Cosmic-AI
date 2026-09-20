@@ -293,19 +293,26 @@ public class ReflexPolicy implements Policy {
             return null;
         }
         Set<String> beenThere = mapsVisited(mind);
+        Set<String> companionsAre = companionMaps(mind, mapId);
 
+        List<WorldModel.PortalTarget> towardsCompany = new ArrayList<>();
         List<WorldModel.PortalTarget> untried = new ArrayList<>();
         List<WorldModel.PortalTarget> towardsSomewhereNew = new ArrayList<>();
         for (WorldModel.PortalTarget portal : portals) {
             Optional<String> leadsTo = destinationOf(mind, portalRef(mapId, portal.name()));
-            if (leadsTo.isEmpty()) {
+            if (leadsTo.isPresent() && companionsAre.contains(leadsTo.get())) {
+                towardsCompany.add(portal);
+            } else if (leadsTo.isEmpty()) {
                 untried.add(portal);
             } else if (!beenThere.contains(leadsTo.get())) {
                 towardsSomewhereNew.add(portal);
             }
         }
 
-        List<WorldModel.PortalTarget> preferred = !untried.isEmpty() ? untried
+        // Company first, and only because someone said where they were and this agent had
+        // already learned which door goes there. Both halves are things it found out.
+        List<WorldModel.PortalTarget> preferred = !towardsCompany.isEmpty() ? towardsCompany
+                : !untried.isEmpty() ? untried
                 : !towardsSomewhereNew.isEmpty() ? towardsSomewhereNew
                 : portals;
         return preferred.get(random.nextInt(preferred.size()));
@@ -322,6 +329,25 @@ public class ReflexPolicy implements Policy {
         Set<String> maps = new HashSet<>();
         for (Belief belief : mind.semantic().all()) {
             if (belief.subject().equals("self") && belief.predicate().equals("in_map")) {
+                maps.add(belief.object());
+            }
+        }
+        return maps;
+    }
+
+    /**
+     * Where other players were last said to be, excluding wherever this agent already is.
+     *
+     * Entirely hearsay: it comes from another agent announcing its own position in map chat
+     * or a whisper. Nothing in the process is shared, so two agents on different machines
+     * would find each other exactly the same way, or fail to in exactly the same way.
+     */
+    private static Set<String> companionMaps(Mind mind, int mapId) {
+        String here = "map:" + mapId;
+        Set<String> maps = new HashSet<>();
+        for (Belief belief : mind.semantic().liveBeliefs()) {
+            if (belief.subject().startsWith("player:") && belief.predicate().equals("in_map")
+                    && !belief.object().equals(here)) {
                 maps.add(belief.object());
             }
         }

@@ -21,7 +21,17 @@ public record Claim(String subject, String predicate, String object) {
     private static final String PREFIX = "!know ";
 
     public static String announce(Belief belief) {
-        return PREFIX + belief.subject() + " " + belief.predicate() + " " + belief.object();
+        return announce(belief.subject(), belief.predicate(), belief.object());
+    }
+
+    /**
+     * Says a triple the speaker is not holding as a belief - "I am here" being the one that
+     * matters. An agent's own whereabouts is the one fact it always has and never states,
+     * because it holds it as {@code self in_map ...} and nobody else can use a claim about
+     * somebody else's "self".
+     */
+    public static String announce(String subject, String predicate, String object) {
+        return PREFIX + subject + " " + predicate + " " + object;
     }
 
     public static Optional<Claim> parse(String text) {
