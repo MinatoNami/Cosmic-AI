@@ -111,7 +111,10 @@ class YamlConfigTest {
 
     @Test
     void load_useDefaultValueForEnvironmentVariablesNotPresent() throws IOException {
-        EnvironmentVariables.setInstance(null);
+        // An empty map rather than the real environment: since EnvironmentVariables also
+        // reads a .env file, leaving this to the ambient environment would make the test
+        // pass or fail depending on whether the developer followed the README.
+        mockEnvironmentVariables(Map.of());
 
         String dbUser = "user";
         String dbPass = "pass";

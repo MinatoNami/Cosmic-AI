@@ -27,12 +27,29 @@ public final class ClientPackets {
 
     // ---------------------------------------------------------------- login server
 
-    /** @see net.server.handlers.login.LoginPasswordHandler */
+    /**
+     * The six skipped bytes are the leading part of the client's machine id, which the
+     * handler discards; only the trailing four nibbles become the hwid.
+     *
+     * @see net.server.handlers.login.LoginPasswordHandler
+     */
     public static Packet login(String account, String password, byte[] hwidNibbles) {
         OutPacket p = packet(RecvOpcode.LOGIN_PASSWORD);
         p.writeString(account);
         p.writeString(password);
+        p.writeBytes(new byte[6]);
         p.writeBytes(hwidNibbles);
+        return p;
+    }
+
+    /**
+     * Answers login failure 23, which a fresh account gets on first login.
+     *
+     * @see net.server.handlers.login.AcceptToSHandler
+     */
+    public static Packet acceptTermsOfService() {
+        OutPacket p = packet(RecvOpcode.ACCEPT_TOS);
+        p.writeByte(1);
         return p;
     }
 
@@ -71,6 +88,35 @@ public final class ClientPackets {
         p.writeInt(characterId);
         p.writeString(macs);
         p.writeString(hostString);
+        return p;
+    }
+
+    /**
+     * @param jobType 0 Cygnus, 1 Adventurer, 2 Aran - not the job id
+     * @see net.server.handlers.login.CreateCharHandler
+     */
+    public static Packet createCharacter(String name, int jobType, int face, int hair, int hairColor,
+                                         int skin, int top, int bottom, int shoes, int weapon, boolean male) {
+        OutPacket p = packet(RecvOpcode.CREATE_CHAR);
+        p.writeString(name);
+        p.writeInt(jobType);
+        p.writeInt(face);
+        p.writeInt(hair);
+        p.writeInt(hairColor);
+        p.writeInt(skin);
+        p.writeInt(top);
+        p.writeInt(bottom);
+        p.writeInt(shoes);
+        p.writeInt(weapon);
+        p.writeByte(male ? 0 : 1);
+        return p;
+    }
+
+    /** @see net.server.handlers.login.SetGenderHandler */
+    public static Packet setGender(boolean male) {
+        OutPacket p = packet(RecvOpcode.SET_GENDER);
+        p.writeByte(1);
+        p.writeByte(male ? 0 : 1);
         return p;
     }
 

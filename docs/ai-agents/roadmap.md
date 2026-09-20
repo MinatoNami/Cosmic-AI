@@ -7,17 +7,26 @@ something you can actually watch happen.
 
 Architecture, protocol survey, prior-art review.
 
-## Stage 1 — a client that connects
+## Stage 1 — a client that connects ✅
 
 `agents.net` + `agents.protocol` outbound. Handshake, cyphers, packet framing. An agent
 logs in, picks a character, lands in a map, walks, and says something in chat.
 
-**Done when** you log in with a real client, stand in Henesys, and watch an agent walk
-past and greet you.
+Verified against a live server: three agents auto-registered their accounts, accepted the
+terms of service, created characters from appearances read out of `MakeCharInfo.img`,
+entered Amherst on channel 1 and stayed there for the run, with no server-side errors.
+See `running.md`.
+
+Two protocol details cost a round of debugging and are worth remembering: the login packet
+carries six bytes of machine id before the four hwid nibbles, and a freshly registered
+account is refused once with reason 23 until it accepts the terms.
 
 ## Stage 2 — perception
 
 Inbound decoding for the first-slice opcodes. Unknown opcodes counted, not dropped.
+
+A 30-second run of three agents standing in Amherst already sees 23 distinct opcodes, so
+the histogram the launcher prints is the priority list to work through.
 
 **Done when** a run prints a readable stream of what the agent saw, and the
 unknown-opcode histogram tells us what to decode next.
