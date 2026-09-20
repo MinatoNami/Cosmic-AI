@@ -41,8 +41,10 @@ services:
     env_file:
       - ./.env
     ports:
-      # Control and monitoring. Reachable over tailscale, not published to the world.
-      - "8090:8090"
+      # Control and monitoring, reachable over tailscale. The host side is settable because
+      # 8090 is a popular port and something else may already have it; inside the container
+      # it is always 8090.
+      - "${AGENTS_PORT:-8091}:8090"
     volumes:
       - ./agents-data:/opt/server/agents-data
       - ./viz:/opt/server/viz
