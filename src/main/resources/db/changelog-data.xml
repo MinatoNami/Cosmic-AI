@@ -46,6 +46,9 @@
     <changeSet id="152" author="Ponk">
         <sqlFile path="db/data/152-drop-data.sql"/>
     </changeSet>
+    <changeSet id="153" author="Silwhoon">
+        <sqlFile path="db/data/153-pyramid-drop-data.sql"/>
+    </changeSet>
 
     <changeSet id="161" author="Ponk">
         <sqlFile path="db/data/161-admin-data.sql"/>
