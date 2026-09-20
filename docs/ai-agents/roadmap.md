@@ -21,15 +21,29 @@ Two protocol details cost a round of debugging and are worth remembering: the lo
 carries six bytes of machine id before the four hwid nibbles, and a freshly registered
 account is refused once with reason 23 until it accepts the terms.
 
-## Stage 2 — perception
+## Stage 2 — perception ✅
 
 Inbound decoding for the first-slice opcodes. Unknown opcodes counted, not dropped.
 
-A 30-second run of three agents standing in Amherst already sees 23 distinct opcodes, so
-the histogram the launcher prints is the priority list to work through.
+Agents now perceive: their own character on entering the world, map changes, stat changes,
+other players appearing and leaving, NPCs, monsters spawning and dying, movement, drops,
+chat and notices. Decoders are tested against the server's own `PacketCreator`, because a
+decoder written from notes drifts silently and the symptom is an agent misreading the world
+rather than anything failing.
 
-**Done when** a run prints a readable stream of what the agent saw, and the
-unknown-opcode histogram tells us what to decode next.
+Two findings from running it:
+
+- **Agents already perceive each other.** With two running, each sees the other's
+  `PlayerAppeared`, hears its `ChatHeard`, and tracks its `ThingMoved`. The channel for
+  social learning exists without anything extra.
+- **Everything still undecoded is client UI state** — keymaps, quickslots, macros, buddy
+  list, family, UI locks. None of it is world knowledge, so the decoder is complete enough
+  for now and the remaining list is not a backlog.
+
+One protocol wrinkle worth remembering: `SERVERMESSAGE` type 4 is ambiguous, since the
+scrolling server message writes a flag byte before the string and `serverNotice(4, …)` does
+not. The decoder reads the byte and reconstructs the string length if it turns out not to be
+the flag.
 
 ## Stage 3 — memory and trace
 

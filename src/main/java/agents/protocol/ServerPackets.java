@@ -98,7 +98,7 @@ public final class ServerPackets {
      *
      * @see tools.PacketCreator#addCharStats
      */
-    private static CharacterSummary decodeCharacterStats(InPacket p) {
+    public static CharacterSummary decodeCharacterStats(InPacket p) {
         int id = p.readInt();
         String name = readFixedString(p, 13);
         p.readByte();                       // gender
