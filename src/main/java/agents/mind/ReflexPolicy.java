@@ -34,6 +34,13 @@ import java.util.Set;
  */
 public class ReflexPolicy implements Policy {
     private static final int MELEE_RANGE = 60;
+
+    /**
+     * How many stretches of patience an agent will spend in one map before leaving whatever
+     * else is going on. A hard ceiling rather than another judgement call: somewhere has to
+     * say "you have seen this place" or a successful agent never sees anywhere else.
+     */
+    private static final int LIFETIMES_BEFORE_MOVING_ON = 3;
     private static final int PORTAL_RANGE = 40;
     private static final int WANDER_STEP = 80;
     private static final int NPC_RANGE = 60;
@@ -110,7 +117,12 @@ public class ReflexPolicy implements Policy {
         } else {
             decisionsSinceProgress++;
         }
-        boolean outstayed = decisionsSinceProgress > disposition.patience();
+        // Two ways to have outstayed a map. Stopping getting anywhere is one. The other is
+        // simply having been here a very long time, which matters because the first test
+        // never fires for an agent that is doing well: it levels, the counter resets, and it
+        // happily grinds the same field for its entire life because that field works.
+        boolean outstayed = decisionsSinceProgress > disposition.patience()
+                || decisionsHere > disposition.patience() * LIFETIMES_BEFORE_MOVING_ON;
 
         List<String> consulted = mind.recall("map monster danger", tick, 3)
                 .stream().map(Belief::ref).toList();

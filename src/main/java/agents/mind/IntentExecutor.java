@@ -14,8 +14,15 @@ import java.awt.Point;
  */
 public class IntentExecutor {
     private static final short MOVE_DURATION_MS = 300;
-    private static final byte STANCE_WALKING_RIGHT = 4;
-    private static final byte STANCE_WALKING_LEFT = 5;
+    /**
+     * Walking, per docs/moveactions.txt. These were 4 and 5, which that same file lists as
+     * <em>standing</em> right and left - so every agent broadcast "I am standing still" on
+     * every step it took, and onlookers saw characters slide around the map in a standing
+     * pose without ever appearing to walk. The server does not care, because it reads the
+     * destination and ignores the pose; only the other clients do.
+     */
+    private static final byte STANCE_WALKING_RIGHT = 0;
+    private static final byte STANCE_WALKING_LEFT = 1;
 
     /**
      * How much damage to claim. The server checks claims against what the character could

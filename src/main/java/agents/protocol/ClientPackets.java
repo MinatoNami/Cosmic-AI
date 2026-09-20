@@ -147,7 +147,9 @@ public final class ClientPackets {
      * One absolute-move fragment, which is all the server needs: {@code MovePlayerHandler}
      * parses the command list and then simply takes the resulting position.
      *
-     * @param stance even values face right, odd face left; 0 is standing
+     * @param stance what onlookers see the character doing: even faces right, odd faces
+     *               left, 0/1 walk and 4/5 stand. See docs/moveactions.txt - this is only
+     *               ever relayed to other clients, so getting it wrong fails silently.
      */
     public static Packet move(Point from, Point to, short foothold, byte stance, short durationMillis) {
         OutPacket p = packet(RecvOpcode.MOVE_PLAYER);
