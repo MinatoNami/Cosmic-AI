@@ -88,4 +88,15 @@ public sealed interface Observation {
      */
     record Unrecognised(long tick, int opcode, String opcodeName, int bytes) implements Observation {
     }
+
+    /**
+     * An episode read back from a saved mind rather than perceived in this run.
+     *
+     * Only what it was and how it read are kept, not the original's structured fields. The
+     * reason to carry episodes across runs at all is to keep beliefs pointing at the evidence
+     * that produced them; nothing re-derives anything from these, and no belief former sees
+     * them, because they arrive already believed.
+     */
+    record Recalled(long tick, String type, String detail) implements Observation {
+    }
 }

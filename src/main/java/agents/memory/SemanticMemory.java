@@ -113,6 +113,20 @@ public class SemanticMemory {
         beliefs.set((int) old.id(), updated);
     }
 
+    /**
+     * Puts back a belief from a saved mind, in id order.
+     *
+     * Belief ids are positions too, and {@code replace} writes by index, so an out-of-order
+     * restore would corrupt every later revision. Loudly refused rather than repaired.
+     */
+    public void restore(Belief belief) {
+        if (belief.id() != beliefs.size()) {
+            throw new IllegalArgumentException("Beliefs restore in id order: expected "
+                    + beliefs.size() + ", got " + belief.id());
+        }
+        beliefs.add(belief);
+    }
+
     public List<Belief> liveBeliefs() {
         return beliefs.stream().filter(Belief::isLive).toList();
     }

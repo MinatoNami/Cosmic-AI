@@ -22,6 +22,17 @@ public class Perceiver {
     private final Map<String, Integer> unrecognisedCounts = new TreeMap<>();
     private long tick;
 
+    /**
+     * Carries the clock on from a saved mind.
+     *
+     * Ticks restarting at zero every run would put a resumed belief's first sighting after
+     * the events that followed it, and the replay scrubber reads ticks literally.
+     */
+    public void resumeFrom(long previousTick) {
+        this.tick = Math.max(this.tick, previousTick);
+    }
+
+
     /** Takes everything that has arrived and interprets it. */
     public List<Observation> perceive(PacketInbox inbox) {
         List<Observation> observations = new ArrayList<>();

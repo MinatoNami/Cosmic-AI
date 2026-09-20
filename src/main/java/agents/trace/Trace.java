@@ -76,6 +76,31 @@ public class Trace implements AutoCloseable {
                 "corroborated", corroborated));
     }
 
+    /**
+     * A belief the agent woke up already holding.
+     *
+     * Written into this run's trace so a replay stands on its own. Flagged, because "knew
+     * this before the run began" and "worked it out at tick 12" are different claims and a
+     * reader should not have to guess which one a line is making.
+     */
+    public void carried(Belief belief) {
+        label(belief.subject());
+        label(belief.object());
+        write("believe", belief.lastSeen(), Map.of(
+                "id", belief.ref(),
+                "triple", List.of(belief.subject(), belief.predicate(), belief.object()),
+                "from", belief.supportedBy().stream().map(id -> "e" + id).toList(),
+                "confidence", round(belief.confidence()),
+                "provenance", belief.provenance().name().toLowerCase(),
+                "corroborated", false,
+                "carried", true));
+    }
+
+    /** Says that a run woke a saved mind, and how much of one. */
+    public void resumed(long tick, int episodes, int beliefs) {
+        write("resume", tick, Map.of("episodes", episodes, "beliefs", beliefs));
+    }
+
     /** A belief the agent stopped holding, and what replaced it. */
     public void revised(Belief invalidated, Belief replacement) {
         write("revise", invalidated.invalidatedAt(), Map.of(

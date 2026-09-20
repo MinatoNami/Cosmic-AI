@@ -24,6 +24,20 @@ public class EpisodicMemory {
         return episode;
     }
 
+    /**
+     * Puts back an episode from a saved mind, keeping its id.
+     *
+     * Ids are positions in this list and beliefs point at them by number, so a restore has to
+     * be in order and complete. A gap would not fail; it would silently repoint a belief's
+     * evidence at a different episode, which is the worst kind of wrong this project can be.
+     */
+    public Episode restore(long tick, String type, String detail) {
+        Episode episode = new Episode(episodes.size(), tick,
+                new Observation.Recalled(tick, type, detail));
+        episodes.add(episode);
+        return episode;
+    }
+
     public Optional<Episode> byId(long id) {
         if (id < 0 || id >= episodes.size()) {
             return Optional.empty();

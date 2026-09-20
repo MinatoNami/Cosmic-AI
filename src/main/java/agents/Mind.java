@@ -5,11 +5,13 @@ import agents.memory.BeliefFormer;
 import agents.memory.DecisionRecord;
 import agents.memory.Episode;
 import agents.memory.EpisodicMemory;
+import agents.memory.MindSnapshot;
 import agents.memory.Recall;
 import agents.memory.SemanticMemory;
 import agents.percept.Observation;
 import agents.trace.Trace;
 
+import java.nio.file.Path;
 import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.List;
@@ -126,9 +128,53 @@ public class Mind implements AutoCloseable {
         }
     }
 
+    /**
+     * Writes this mind down so the next run starts where this one stopped.
+     *
+     * @param tick the clock this run reached, so the next one carries it on rather than
+     *             restarting and putting new events before old ones
+     */
+    public void save(Path path, long tick) {
+        MindSnapshot.save(path, name, tick, episodic, semantic);
+    }
+
+    /**
+     * Wakes this mind up as the last run left it.
+     *
+     * Everything restored is written into this run's trace as well. Without that a replay
+     * would show an agent acting on beliefs it is never seen to acquire, which is precisely
+     * the question the trace exists to answer.
+     *
+     * @return the tick the previous run reached, or 0 for a mind with no past
+     */
+    public long restoreFrom(Path path) {
+        MindSnapshot.Restored restored = MindSnapshot.load(path, episodic, semantic);
+        if (restored == null) {
+            return 0;
+        }
+        trace.resumed(restored.tick(), restored.episodes(), restored.beliefs());
+        for (Belief belief : semantic.all()) {
+            trace.carried(belief);
+        }
+        // Second pass, because a revision names the belief that replaced it and that one may
+        // not have been written yet on the first.
+        for (Belief belief : semantic.all()) {
+            if (belief.invalidatedAt() != null && belief.supersededBy() != null) {
+                semantic.byId(belief.supersededBy())
+                        .ifPresent(replacement -> trace.revised(belief, replacement));
+            }
+        }
+        return restored.tick();
+    }
+
     /** The beliefs worth putting in front of a decision about {@code topic}. */
     public List<Belief> recall(String topic, long nowTick, int limit) {
         return Recall.mostRelevant(semantic, topic, nowTick, limit);
+    }
+
+    /** Pushes the trace to disk, so something following the file sees this step. */
+    public void flush() {
+        trace.flush();
     }
 
     public String name() {
