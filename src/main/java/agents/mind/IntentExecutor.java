@@ -125,13 +125,19 @@ public class IntentExecutor {
             step = new Point(
                     (int) Math.round(from.x + (destination.x - from.x) * fraction),
                     (int) Math.round(from.y + (destination.y - from.y) * fraction));
-        }
 
-        // Put the step on the floor. Interpolating straight from here to there walks through
-        // whatever happens to be in between, which is how an agent ends up strolling through
-        // a platform: nothing was stopping it, because nothing knew the platform was there.
-        int ground = MapGeometry.groundUnder(world.mapId(), step.x, from.y);
-        step = new Point(step.x, ground);
+            // Put the step on the floor, but only while still on the way. Interpolating
+            // straight from here to there walks through whatever is in between, which is how
+            // an agent strolls through a platform - nothing was stopping it, because nothing
+            // knew the platform was there.
+            //
+            // The last step is left exactly where it was aimed. Snapping that one too meant an
+            // agent could never arrive anywhere whose height differed from the floor beneath
+            // it: it reached the right x, got pulled back down, and the arrival check - which
+            // measures both axes - never came true. An observer watching one of these saw
+            // fifty-seven moves to the same point, one millisecond apart, forever.
+            step = new Point(step.x, MapGeometry.groundUnder(world.mapId(), step.x, from.y));
+        }
 
         byte stance = step.x >= from.x ? STANCE_WALKING_RIGHT : STANCE_WALKING_LEFT;
         short duration = (short) Math.max(1,
