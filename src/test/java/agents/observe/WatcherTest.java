@@ -116,4 +116,34 @@ class WatcherTest {
         assertEquals(1, watcher.stepsBy(9).size());
         assertEquals(0, watcher.stepsBy(10).size());
     }
+
+    /**
+     * Every step here is a well-formed walking step, and the character has not moved an inch.
+     * This is what four minutes of a real agent looked like, and no single-packet predicate
+     * can see it.
+     */
+    @Test
+    void noticesACharacterWalkingOnTheSpot() {
+        Watcher watcher = watching(
+                moveBroadcast(9, 836, 605, 0, 1),
+                moveBroadcast(9, 836, 605, 0, 1),
+                moveBroadcast(9, 836, 605, 0, 1),
+                moveBroadcast(9, 836, 605, 0, 1));
+
+        assertTrue(watcher.stepsBy(9).stream().allMatch(Watcher.Step::isWalking),
+                "each step on its own looks perfectly fine, which is the problem");
+        assertEquals(0, watcher.groundCovered(9));
+        assertEquals(3, watcher.longestRunOnTheSpot(9));
+    }
+
+    @Test
+    void measuresGroundCoveredBySomethingActuallyWalking() {
+        Watcher watcher = watching(
+                moveBroadcast(9, 100, 485, 0, 300),
+                moveBroadcast(9, 175, 485, 0, 300),
+                moveBroadcast(9, 250, 485, 0, 300));
+
+        assertEquals(150, watcher.groundCovered(9));
+        assertEquals(0, watcher.longestRunOnTheSpot(9));
+    }
 }

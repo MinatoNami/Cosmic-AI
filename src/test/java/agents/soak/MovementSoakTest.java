@@ -68,6 +68,14 @@ class MovementSoakTest {
      */
     private static final int FURTHEST_PLAUSIBLE_STEP = 200;
 
+    /**
+     * How many steps to an identical point are forgivable.
+     *
+     * A few are ordinary - an agent standing next to what it is hitting re-states where it is.
+     * A run of dozens is the bug that wasted an evening.
+     */
+    private static final int MOST_STEPS_GOING_NOWHERE = 20;
+
     @TempDir
     Path traces;
 
@@ -109,11 +117,17 @@ class MovementSoakTest {
 
         // It went somewhere. Catches an agent stepping onto the spot it is already standing
         // on, which looks identical to a working agent in every log the project has.
-        int leftmost = steps.stream().mapToInt(Watcher.Step::x).min().orElseThrow();
-        int rightmost = steps.stream().mapToInt(Watcher.Step::x).max().orElseThrow();
-        assertTrue(rightmost - leftmost > PIXELS_WORTH_OF_WANDERING,
-                "covered only " + (rightmost - leftmost) + " pixels in " + WATCH_SECONDS
-                        + "s, across " + steps.size() + " steps - it is not going anywhere");
+        int covered = watcher.groundCovered(who);
+        assertTrue(covered > PIXELS_WORTH_OF_WANDERING,
+                "covered only " + covered + " pixels in " + WATCH_SECONDS + "s, across "
+                        + steps.size() + " steps - it is not going anywhere");
+
+        // And it was not standing still for most of them. Ground covered alone can be passed
+        // by an agent that walks once and then spends four minutes twitching, which is close
+        // enough to what actually happened to be worth asserting separately.
+        assertTrue(watcher.longestRunOnTheSpot(who) < MOST_STEPS_GOING_NOWHERE,
+                "sent " + watcher.longestRunOnTheSpot(who)
+                        + " steps in a row to the same point - it is walking on the spot");
 
         // It walked there. Catches a character broadcasting a standing pose while moving.
         assertTrue(steps.stream().allMatch(Watcher.Step::isWalking),

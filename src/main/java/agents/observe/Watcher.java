@@ -144,6 +144,45 @@ public class Watcher {
         return steps.stream().filter(s -> s.characterId() == characterId).toList();
     }
 
+    /**
+     * How much ground a character covered, left to right, across everything seen.
+     *
+     * A single step tells you nothing about whether a character is going anywhere - the
+     * walking-on-the-spot bug broadcast a perfectly well-formed walking pose, to an identical
+     * point, several times a second, for four minutes. Only the sequence gives it away, which
+     * is why the predicates that matter here are about runs of packets rather than one.
+     */
+    public int groundCovered(int characterId) {
+        List<Step> mine = stepsBy(characterId);
+        if (mine.size() < 2) {
+            return 0;
+        }
+        int leftmost = mine.stream().mapToInt(Step::x).min().orElseThrow();
+        int rightmost = mine.stream().mapToInt(Step::x).max().orElseThrow();
+        return rightmost - leftmost;
+    }
+
+    /**
+     * The longest run of steps that went nowhere at all.
+     *
+     * Two of tonight's three movement bugs produced exactly this and nothing else: a run of
+     * identical destinations. One came from a foothold snap cancelling the step, the other
+     * from walking to a target already underfoot.
+     */
+    public int longestRunOnTheSpot(int characterId) {
+        List<Step> mine = stepsBy(characterId);
+        int longest = 0;
+        int run = 0;
+        for (int i = 1; i < mine.size(); i++) {
+            Step before = mine.get(i - 1);
+            Step now = mine.get(i);
+            boolean samePlace = before.x() == now.x() && before.y() == now.y();
+            run = samePlace ? run + 1 : 0;
+            longest = Math.max(longest, run);
+        }
+        return longest;
+    }
+
     public void forget() {
         swings.clear();
         steps.clear();
