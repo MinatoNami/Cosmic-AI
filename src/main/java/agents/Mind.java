@@ -5,6 +5,7 @@ import agents.memory.BeliefFormer;
 import agents.memory.DecisionRecord;
 import agents.memory.Episode;
 import agents.memory.EpisodicMemory;
+import agents.memory.Inferrer;
 import agents.memory.MindSnapshot;
 import agents.memory.Recall;
 import agents.memory.SemanticMemory;
@@ -30,6 +31,7 @@ public class Mind implements AutoCloseable {
     private final EpisodicMemory episodic = new EpisodicMemory();
     private final SemanticMemory semantic = new SemanticMemory();
     private final BeliefFormer former = new BeliefFormer();
+    private final Inferrer inferrer = new Inferrer();
     private final Deque<DecisionRecord> decisions = new ArrayDeque<>();
     private final Trace trace;
 
@@ -49,6 +51,14 @@ public class Mind implements AutoCloseable {
     public void take(Observation observation) {
         Episode episode = episodic.record(observation);
         trace.observed(episode);
+
+        // Concluded rather than restated, and kept apart from restatement so a replay can
+        // always tell which is which. These arrive as INFERRED, which the confidence curve
+        // scores below anything actually seen.
+        for (Inferrer.Conclusion conclusion : inferrer.consider(observation)) {
+            infer(conclusion.subject(), conclusion.predicate(), conclusion.object(),
+                    observation.tick());
+        }
 
         for (BeliefFormer.Triple triple : former.beliefsFrom(episode)) {
             SemanticMemory.Assertion assertion = semantic.assertTriple(
