@@ -209,6 +209,9 @@ public class ReflexPolicy implements Policy {
      */
     private WorldModel.PortalTarget doorInMind;
 
+    /** Which tier of chooseDoor produced the candidate, for the trace. */
+    private String whyThisDoor = "";
+
     /**
      * What the agent is currently walking towards, of any kind.
      *
@@ -583,7 +586,8 @@ public class ReflexPolicy implements Policy {
         // kind of thing won but never which door or how distant.
 choices.add(new Choice("door", new Intent.MoveTo(door.position()),
                 "walk to a way out: " + door.name() + " "
-                        + Math.round(door.position().distance(self)) + "px away", score, () -> {
+                        + Math.round(door.position().distance(self)) + "px away ["
+                        + whyThisDoor + "]", score, () -> {
                     committedPortal = door;
                     // Register it as the journey too, not just as a committed portal. Two
                     // commitment mechanisms meant a door and a conversation could both be
@@ -706,10 +710,20 @@ choices.add(new Choice("door", new Intent.MoveTo(door.position()),
         if (worthTrying.isEmpty()) {
             return null;        // no way out of here that works; get on with what is here
         }
-        List<WorldModel.PortalTarget> preferred = !towardsCompany.isEmpty() ? towardsCompany
-                : !untried.isEmpty() ? untried
+        // Unopened first, then company, then merely somewhere new.
+        //
+        // Company came first and two agents locked each other in place: the fighter settled in
+        // Dangerous Forest and said so, the wanderer arrived in Amherst, heard where its
+        // companion was, and turned round - past two doors it had never opened, one of which
+        // is the road to Southperry and off the island. Neither wanting company nor wanting
+        // to see what is through that door is wrong; an absolute ordering between them is.
+        List<WorldModel.PortalTarget> preferred = !untried.isEmpty() ? untried
+                : !towardsCompany.isEmpty() ? towardsCompany
                 : !towardsSomewhereNew.isEmpty() ? towardsSomewhereNew
                 : worthTrying;
+        whyThisDoor = (preferred == untried ? "untried" : preferred == towardsCompany ? "company"
+                : preferred == towardsSomewhereNew ? "somewhere new" : "last resort")
+                + " " + preferred.size() + "/" + portals.size();
         return preferred.get(random.nextInt(preferred.size()));
     }
 
