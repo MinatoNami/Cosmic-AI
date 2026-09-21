@@ -10,6 +10,7 @@ import org.junit.jupiter.api.io.TempDir;
 
 import java.awt.Point;
 import java.nio.file.Path;
+import java.util.List;
 import java.util.Random;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -190,4 +191,28 @@ class ReflexPolicyTest {
                         + " decisions, with an NPC standing right there");
     }
 
+
+    /**
+     * An agent that walked in from the west should try the eastern door first.
+     *
+     * Choosing at random among unopened doors made each map a coin flip: one agent reached
+     * Split Road of Destiny, one door from Southperry and the way off Maple Island, then
+     * turned round and went back. Knowing where you came in is the only sense of direction
+     * something without a map can honestly have.
+     */
+    @Test
+    void headsOnwardRatherThanBackTheWayItCame() {
+        // Positions only, no destinations known, so both doors are equally unopened.
+        WorldModel.PortalTarget back = new WorldModel.PortalTarget("west00", new Point(-500, 0));
+        WorldModel.PortalTarget onward = new WorldModel.PortalTarget("east00", new Point(900, 0));
+
+        ReflexPolicy policy = new ReflexPolicy(new Random(1), Disposition.WANDERER);
+        policy.cameInAt(new Point(-480, 0));
+
+        WorldModel.PortalTarget chosen =
+                policy.pickDoor(List.of(back, onward), mind, 10000, "player:1");
+
+        assertEquals("east00", chosen.name(),
+                "it walked in beside west00, so east00 is the one that leads onward");
+    }
 }

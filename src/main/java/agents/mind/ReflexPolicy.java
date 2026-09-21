@@ -213,6 +213,17 @@ public class ReflexPolicy implements Policy {
     private String whyThisDoor = "";
 
     /**
+     * Where the agent came into this map.
+     *
+     * The whole of its sense of direction. An agent has no map of the world and is not given
+     * one, but it knows where it walked in, and the door furthest from that is the one
+     * leading onward rather than back the way it came. Choosing at random among unopened
+     * doors made exploring a coin flip per map: it reached Split Road of Destiny, one door
+     * from Southperry, and wandered back west.
+     */
+    private Point arrivedAt;
+
+    /**
      * What the agent is currently walking towards, of any kind.
      *
      * Only doors used to have commitment, so every other journey was re-argued from scratch
@@ -270,6 +281,7 @@ public class ReflexPolicy implements Policy {
             committedPortal = null;     // the old map's doors are gone
             doorInMind = null;
             journeyKind = null;         // and nothing here is where we were going
+            arrivedAt = world.selfPosition();
         }
         decisionsHere++;
         decisionsMade++;
@@ -675,6 +687,17 @@ choices.add(new Choice("door", new Intent.MoveTo(door.position()),
      * every door in a map and found nothing new will still leave, because the last tier keeps
      * it moving.
      */
+    /** Lets a test say where the agent walked in, which is otherwise set on a map change. */
+    void cameInAt(Point where) {
+        this.arrivedAt = where;
+    }
+
+    /** Visible for testing: which door the agent would set off for. */
+    WorldModel.PortalTarget pickDoor(List<WorldModel.PortalTarget> portals, Mind mind, int mapId,
+                                     String selfRef) {
+        return chooseDoor(portals, mind, mapId, selfRef);
+    }
+
     private WorldModel.PortalTarget chooseDoor(List<WorldModel.PortalTarget> portals, Mind mind,
                                                int mapId, String selfRef) {
         if (portals.isEmpty()) {
@@ -724,6 +747,16 @@ choices.add(new Choice("door", new Intent.MoveTo(door.position()),
         whyThisDoor = (preferred == untried ? "untried" : preferred == towardsCompany ? "company"
                 : preferred == towardsSomewhereNew ? "somewhere new" : "last resort")
                 + " " + preferred.size() + "/" + portals.size();
+
+        // Onward rather than back. Among equally unopened doors, the one furthest from where
+        // the agent walked in is the one that keeps it going in the direction it was already
+        // heading - which is all "explore outward" can honestly mean to something that has
+        // never seen a map of the world.
+        if (arrivedAt != null && preferred.size() > 1) {
+            return preferred.stream()
+                    .max(Comparator.comparingDouble(p -> p.position().distance(arrivedAt)))
+                    .orElseThrow();
+        }
         return preferred.get(random.nextInt(preferred.size()));
     }
 
