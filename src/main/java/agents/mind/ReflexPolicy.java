@@ -456,7 +456,12 @@ public class ReflexPolicy implements Policy {
                     new Intent.EnterPortal(door.name(), door.position()),
                     "see where this goes", score,
                     () -> {
-                        doorsAwaitingVerdict.put(portalRef(world.mapId(), door.name()),
+                        // putIfAbsent, not put. Walking into the same door again must not
+                        // restart its clock, or a door tried every six decisions and judged
+                        // after twelve is never judged at all - which is how one agent came
+                        // to walk into the same tutorial portal fifty-two times while the
+                        // machinery for noticing sat there working perfectly.
+                        doorsAwaitingVerdict.putIfAbsent(portalRef(world.mapId(), door.name()),
                                 decisionsMade);
                         committedPortal = null;
                     }));
