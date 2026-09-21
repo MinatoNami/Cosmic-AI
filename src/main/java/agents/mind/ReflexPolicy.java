@@ -111,12 +111,15 @@ public class ReflexPolicy implements Policy {
     /**
      * Added to the door already being walked to.
      *
-     * Large, deliberately. Re-deciding every tick once took an agent one step towards a door
-     * and then somewhere else, over and over: 199 decisions in a two-minute run, all of them
-     * MoveTo, and it never left the starting town. Committing until arrival is the difference
-     * between wandering and going somewhere.
+     * Has to outlast a distraction, not merely outweigh a calm one. Neglect can lift any
+     * option by 1.5, so at 0.4 a half-finished walk to a door lost to whatever the agent had
+     * not done lately, every time: it would set off, stop to talk, set off again, and never
+     * arrive. A journey that cannot survive one distraction is not a journey.
+     *
+     * Three separate versions of this bug have now cost a night between them - 199 MoveTos
+     * without leaving the starting town, a door abandoned every six decisions, and this.
      */
-    private static final double COMMITTED = 0.4;
+    private static final double COMMITTED = 1.2;
 
     /** There is always something to do, even if it is only walking about. */
     private static final double WANDERING_IS_BETTER_THAN_NOTHING = 0.05;
