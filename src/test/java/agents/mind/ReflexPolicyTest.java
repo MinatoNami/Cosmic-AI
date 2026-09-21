@@ -326,4 +326,50 @@ class ReflexPolicyTest {
     void goesAndAsksAgainWhenItCannotTellWhatWasAskedFor() {
         assertTrue(ReflexPolicy.canPay("prove yourself worthy first", 1, 0));
     }
+
+    /**
+     * Two agents wiped clean landed in Lith Harbor, recorded all twenty-eight of its exits,
+     * tried none of them, and spent fifteen minutes walking at one NPC standing on a ledge
+     * they cannot climb to. Hundreds of MoveTo to the same point, the commitment bonus
+     * winning the argument every time, and no mechanism anywhere for changing its mind.
+     */
+    @Test
+    void givesUpOnSomewhereItCannotGetTo() {
+        Point unreachable = new Point(2000, 0);
+        world.update(new Observation.NpcAppeared(2, 7001, 2100, unreachable));
+        Policy policy = new ReflexPolicy(new Random(1), Disposition.TALKER);
+
+        boolean stillWalkingAtIt = false;
+        for (int decision = 0; decision < 60; decision++) {
+            Intent intent = policy.decide(mind, world, decision).intent();
+            world.movedTo(new Point(0, 0));     // every step leaves it exactly where it was
+            if (decision >= 45) {
+                stillWalkingAtIt |= intent instanceof Intent.MoveTo going
+                        && going.destination().equals(unreachable);
+            }
+        }
+
+        assertFalse(stillWalkingAtIt,
+                "after fifteen decisions that got it no closer it should have given up");
+    }
+
+    /** The other half: a journey that is working must not be called off for being long. */
+    @Test
+    void keepsGoingWhileItIsStillGettingCloser() {
+        Point acrossTheMap = new Point(3000, 0);
+        world.update(new Observation.NpcAppeared(2, 7001, 2100, acrossTheMap));
+        Policy policy = new ReflexPolicy(new Random(1), Disposition.TALKER);
+
+        Intent intent = null;
+        Point walked = new Point(0, 0);
+        for (int decision = 0; decision < 30; decision++) {
+            intent = policy.decide(mind, world, decision).intent();
+            walked = new Point(walked.x + 75, 0);   // one honest walking step
+            world.movedTo(walked);
+        }
+
+        assertEquals(acrossTheMap,
+                assertInstanceOf(Intent.MoveTo.class, intent).destination(),
+                "it was getting closer every decision; there was nothing wrong with it");
+    }
 }

@@ -251,6 +251,19 @@ public class ReflexPolicy implements Policy {
     private String journeyKind;
     private Point journeyTo;
 
+    /** The closest the agent has got to {@link #journeyTo}, and how long since it improved. */
+    private double closestApproach = Double.MAX_VALUE;
+    private int stalledFor;
+
+    /**
+     * Places the agent set off for, failed to reach, and is leaving alone for now.
+     *
+     * Keyed by a coarse grid rather than an exact point, because the thing that was
+     * unreachable is the ledge, not the pixel - and a monster standing on it drifts a few
+     * pixels every second. Cleared on leaving a map, where the coordinates mean nothing.
+     */
+    private final Map<String, Integer> gaveUpOn = new HashMap<>();
+
     /**
      * An NPC that told this agent what it needed first, and the map it was standing in.
      *
@@ -308,6 +321,7 @@ public class ReflexPolicy implements Policy {
             committedPortal = null;     // the old map's doors are gone
             doorInMind = null;
             journeyKind = null;         // and nothing here is where we were going
+            gaveUpOn.clear();           // and nowhere here is somewhere we failed to reach
             arrivedAt = world.selfPosition();
             // Write down which doors this place has. Noticing the exits of the room you are
             // standing in is looking, not deduction - and it is the one thing that lets an
@@ -319,6 +333,7 @@ public class ReflexPolicy implements Policy {
         }
         decisionsHere++;
         decisionsMade++;
+        watchTheJourney(world.selfPosition());
 
         if (world.level() > lastLevel) {
             lastLevel = world.level();
@@ -352,7 +367,15 @@ public class ReflexPolicy implements Policy {
 
         ageUrges();
 
-        Choice best = choices.stream().max(Comparator.comparingDouble(Choice::score)).orElseThrow();
+        // Somewhere the agent has just failed to reach is not a candidate, however well it
+        // scores. Without this the give-up is undone on the very next decision: the ledge is
+        // still the nearest NPC, it still wins, and the agent sets off for it again.
+        List<Choice> reachable = choices.stream()
+                .filter(choice -> !(choice.intent() instanceof Intent.MoveTo going)
+                        || !outOfMind(going.destination()))
+                .toList();
+        Choice best = (reachable.isEmpty() ? choices : reachable).stream()
+                .max(Comparator.comparingDouble(Choice::score)).orElseThrow();
         lastChosenAt.put(best.kind(), decisionsMade);
         if (best.onChosen() != null) {
             best.onChosen().run();
@@ -440,10 +463,91 @@ public class ReflexPolicy implements Policy {
     /** Close enough to count as the same destination between one decision and the next. */
     private static final int SAME_ERRAND = 120;
 
+    /**
+     * How much closer a journey has to get before it counts as going anywhere.
+     *
+     * A walking step is about {@code STEP_PIXELS} wide, so a journey that is working closes
+     * far more than this per decision. The bar is low on purpose: this is meant to catch a
+     * journey making no progress at all, not to hurry a slow one.
+     */
+    private static final int GETTING_SOMEWHERE = 30;
+
+    /**
+     * How many decisions a journey may make no progress before the agent gives up on it.
+     *
+     * Doors have had this since the night an agent walked into the same dead tutorial portal
+     * fifty-two times; nothing else did. Two agents wiped clean and set loose landed in Lith
+     * Harbor, recorded all twenty-eight of its exits, tried none of them, and spent fifteen
+     * minutes walking towards one NPC on a ledge they cannot climb to - hundreds of MoveTo
+     * to the same point, the commitment bonus re-winning the argument every time. Deciding
+     * to go somewhere has to be revocable, or the first unreachable thing an agent fancies
+     * is the last decision it ever makes.
+     */
+    private static final int JOURNEY_SHOULD_BE_GETTING_SOMEWHERE = 15;
+
+    /**
+     * How long somewhere stays out of mind after the agent fails to reach it.
+     *
+     * Not forever. Unreachable usually means "not from this ledge, in this direction, with
+     * what I know about walking" - and all three change. Long enough that the agent gets on
+     * with something else first.
+     */
+    private static final int WORTH_TRYING_AGAIN = 300;
+
     /** Remembers a journey begun, so the next decision knows it is already under way. */
     private void settingOff(String kind, Point target) {
+        // A new journey, not the same one re-confirmed. A monster drifts a few pixels every
+        // decision and re-registers its journey each time; resetting the progress watch on
+        // that would mean it never notices anything is wrong.
+        boolean somewhereElse = !kind.equals(journeyKind) || journeyTo == null
+                || journeyTo.distance(target) >= SAME_ERRAND;
+        if (somewhereElse) {
+            closestApproach = Double.MAX_VALUE;
+            stalledFor = 0;
+        }
         journeyKind = kind;
         journeyTo = target;
+    }
+
+    /**
+     * Notices a journey that is not getting anywhere and calls it off.
+     *
+     * Distance to the target, against the closest the agent has ever managed. Anything else
+     * - time, step count, whether the server acknowledged the move - can look like progress
+     * while the agent stands still, and standing still is precisely the failure. Where it
+     * was going goes out of mind afterwards, or the next decision picks it straight back up
+     * and nothing has changed.
+     */
+    private void watchTheJourney(Point self) {
+        if (journeyKind == null || journeyTo == null) {
+            return;
+        }
+        double distance = journeyTo.distance(self);
+        if (distance < closestApproach - GETTING_SOMEWHERE) {
+            closestApproach = distance;
+            stalledFor = 0;
+            return;
+        }
+        if (++stalledFor < JOURNEY_SHOULD_BE_GETTING_SOMEWHERE) {
+            return;
+        }
+        gaveUpOn.put(whereabouts(journeyTo), decisionsMade);
+        if ("door".equals(journeyKind)) {
+            doorInMind = null;          // pick a different way out next time
+            committedPortal = null;
+        }
+        arrived();                      // stop pretending we are still on our way
+    }
+
+    /** Whether somewhere is one the agent recently failed to reach. */
+    private boolean outOfMind(Point target) {
+        Integer gaveUp = gaveUpOn.get(whereabouts(target));
+        return gaveUp != null && decisionsMade - gaveUp < WORTH_TRYING_AGAIN;
+    }
+
+    /** A place, coarsely - near enough to the same spot is the same spot. */
+    private static String whereabouts(Point where) {
+        return Math.floorDiv(where.x, SAME_ERRAND) + ":" + Math.floorDiv(where.y, SAME_ERRAND);
     }
 
     /** Arrived, or done with it either way. */
