@@ -49,6 +49,16 @@ public class ReflexPolicy implements Policy {
     private final Random random;
     private final Disposition disposition;
 
+    /**
+     * NPCs already spoken to that had nothing on offer.
+     *
+     * Saying hello twice is saying hello once too many. Without this, talking kept winning in
+     * a town - neglect lifts any option by up to 1.5, so an agent that had greeted everybody
+     * greeted them all again rather than walk east, and three maps from Southperry it stood in
+     * Amherst having forty conversations in three minutes.
+     */
+    private final Set<Integer> alreadyGreeted = new HashSet<>();
+
     /** Quests already started, so a refusal is not retried forever. */
     private final Set<Integer> questsTried = new HashSet<>();
 
@@ -394,6 +404,9 @@ public class ReflexPolicy implements Policy {
             Optional<Integer> offer = QuestBoard.offeredBy(npc.typeId()).stream()
                     .filter(q -> !questsTried.contains(q))
                     .findFirst();
+            if (offer.isEmpty() && alreadyGreeted.contains(npc.typeId())) {
+                return;     // nothing new to say to this one
+            }
             // Something on offer is worth crossing a map for; a chat is worth a wander.
             double appeal = offer.isPresent() ? 0.7 : 0.2 + disposition.curiosity() * 0.3;
             double score = appeal + NEGLECT_MATTERS * neglect("talk") + urgeFor("talk");
@@ -412,7 +425,8 @@ public class ReflexPolicy implements Policy {
             }
             choices.add(new Choice("talk",
                     new Intent.TalkTo(npc.objectId(), npc.typeId(), npc.position()),
-                    "say hello and see what happens", score, null));
+                    "say hello and see what happens", score,
+                    () -> alreadyGreeted.add(npc.typeId())));
         });
     }
 
