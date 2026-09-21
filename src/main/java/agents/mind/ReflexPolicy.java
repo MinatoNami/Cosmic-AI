@@ -578,8 +578,20 @@ public class ReflexPolicy implements Policy {
                     }));
             return;
         }
-        choices.add(new Choice("door", new Intent.MoveTo(door.position()),
-                "walk to a way out", score, () -> committedPortal = door));
+                // The door and how far off it is, in the goal: every diagnosis of this behaviour
+        // so far has been inference from positions, because the trace could say which
+        // kind of thing won but never which door or how distant.
+choices.add(new Choice("door", new Intent.MoveTo(door.position()),
+                "walk to a way out: " + door.name() + " "
+                        + Math.round(door.position().distance(self)) + "px away", score, () -> {
+                    committedPortal = door;
+                    // Register it as the journey too, not just as a committed portal. Two
+                    // commitment mechanisms meant a door and a conversation could both be
+                    // "under way" at once, each adding its bonus, which is the oscillation
+                    // this was all meant to stop. settingOff overwrites, so there is exactly
+                    // one thing an agent is in the middle of.
+                    settingOff("door", door.position());
+                }));
     }
 
     /**

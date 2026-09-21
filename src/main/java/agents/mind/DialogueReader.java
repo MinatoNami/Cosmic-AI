@@ -35,18 +35,37 @@ public class DialogueReader {
             You know nothing about this world except what you have seen and what you are being \
             told right now. Decide from the words themselves.
 
-            Answer with exactly one line and nothing else:
+            Answer with one decision line:
               CONTINUE   - agree, accept, or move the conversation on
               DECLINE    - refuse, or end the conversation
               CHOOSE <n> - pick option n, counting from 0, when a list is offered
+
+            If this one told you something you must do or have before it will help - a level,
+            a sum of money, an item, somewhere to be - add one more line:
+              NEEDS: <what it said you need, in a few words>
+
+            Only when a condition was actually stated. It is how you will remember to come
+            back, so write what would let you recognise the moment you qualify.
 
             Prefer CONTINUE when the NPC is offering you something, work, or information. \
             Prefer DECLINE when it would cost you something you cannot judge, or when the \
             conversation is over.""";
 
-    /** What to send back: the action byte, and a menu selection when one was asked for. */
-    public record Reply(byte action, int selection, String why) {
+    /**
+     * What to send back: the action byte, a menu selection when one was asked for, and
+     * anything the NPC said was required before it would help.
+     *
+     * @param needs what this one wants of the agent first, or null - an NPC that says "come
+     *              back at level seven with 150 mesos" has given the agent a reason to
+     *              return, and an agent that forgets the moment the window closes will only
+     *              ever hear it again by accident
+     */
+    public record Reply(byte action, int selection, String why, String needs) {
         public static final int NO_SELECTION = -1;
+
+        Reply(byte action, int selection, String why) {
+            this(action, selection, why, null);
+        }
     }
 
     /** Continue, which is what the style-byte reflex always did. */
@@ -80,6 +99,22 @@ public class DialogueReader {
      * a correct decision over a preamble helps nobody.
      */
     static Optional<Reply> parse(String answer) {
+        String found = null;
+        for (String line : answer.split("\n")) {
+            String trimmed = line.trim();
+            if (trimmed.toUpperCase().startsWith("NEEDS:")) {
+                String said = trimmed.substring(6).trim();
+                if (!said.isBlank() && !said.equalsIgnoreCase("none")) {
+                    found = said;
+                }
+            }
+        }
+        String needs = found;
+        return decisionIn(answer).map(reply ->
+                new Reply(reply.action(), reply.selection(), reply.why(), needs));
+    }
+
+    private static Optional<Reply> decisionIn(String answer) {
         String said = answer.toUpperCase();
         int choose = said.indexOf("CHOOSE");
         if (choose >= 0) {

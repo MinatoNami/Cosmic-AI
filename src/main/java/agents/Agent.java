@@ -68,7 +68,7 @@ public class Agent implements Runnable {
     private volatile boolean running = true;
 
     /** An NPC's words, out with the model, with the style byte needed to answer them. */
-    private record PendingDialogue(byte style, long askedAtMillis,
+    private record PendingDialogue(byte style, int npcId, long askedAtMillis,
                                    CompletableFuture<java.util.Optional<DialogueReader.Reply>> answer) {
     }
 
@@ -171,7 +171,8 @@ public class Agent implements Runnable {
                     (byte) dialogue.style(), NPC_YES_OR_NEXT, NO_SELECTION));
             return;
         }
-        pendingDialogue = new PendingDialogue((byte) dialogue.style(), System.currentTimeMillis(),
+        pendingDialogue = new PendingDialogue((byte) dialogue.style(), dialogue.npcId(),
+                System.currentTimeMillis(),
                 CompletableFuture.supplyAsync(() -> dialogueReader.read(dialogue), reading));
     }
 
@@ -198,6 +199,16 @@ public class Agent implements Runnable {
                     .orElse(DialogueReader.CONTINUE);
         } else {
             pending.answer().cancel(true);
+        }
+
+        // An NPC that named a condition has given the agent a reason to come back. Recorded
+        // as hearsay about that NPC, because being told something is not the same as knowing
+        // it - and it puts the errand in the belief graph, where the agent can act on it and
+        // a person can read it, rather than evaporating when the dialogue window closes.
+        if (reply.needs() != null && pending.npcId() > 0) {
+            mind.hear("npc:" + pending.npcId(), "wants_first", reply.needs(),
+                    perceiver.currentTick());
+            log.info("{} was told npc:{} wants {}", mind.name(), pending.npcId(), reply.needs());
         }
 
         log.debug("{} answers the NPC: {}", mind.name(), reply.why());
