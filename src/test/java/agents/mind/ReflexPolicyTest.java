@@ -3,6 +3,7 @@ package agents.mind;
 import agents.Mind;
 import agents.percept.Observation;
 import agents.trace.Trace;
+import agents.world.KnownWorld;
 import agents.world.WorldModel;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -11,6 +12,7 @@ import org.junit.jupiter.api.io.TempDir;
 import java.awt.Point;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
 import java.util.Random;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -214,5 +216,114 @@ class ReflexPolicyTest {
 
         assertEquals("east00", chosen.name(),
                 "it walked in beside west00, so east00 is the one that leads onward");
+    }
+
+    /**
+     * Every door in this room has been opened and leads somewhere the agent has been. The
+     * thing it needs to remember is two maps away, and nothing in front of it says so.
+     *
+     * This is the stall that ran for hours: nine maps, every known exit leading back into
+     * them, and one map - visited once and left by the door it came in - still holding an
+     * unopened door that was the way off the island. Picking the best door in the room
+     * cannot fix that, however the preferences are ranked, because the door it wants is not
+     * in the room.
+     */
+    @Test
+    void setsOffForADoorItNeverOpenedInAnotherMap() {
+        mind.take(new Observation.MapEntered(1, 20000, 0));
+        mind.take(new Observation.MapEntered(2, 30000, 0));
+        mind.take(new Observation.MapEntered(3, 10000, 0));
+        mind.infer(KnownWorld.portalRef(10000, "west00"), "leads_to",
+                KnownWorld.mapRef(20000), 4);
+        mind.infer(KnownWorld.portalRef(10000, "east00"), "leads_to",
+                KnownWorld.mapRef(30000), 4);
+        mind.saw(KnownWorld.mapRef(30000), "has_door", "north00", 4);
+
+        ReflexPolicy policy = new ReflexPolicy(new Random(1), Disposition.WANDERER);
+        // Walked in beside east00, so the sense-of-direction tie-break on its own would send
+        // it west. Only the route knows better.
+        policy.cameInAt(new Point(500, 0));
+
+        WorldModel.PortalTarget chosen = policy.pickDoor(
+                List.of(new WorldModel.PortalTarget("west00", new Point(-500, 0)),
+                        new WorldModel.PortalTarget("east00", new Point(500, 0))),
+                mind, 10000, "player:1");
+
+        assertEquals("east00", chosen.name(),
+                "the only unopened door it knows of is through east00, one map along");
+    }
+
+    /**
+     * An NPC named a price. The agent could not pay it, went away, levelled up, and now can.
+     *
+     * The belief was already being written down and nothing read it, so the one instruction
+     * that leads off Maple Island was recorded faithfully and then ignored forever.
+     */
+    @Test
+    void goesBackToAnNpcOnceItCanPayWhatItAsked() {
+        mind.take(new Observation.MapEntered(1, 20000, 0));
+        mind.take(new Observation.MapEntered(2, 30000, 0));
+        mind.take(new Observation.MapEntered(3, 10000, 0));
+        mind.take(new Observation.StatsChanged(4, Map.of("LEVEL", 12, "MESO", 900)));
+        mind.hear("npc:22000", "wants_first", "be level 6 and bring 150 mesos", 5);
+        mind.infer("npc:22000", "present_in", KnownWorld.mapRef(20000), 5);
+        mind.infer(KnownWorld.portalRef(10000, "west00"), "leads_to",
+                KnownWorld.mapRef(20000), 5);
+        mind.infer(KnownWorld.portalRef(10000, "east00"), "leads_to",
+                KnownWorld.mapRef(30000), 5);
+        mind.saw(KnownWorld.mapRef(30000), "has_door", "north00", 5);
+
+        world.update(new Observation.MapEntered(6, 10000, 0));
+        world.update(new Observation.StatsChanged(6, Map.of("LEVEL", 12)));
+
+        ReflexPolicy policy = new ReflexPolicy(new Random(1), Disposition.WANDERER);
+        policy.decide(mind, world, 6);          // notices what it is owed
+        // Walked in beside west00, so both the direction tie-break and the unopened door it
+        // knows of point east. Only the errand points back the other way.
+        policy.cameInAt(new Point(-500, 0));
+
+        WorldModel.PortalTarget chosen = policy.pickDoor(
+                List.of(new WorldModel.PortalTarget("west00", new Point(-500, 0)),
+                        new WorldModel.PortalTarget("east00", new Point(500, 0))),
+                mind, 10000, "player:1");
+
+        assertEquals("west00", chosen.name(),
+                "the errand is west; the unopened door east is the more interesting trip "
+                        + "and it should still lose to a conversation it can now afford");
+    }
+
+    @Test
+    void willNotSetOffForAnNpcItStillCannotAfford() {
+        mind.take(new Observation.MapEntered(1, 20000, 0));
+        mind.take(new Observation.MapEntered(2, 10000, 0));
+        mind.hear("npc:22000", "wants_first", "come back at level 30", 3);
+        mind.infer("npc:22000", "present_in", KnownWorld.mapRef(20000), 3);
+
+        world.update(new Observation.StatsChanged(4, Map.of("LEVEL", 12)));
+
+        ReflexPolicy policy = new ReflexPolicy(new Random(1), Disposition.WANDERER);
+        policy.decide(mind, world, 4);
+
+        assertFalse(policy.decide(mind, world, 5).goal().contains("errand"),
+                "level 12 is not level 30, so there is nothing to go back for yet");
+    }
+
+    @Test
+    void readsAPriceOutOfWhateverTheNpcActuallySaid() {
+        assertTrue(ReflexPolicy.canPay("you must be level 6 and have 150 mesos", 10, 200));
+        assertFalse(ReflexPolicy.canPay("you must be level 6 and have 150 mesos", 3, 200));
+        assertFalse(ReflexPolicy.canPay("you must be level 6 and have 150 mesos", 10, 20));
+        assertTrue(ReflexPolicy.canPay("1,500 mesos", 1, 2000));
+        assertFalse(ReflexPolicy.canPay("1,500 mesos", 1, 900));
+    }
+
+    /**
+     * Taking silence for consent, on purpose: the condition is free text from a model
+     * reading an NPC, and an unreadable one should send the agent back to ask rather than
+     * write the NPC off. One wasted conversation is cheaper than a missed way out.
+     */
+    @Test
+    void goesAndAsksAgainWhenItCannotTellWhatWasAskedFor() {
+        assertTrue(ReflexPolicy.canPay("prove yourself worthy first", 1, 0));
     }
 }

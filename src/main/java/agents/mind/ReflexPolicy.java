@@ -2,6 +2,7 @@ package agents.mind;
 
 import agents.Mind;
 import agents.memory.Belief;
+import agents.world.KnownWorld;
 import agents.world.QuestBoard;
 import agents.world.WorldModel;
 
@@ -15,6 +16,8 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Random;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Fixed rules, no model, no reasoning.
@@ -163,6 +166,16 @@ public class ReflexPolicy implements Policy {
     private static final double URGED = 0.3;
 
     /**
+     * How much an NPC's unfinished business is worth against the pull of whatever is in
+     * front of the agent right now.
+     *
+     * Enough to get it walking to the door while there are still monsters about, not enough
+     * to walk past a monster hitting it. Being owed a conversation is a strong reason to
+     * travel and a weak reason to ignore your own health.
+     */
+    private static final double ERRAND = 0.6;
+
+    /**
      * The door just walked through, held until the next map arrives so the agent can find out
      * where it went.
      *
@@ -238,6 +251,20 @@ public class ReflexPolicy implements Policy {
     private String journeyKind;
     private Point journeyTo;
 
+    /**
+     * An NPC that told this agent what it needed first, and the map it was standing in.
+     *
+     * The agent was already writing these down - an NPC that says "come back when you are
+     * level six and have a hundred and fifty mesos" produces a {@code wants_first} belief -
+     * and then nothing whatsoever read them. So it heard the one instruction that leads off
+     * the island, recorded it faithfully, walked away and never went back.
+     *
+     * Holding the errand is the other half: once the agent can pay what was asked, the map
+     * that NPC was in stops being just another map and becomes somewhere it is going.
+     */
+    private String errandMap;
+    private int errandNpc = -1;
+
     public ReflexPolicy(Random random) {
         this(random, Disposition.WANDERER);
     }
@@ -282,6 +309,13 @@ public class ReflexPolicy implements Policy {
             doorInMind = null;
             journeyKind = null;         // and nothing here is where we were going
             arrivedAt = world.selfPosition();
+            // Write down which doors this place has. Noticing the exits of the room you are
+            // standing in is looking, not deduction - and it is the one thing that lets an
+            // agent realise, from two maps away, that it left one of them unopened. Without
+            // it the frontier is invisible the moment you walk out.
+            for (WorldModel.PortalTarget door : world.portals()) {
+                mind.saw(KnownWorld.mapRef(world.mapId()), "has_door", door.name(), tick);
+            }
         }
         decisionsHere++;
         decisionsMade++;
@@ -292,6 +326,8 @@ public class ReflexPolicy implements Policy {
         } else {
             decisionsSinceProgress++;
         }
+
+        takeStockOfWhatIsOwed(mind, world);
 
         Set<Integer> unfinished = startedQuests(mind);
 
@@ -498,12 +534,18 @@ public class ReflexPolicy implements Policy {
             Optional<Integer> offer = QuestBoard.offeredBy(npc.typeId()).stream()
                     .filter(q -> !questsTried.contains(q))
                     .findFirst();
+            // The NPC that named a price this agent can now pay is the one it came back
+            // for, so neither "said hello recently" nor an ordinary quest marker should be
+            // able to talk it out of the conversation it made the journey for.
+            boolean cameBackFor = npc.typeId() == errandNpc;
             Integer greeted = greetedAt.get(npc.typeId());
-            if (offer.isEmpty() && greeted != null && decisionsMade - greeted < WORTH_ANOTHER_ASK) {
+            if (offer.isEmpty() && !cameBackFor
+                    && greeted != null && decisionsMade - greeted < WORTH_ANOTHER_ASK) {
                 return;     // nothing new to say to this one, for now
             }
             // Something on offer is worth crossing a map for; a chat is worth a wander.
-            double appeal = offer.isPresent() ? 0.7 : 0.2 + disposition.curiosity() * 0.3;
+            double appeal = cameBackFor ? 1.0
+                    : offer.isPresent() ? 0.7 : 0.2 + disposition.curiosity() * 0.3;
             double score = appeal + NEGLECT_MATTERS * neglect("talk") + urgeFor("talk")
                     + commitmentTo("talk", npc.position());
 
@@ -569,9 +611,13 @@ public class ReflexPolicy implements Policy {
         // out because a map is spent, not because it has not walked out lately. With neglect
         // in, the door won every attention span regardless, and since reaching one costs
         // dozens of steps the agent spent 88% of its life walking to exits.
+        // An errand is the one reason to leave that does not have to wait for a map to wear
+        // out. Everything else here is a measure of boredom; this is the agent knowing where
+        // it is going and what is waiting when it arrives.
         double wornOut = Math.min(1.0, (double) decisionsHere / disposition.patience());
         double score = (0.3 + disposition.wanderlust()) * wornOut
                 + (stale ? 1.0 : 0)
+                + (errandMap != null ? ERRAND : 0)
                 + urgeFor("door")
                 + (alreadyOnTheWay ? COMMITTED : 0);
 
@@ -593,10 +639,10 @@ public class ReflexPolicy implements Policy {
                     }));
             return;
         }
-                // The door and how far off it is, in the goal: every diagnosis of this behaviour
-        // so far has been inference from positions, because the trace could say which
-        // kind of thing won but never which door or how distant.
-choices.add(new Choice("door", new Intent.MoveTo(door.position()),
+        // The door and how far off it is, in the goal: every diagnosis of this behaviour so
+        // far has been inference from positions, because the trace could say which kind of
+        // thing won but never which door or how distant.
+        choices.add(new Choice("door", new Intent.MoveTo(door.position()),
                 "walk to a way out: " + door.name() + " "
                         + Math.round(door.position().distance(self)) + "px away ["
                         + whyThisDoor + "]", score, () -> {
@@ -703,6 +749,7 @@ choices.add(new Choice("door", new Intent.MoveTo(door.position()),
         if (portals.isEmpty()) {
             return null;
         }
+        KnownWorld known = KnownWorld.rememberedBy(mind.semantic().liveBeliefs());
         Set<String> beenThere = mapsVisited(mind);
         Set<String> companionsAre = companionMaps(mind, mapId, selfRef);
 
@@ -711,66 +758,91 @@ choices.add(new Choice("door", new Intent.MoveTo(door.position()),
         List<WorldModel.PortalTarget> towardsSomewhereNew = new ArrayList<>();
         List<WorldModel.PortalTarget> worthTrying = new ArrayList<>();
         for (WorldModel.PortalTarget portal : portals) {
-            Optional<String> leadsTo = destinationOf(mind, portalRef(mapId, portal.name()));
+            Optional<String> leadsTo =
+                    known.destinationOf(KnownWorld.portalRef(mapId, portal.name()));
             if (leadsTo.filter(NOWHERE::equals).isPresent()) {
                 continue;       // tried it, nothing happened, not trying it again
             }
             worthTrying.add(portal);
-            if (leadsTo.isPresent() && companionsAre.contains(leadsTo.get())) {
-                towardsCompany.add(portal);
-            } else if (leadsTo.isEmpty()) {
+            // Somewhere new is tested before company, so a door that is both counts as new.
+            // The other way round, a companion standing in a map this agent had never seen
+            // turned the most interesting door on the map into the lowest-ranked one.
+            if (leadsTo.isEmpty()) {
                 untried.add(portal);
             } else if (!beenThere.contains(leadsTo.get())) {
                 towardsSomewhereNew.add(portal);
+            } else if (companionsAre.contains(leadsTo.get())) {
+                towardsCompany.add(portal);
             }
         }
 
-        // Company first, and only because someone said where they were and this agent had
-        // already learned which door goes there. Both halves are things it found out.
         // The last resort is every door still worth trying, not every door there is. Falling
         // back to the full list handed the duds straight back, which is how an agent walked
         // into the same dead tutorial portal fifty-two times while believing it led nowhere.
         if (worthTrying.isEmpty()) {
             return null;        // no way out of here that works; get on with what is here
         }
-        // Unopened first, then company, then merely somewhere new.
-        //
-        // Company came first and two agents locked each other in place: the fighter settled in
-        // Dangerous Forest and said so, the wanderer arrived in Amherst, heard where its
-        // companion was, and turned round - past two doors it had never opened, one of which
-        // is the road to Southperry and off the island. Neither wanting company nor wanting
-        // to see what is through that door is wrong; an absolute ordering between them is.
-        // Unopened, then somewhere it has not been, then anything that works - and company
-        // last of all.
-        //
-        // Company has now caused the same stall twice, one level apart. First above unopened
-        // doors, which turned two agents into a two-map orbit. Then above "somewhere new",
-        // which stalled exploration at exactly the moment a map ran out of unopened doors -
-        // the moment the agent should be pushing on. Both times the pull back to a stationary
-        // companion beat the pull outward.
-        //
-        // Cooperation does not need this to work. Agents still hear each other's positions,
-        // still adopt what they are told, and still end up in the same map often enough to
-        // talk - what they lose is a standing preference to walk back to each other, which is
-        // the part that was stopping either of them going anywhere.
-        List<WorldModel.PortalTarget> preferred = !untried.isEmpty() ? untried
-                : !towardsSomewhereNew.isEmpty() ? towardsSomewhereNew
-                : !worthTrying.isEmpty() ? worthTrying
-                : towardsCompany;
-        whyThisDoor = (preferred == untried ? "untried" : preferred == towardsCompany ? "company"
-                : preferred == towardsSomewhereNew ? "somewhere new" : "last resort")
-                + " " + preferred.size() + "/" + portals.size();
 
-        // Onward rather than back. Among equally unopened doors, the one furthest from where
-        // the agent walked in is the one that keeps it going in the direction it was already
-        // heading - which is all "explore outward" can honestly mean to something that has
-        // never seen a map of the world.
-        if (arrivedAt != null && preferred.size() > 1) {
-            return preferred.stream()
-                    .max(Comparator.comparingDouble(p -> p.position().distance(arrivedAt)))
+        // An unopened door in this very room beats any plan, because it is the cheapest
+        // possible way to learn something and the plan would only be a longer way round to
+        // an equivalent door.
+        if (!untried.isEmpty()) {
+            whyThisDoor = "untried " + untried.size() + "/" + portals.size();
+            return onwardOf(untried);
+        }
+
+        // Nothing unopened here. This is the moment three separate orderings of the tiers
+        // below all failed at: every door in the room leads somewhere the agent has been, so
+        // whichever it picks it is going round its own loop again. An agent spent hours like
+        // this inside nine maps, one of which it had visited and left by the door it came in
+        // - and the door it never opened there was the way off the island.
+        //
+        // So stop choosing between the doors in this room and ask a larger question: where
+        // is the edge of what I know, and which way is it from here? The answer is a walk
+        // several maps long, and only its first step is taken now; the rest is re-derived on
+        // arrival, which is the honest way for something that learns as it walks to hold a
+        // plan. An errand - an NPC that named a price this agent can now pay - outranks
+        // curiosity, because it is the one journey with a known reward at the end of it.
+        String here = KnownWorld.mapRef(mapId);
+        Optional<KnownWorld.Route> route = Optional.ofNullable(errandMap)
+                .flatMap(target -> known.routeTo(here, target))
+                .or(() -> known.routeToNearestFrontier(here));
+        Optional<WorldModel.PortalTarget> planned = route.flatMap(plan -> portals.stream()
+                .filter(portal -> portal.name().equals(plan.firstDoor()))
+                .findFirst());
+        if (planned.isPresent()) {
+            KnownWorld.Route plan = route.orElseThrow();
+            boolean onAnErrand = plan.towards().equals(errandMap);
+            whyThisDoor = (onAnErrand ? "errand" : "frontier") + " " + plan.hops() + " maps off";
+            return planned.get();
+        }
+
+        // No route either: the agent has opened every door it has ever seen, or the one it
+        // wants is not in this room. Back to picking the least stale door here.
+        List<WorldModel.PortalTarget> preferred = !towardsSomewhereNew.isEmpty()
+                ? towardsSomewhereNew
+                : !worthTrying.isEmpty() ? worthTrying : towardsCompany;
+        whyThisDoor = (preferred == towardsSomewhereNew ? "somewhere new"
+                : preferred == towardsCompany ? "company" : "last resort")
+                + " " + preferred.size() + "/" + portals.size();
+        return onwardOf(preferred);
+    }
+
+    /**
+     * Onward rather than back. Among equally good doors, the one furthest from where the
+     * agent walked in is the one that keeps it going in the direction it was already
+     * heading - which is all "explore outward" can honestly mean to something that has never
+     * seen a map of the world. It is a tie-break and nothing more: it misreads a map entered
+     * from the middle, and now that routing exists it is no longer carrying the whole weight
+     * of the agent's sense of direction.
+     */
+    private WorldModel.PortalTarget onwardOf(List<WorldModel.PortalTarget> doors) {
+        if (arrivedAt != null && doors.size() > 1) {
+            return doors.stream()
+                    .max(Comparator.comparingDouble(door -> door.position().distance(arrivedAt)))
                     .orElseThrow();
         }
-        return preferred.get(random.nextInt(preferred.size()));
+        return doors.get(random.nextInt(doors.size()));
     }
 
     /**
@@ -814,17 +886,108 @@ choices.add(new Choice("door", new Intent.MoveTo(door.position()),
         return maps;
     }
 
-    private static Optional<String> destinationOf(Mind mind, String portal) {
+    /**
+     * Looks through what NPCs have asked for and works out whether any of it is now payable.
+     *
+     * Re-read every decision rather than cached, because the two things that change the
+     * answer - the agent's level and its purse - change without warning, and the whole point
+     * is to notice the moment a condition that was out of reach stops being so.
+     *
+     * An NPC spoken to recently is skipped even when its price is met. Without that the
+     * agent walks back the instant it is told something, is told the same thing again, and
+     * walks back again; {@link #WORTH_ANOTHER_ASK} already encodes how long "recently"
+     * should be for exactly this reason.
+     */
+    private void takeStockOfWhatIsOwed(Mind mind, WorldModel world) {
+        errandMap = null;
+        errandNpc = -1;
+        int mesos = mesosHeld(mind);
+        String here = KnownWorld.mapRef(world.mapId());
+        for (Belief belief : mind.semantic().liveBeliefs()) {
+            if (!belief.predicate().equals("wants_first")
+                    || !belief.subject().startsWith("npc:")) {
+                continue;
+            }
+            if (!canPay(belief.object(), world.level(), mesos)) {
+                continue;
+            }
+            int npcId = npcIdIn(belief.subject());
+            Integer spokenAt = greetedAt.get(npcId);
+            if (npcId < 0 || (spokenAt != null && decisionsMade - spokenAt < WORTH_ANOTHER_ASK)) {
+                continue;
+            }
+            Optional<String> whereItWas = lastSeenIn(mind, belief.subject());
+            if (whereItWas.isEmpty()) {
+                continue;       // heard the condition, never saw where; nothing to walk to
+            }
+            errandNpc = npcId;
+            if (!whereItWas.get().equals(here)) {
+                errandMap = whereItWas.get();
+            }
+            return;             // one errand at a time; a plan you keep changing is not one
+        }
+    }
+
+    /**
+     * Whether what an NPC asked for is something the agent now has.
+     *
+     * The condition is free text, because it came back from a model reading the NPC's own
+     * words, so this reads what it can out of it and takes silence for consent. An
+     * unparseable condition means the agent goes back and asks - which is what a player does
+     * when they half-remember being told to come back later, and costs one conversation.
+     */
+    static boolean canPay(String asked, int level, int mesos) {
+        Matcher wantsLevel = LEVEL_ASKED.matcher(asked);
+        if (wantsLevel.find() && level < Integer.parseInt(wantsLevel.group(1))) {
+            return false;
+        }
+        Matcher wantsMesos = MESOS_ASKED.matcher(asked);
+        return !wantsMesos.find()
+                || mesos >= Integer.parseInt(wantsMesos.group(1).replace(",", ""));
+    }
+
+    private static final Pattern LEVEL_ASKED =
+            Pattern.compile("(?:level|lv\\.?)\\s*(\\d+)", Pattern.CASE_INSENSITIVE);
+    private static final Pattern MESOS_ASKED =
+            Pattern.compile("([\\d,]+)\\s*mesos?", Pattern.CASE_INSENSITIVE);
+
+    /** What the agent last knew about its own purse, which the server tells it as a stat. */
+    private static int mesosHeld(Mind mind) {
         return mind.semantic().liveBeliefs().stream()
-                .filter(b -> b.subject().equals(portal) && b.predicate().equals("leads_to"))
+                .filter(b -> b.subject().equals("self") && b.predicate().equals("meso"))
+                .map(Belief::object)
+                .findFirst()
+                .map(held -> {
+                    try {
+                        return Integer.parseInt(held);
+                    } catch (NumberFormatException notANumber) {
+                        return 0;
+                    }
+                })
+                .orElse(0);
+    }
+
+    /** The map an NPC was last perceived in, whether by seeing it or by talking to it. */
+    private static Optional<String> lastSeenIn(Mind mind, String npcRef) {
+        return mind.semantic().liveBeliefs().stream()
+                .filter(b -> b.subject().equals(npcRef)
+                        && (b.predicate().equals("present_in") || b.predicate().equals("talks_in")))
                 .map(Belief::object)
                 .findFirst();
     }
 
+    private static int npcIdIn(String npcRef) {
+        try {
+            return Integer.parseInt(npcRef.substring("npc:".length()));
+        } catch (NumberFormatException notAnId) {
+            return -1;
+        }
+    }
+
     /** Where a door goes when walking into it does nothing at all. */
-    private static final String NOWHERE = "nowhere";
+    private static final String NOWHERE = KnownWorld.NOWHERE;
 
     private static String portalRef(int mapId, String name) {
-        return "portal:" + mapId + "/" + name;
+        return KnownWorld.portalRef(mapId, name);
     }
 }

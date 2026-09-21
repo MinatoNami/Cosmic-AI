@@ -114,6 +114,19 @@ public class Mind implements AutoCloseable {
     }
 
     /**
+     * Records something the agent is looking at.
+     *
+     * Most first-hand beliefs arrive through {@link #take}, because most of what an agent
+     * sees arrives as a packet. A few things are perceived by looking rather than by being
+     * told - the doors drawn in the map you are standing in are the case this was added for
+     * - and calling those INFERRED would be a lie about where the knowledge came from, in a
+     * memory whose whole point is that provenance is honest.
+     */
+    public void saw(String subject, String predicate, String object, long tick) {
+        assertWithProvenance(subject, predicate, object, tick, Belief.Provenance.FIRST_HAND);
+    }
+
+    /**
      * Records something the agent worked out rather than saw.
      *
      * Grounded in the latest episode, which is where the agent was standing when it drew the
