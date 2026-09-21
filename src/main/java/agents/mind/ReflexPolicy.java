@@ -740,10 +740,23 @@ choices.add(new Choice("door", new Intent.MoveTo(door.position()),
         // companion was, and turned round - past two doors it had never opened, one of which
         // is the road to Southperry and off the island. Neither wanting company nor wanting
         // to see what is through that door is wrong; an absolute ordering between them is.
+        // Unopened, then somewhere it has not been, then anything that works - and company
+        // last of all.
+        //
+        // Company has now caused the same stall twice, one level apart. First above unopened
+        // doors, which turned two agents into a two-map orbit. Then above "somewhere new",
+        // which stalled exploration at exactly the moment a map ran out of unopened doors -
+        // the moment the agent should be pushing on. Both times the pull back to a stationary
+        // companion beat the pull outward.
+        //
+        // Cooperation does not need this to work. Agents still hear each other's positions,
+        // still adopt what they are told, and still end up in the same map often enough to
+        // talk - what they lose is a standing preference to walk back to each other, which is
+        // the part that was stopping either of them going anywhere.
         List<WorldModel.PortalTarget> preferred = !untried.isEmpty() ? untried
-                : !towardsCompany.isEmpty() ? towardsCompany
                 : !towardsSomewhereNew.isEmpty() ? towardsSomewhereNew
-                : worthTrying;
+                : !worthTrying.isEmpty() ? worthTrying
+                : towardsCompany;
         whyThisDoor = (preferred == untried ? "untried" : preferred == towardsCompany ? "company"
                 : preferred == towardsSomewhereNew ? "somewhere new" : "last resort")
                 + " " + preferred.size() + "/" + portals.size();
