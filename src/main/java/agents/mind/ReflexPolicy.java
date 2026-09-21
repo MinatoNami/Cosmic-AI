@@ -186,6 +186,18 @@ public class ReflexPolicy implements Policy {
      */
     private WorldModel.PortalTarget committedPortal;
 
+    /**
+     * The door currently in mind, chosen once and kept.
+     *
+     * Separate from {@link #committedPortal}, because picking a candidate and setting off for
+     * one are different things - and conflating them has now cost an evening twice over.
+     * Committing while merely scoring gave the door a bonus on an agent's first ever decision.
+     * Not remembering the candidate at all re-rolled it whenever some other option won a
+     * decision, so an agent in Amherst, which has three unopened doors, spent four minutes
+     * walking a few steps towards one, then a few towards another, and arrived at none.
+     */
+    private WorldModel.PortalTarget doorInMind;
+
     public ReflexPolicy(Random random) {
         this(random, Disposition.WANDERER);
     }
@@ -227,6 +239,7 @@ public class ReflexPolicy implements Policy {
             decisionsHere = 0;
             decisionsSinceProgress = 0;
             committedPortal = null;     // the old map's doors are gone
+            doorInMind = null;
         }
         decisionsHere++;
         decisionsMade++;
@@ -437,8 +450,11 @@ public class ReflexPolicy implements Policy {
         // decision an agent ever made and the door beat everything for the rest of its life -
         // seven tests said so at once.
         boolean alreadyOnTheWay = committedPortal != null;
-        WorldModel.PortalTarget door = alreadyOnTheWay ? committedPortal
-                : chooseDoor(world.portals(), mind, world.mapId(), "player:" + world.characterId());
+        if (doorInMind == null) {
+            doorInMind = chooseDoor(world.portals(), mind, world.mapId(),
+                    "player:" + world.characterId());
+        }
+        WorldModel.PortalTarget door = alreadyOnTheWay ? committedPortal : doorInMind;
         if (door == null) {
             // Every door here has been tried and none of them did anything. An agent in a room
             // with no working way out should get on with what is in the room, not keep walking
@@ -481,6 +497,7 @@ public class ReflexPolicy implements Policy {
                         doorsAwaitingVerdict.putIfAbsent(portalRef(world.mapId(), door.name()),
                                 decisionsMade);
                         committedPortal = null;
+                        doorInMind = null;      // used it; next time, choose afresh
                     }));
             return;
         }
