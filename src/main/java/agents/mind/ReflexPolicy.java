@@ -57,7 +57,18 @@ public class ReflexPolicy implements Policy {
      * greeted them all again rather than walk east, and three maps from Southperry it stood in
      * Amherst having forty conversations in three minutes.
      */
-    private final Set<Integer> alreadyGreeted = new HashSet<>();
+    private final Map<Integer, Integer> greetedAt = new HashMap<>();
+
+    /**
+     * How long an agent will take "nothing to say" for an answer.
+     *
+     * Not forever, which is what a plain set of greeted NPCs amounted to. What an NPC offers
+     * changes: the one who will ferry you off Maple Island has nothing for you until you have
+     * finished enough else, and an agent that crossed it off the first time it said hello
+     * would never learn otherwise. Long enough to stop it pestering the same NPC every few
+     * seconds, short enough that a morning's progress gets a fresh hearing.
+     */
+    private static final int WORTH_ANOTHER_ASK = 600;
 
     /** Quests already started, so a refusal is not retried forever. */
     private final Set<Integer> questsTried = new HashSet<>();
@@ -472,8 +483,9 @@ public class ReflexPolicy implements Policy {
             Optional<Integer> offer = QuestBoard.offeredBy(npc.typeId()).stream()
                     .filter(q -> !questsTried.contains(q))
                     .findFirst();
-            if (offer.isEmpty() && alreadyGreeted.contains(npc.typeId())) {
-                return;     // nothing new to say to this one
+            Integer greeted = greetedAt.get(npc.typeId());
+            if (offer.isEmpty() && greeted != null && decisionsMade - greeted < WORTH_ANOTHER_ASK) {
+                return;     // nothing new to say to this one, for now
             }
             // Something on offer is worth crossing a map for; a chat is worth a wander.
             double appeal = offer.isPresent() ? 0.7 : 0.2 + disposition.curiosity() * 0.3;
@@ -501,7 +513,7 @@ public class ReflexPolicy implements Policy {
                     new Intent.TalkTo(npc.objectId(), npc.typeId(), npc.position()),
                     "say hello and see what happens", score,
                     () -> {
-                        alreadyGreeted.add(npc.typeId());
+                        greetedAt.put(npc.typeId(), decisionsMade);
                         arrived();
                     }));
         });
