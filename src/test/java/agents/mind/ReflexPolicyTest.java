@@ -176,6 +176,12 @@ class ReflexPolicyTest {
             } else {
                 lookedUp++;
             }
+            // The world has to move when the agent does, or a journey can never end. Now that
+            // setting off for something commits an agent to it, a test that leaves it rooted
+            // to the spot measures an agent walking to an NPC it can never reach.
+            if (made.intent() instanceof Intent.MoveTo going) {
+                world.movedTo(going.destination());
+            }
         }
 
         assertTrue(grinding > lookedUp, "fighting should still be what a fighter mostly does");

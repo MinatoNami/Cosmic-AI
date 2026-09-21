@@ -198,6 +198,21 @@ public class ReflexPolicy implements Policy {
      */
     private WorldModel.PortalTarget doorInMind;
 
+    /**
+     * What the agent is currently walking towards, of any kind.
+     *
+     * Only doors used to have commitment, so every other journey was re-argued from scratch
+     * every 600ms. An agent in Amherst would set off east for a door, be out-scored halfway
+     * by an NPC it owed a quest to in the west, turn round, be out-scored again, and cross
+     * the same ground for four minutes without reaching either. Watching it from inside the
+     * map is unmistakable: 1305, 1356, then 1281, 1206, 1131, 1056, 981, 906.
+     *
+     * Three door-shaped versions of this bug have been fixed tonight. This is the shape they
+     * all had: whatever you have started has to be worth more than whatever you have not.
+     */
+    private String journeyKind;
+    private Point journeyTo;
+
     public ReflexPolicy(Random random) {
         this(random, Disposition.WANDERER);
     }
@@ -240,6 +255,7 @@ public class ReflexPolicy implements Policy {
             decisionsSinceProgress = 0;
             committedPortal = null;     // the old map's doors are gone
             doorInMind = null;
+            journeyKind = null;         // and nothing here is where we were going
         }
         decisionsHere++;
         decisionsMade++;
@@ -346,6 +362,34 @@ public class ReflexPolicy implements Policy {
         urgedFor.replaceAll((kind, left) -> Math.max(0, left - 1));
     }
 
+    /**
+     * What an unfinished journey towards this thing is worth.
+     *
+     * Keyed on where it was going as well as what kind, so a new monster does not inherit the
+     * commitment earned walking towards a different one.
+     */
+    private double commitmentTo(String kind, Point target) {
+        if (!kind.equals(journeyKind) || journeyTo == null) {
+            return 0;
+        }
+        return journeyTo.distance(target) < SAME_ERRAND ? COMMITTED : 0;
+    }
+
+    /** Close enough to count as the same destination between one decision and the next. */
+    private static final int SAME_ERRAND = 120;
+
+    /** Remembers a journey begun, so the next decision knows it is already under way. */
+    private void settingOff(String kind, Point target) {
+        journeyKind = kind;
+        journeyTo = target;
+    }
+
+    /** Arrived, or done with it either way. */
+    private void arrived() {
+        journeyKind = null;
+        journeyTo = null;
+    }
+
     /** 1 when standing on it, 0 at the edge of what the agent would cross for it. */
     private static double nearness(double distance, double range) {
         return distance >= range ? 0 : 1 - distance / range;
@@ -376,14 +420,19 @@ public class ReflexPolicy implements Policy {
             if (near <= 0) {
                 return;
             }
-            double score = (0.2 + disposition.aggression()) * near + NEGLECT_MATTERS * neglect("fight") + urgeFor("fight");
-            Intent intent = distance < MELEE_RANGE
+            double score = (0.2 + disposition.aggression()) * near
+                    + NEGLECT_MATTERS * neglect("fight") + urgeFor("fight")
+                    + commitmentTo("fight", monster.position());
+            boolean withinReach = distance < MELEE_RANGE;
+            Intent intent = withinReach
                     ? new Intent.Attack(monster.objectId(), monster.position())
                     : new Intent.MoveTo(monster.position());
-            String goal = distance < MELEE_RANGE
+            String goal = withinReach
                     ? "hit what is in front of me"
                     : "get closer to the thing I can see";
-            choices.add(new Choice("fight", intent, goal, score, null));
+            Point where = monster.position();
+            choices.add(new Choice("fight", intent, goal, score,
+                    withinReach ? this::arrived : () -> settingOff("fight", where)));
         });
     }
 
@@ -398,16 +447,22 @@ public class ReflexPolicy implements Policy {
         errandFor(world, unfinished).ifPresent(errand -> {
             WorldModel.Entity host = errand.npc();
             double distance = host.position().distance(self);
-            double score = 0.8 + NEGLECT_MATTERS * neglect("errand") + urgeFor("errand");
+            double score = 0.8 + NEGLECT_MATTERS * neglect("errand") + urgeFor("errand")
+                    + commitmentTo("errand", host.position());
             if (distance >= NPC_RANGE) {
+                Point where = host.position();
                 choices.add(new Choice("errand", new Intent.MoveTo(host.position()),
-                        "go back to the one I owe something", score, null));
+                        "go back to the one I owe something", score,
+                        () -> settingOff("errand", where)));
                 return;
             }
             choices.add(new Choice("errand",
                     new Intent.CompleteQuest(errand.questId(), host.typeId(), host.position()),
                     "see if what I owe is done", score,
-                    () -> lastHandIn.put(errand.questId(), decisionsMade)));
+                    () -> {
+                        lastHandIn.put(errand.questId(), decisionsMade);
+                        arrived();
+                    }));
         });
     }
 
@@ -422,24 +477,33 @@ public class ReflexPolicy implements Policy {
             }
             // Something on offer is worth crossing a map for; a chat is worth a wander.
             double appeal = offer.isPresent() ? 0.7 : 0.2 + disposition.curiosity() * 0.3;
-            double score = appeal + NEGLECT_MATTERS * neglect("talk") + urgeFor("talk");
+            double score = appeal + NEGLECT_MATTERS * neglect("talk") + urgeFor("talk")
+                    + commitmentTo("talk", npc.position());
 
             if (distance >= NPC_RANGE) {
+                Point where = npc.position();
                 choices.add(new Choice("talk", new Intent.MoveTo(npc.position()),
-                        "go and see what that one wants", score, null));
+                        "go and see what that one wants", score,
+                        () -> settingOff("talk", where)));
                 return;
             }
             if (offer.isPresent()) {
                 choices.add(new Choice("talk",
                         new Intent.StartQuest(offer.get(), npc.typeId(), npc.position()),
                         "take whatever this one is offering", score,
-                        () -> questsTried.add(offer.get())));
+                        () -> {
+                            questsTried.add(offer.get());
+                            arrived();
+                        }));
                 return;
             }
             choices.add(new Choice("talk",
                     new Intent.TalkTo(npc.objectId(), npc.typeId(), npc.position()),
                     "say hello and see what happens", score,
-                    () -> alreadyGreeted.add(npc.typeId())));
+                    () -> {
+                        alreadyGreeted.add(npc.typeId());
+                        arrived();
+                    }));
         });
     }
 
@@ -498,6 +562,7 @@ public class ReflexPolicy implements Policy {
                                 decisionsMade);
                         committedPortal = null;
                         doorInMind = null;      // used it; next time, choose afresh
+                        arrived();
                     }));
             return;
         }
