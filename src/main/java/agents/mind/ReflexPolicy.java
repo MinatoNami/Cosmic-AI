@@ -136,7 +136,7 @@ public class ReflexPolicy implements Policy {
      * Enough to change what it does, not enough to make it ignore a monster hitting it. An
      * intention is a lean, not an order.
      */
-    private static final double URGED = 1.0;
+    private static final double URGED = 0.3;
 
     /**
      * The door just walked through, held until the next map arrives so the agent can find out
@@ -405,10 +405,16 @@ public class ReflexPolicy implements Policy {
         // every map, and the agent stopped fighting altogether: three minutes of measurement
         // came back 91% walking, 9% doors, and no combat whatsoever. A door is worth taking
         // when you have worn a place out, not the moment you get there.
+        // No neglect term here, unlike every other option. Neglect asks "when did the agent
+        // last do this", which is the right question for fighting or talking - things you do
+        // over and over in one place - and the wrong one for leaving. An agent should walk
+        // out because a map is spent, not because it has not walked out lately. With neglect
+        // in, the door won every attention span regardless, and since reaching one costs
+        // dozens of steps the agent spent 88% of its life walking to exits.
         double wornOut = Math.min(1.0, (double) decisionsHere / disposition.patience());
         double score = (0.3 + disposition.wanderlust()) * wornOut
                 + (stale ? 1.0 : 0)
-                + NEGLECT_MATTERS * neglect("door") + urgeFor("door")
+                + urgeFor("door")
                 + (alreadyOnTheWay ? COMMITTED : 0);
 
         if (door.position().distance(self) < PORTAL_RANGE) {

@@ -158,9 +158,13 @@ class ReflexPolicyTest {
      */
     @Test
     void looksUpFromFightingOftenEnoughToDoSomethingElse() {
-        // A monster permanently within reach, which is the situation that starves everything
-        // below it: hit it, loot it, and there is always another.
+        // A monster permanently within reach - the situation that starves everything else -
+        // and an NPC standing there as something else worth doing. The NPC matters: an agent
+        // alone in a field with one monster and nothing else should fight, and an earlier
+        // version of this test demanded it "look up" into an empty room, which is fidgeting
+        // rather than behaviour.
         world.update(new Observation.MonsterAppeared(2, 9001, 100100, new Point(20, 0)));
+        world.update(new Observation.NpcAppeared(2, 8001, 2100, new Point(60, 0)));
         Policy grinder = new ReflexPolicy(new Random(1), Disposition.FIGHTER);
 
         int grinding = 0;
@@ -174,9 +178,9 @@ class ReflexPolicyTest {
             }
         }
 
-        assertTrue(grinding > 0, "it should still be fighting most of the time");
+        assertTrue(grinding > lookedUp, "fighting should still be what a fighter mostly does");
         assertTrue(lookedUp > 0,
-                "it never looked up once in " + (Disposition.FIGHTER.attentionSpan() * 3)
-                        + " decisions, so nothing below the monsters can ever happen");
+                "it never did anything but fight in " + (Disposition.FIGHTER.attentionSpan() * 3)
+                        + " decisions, with an NPC standing right there");
     }
 }
