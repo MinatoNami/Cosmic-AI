@@ -146,10 +146,14 @@ public class ReflexPolicy implements Policy {
      * which is why the prompt says "you do not know where it goes". Taking one and seeing
      * where you end up is the only way to find out, and it is worth writing down.
      */
-    private String portalJustTaken;
-
-    /** When it was taken, so the agent can notice that nothing happened. */
-    private int portalTakenAt;
+    /**
+     * Doors walked into and not yet judged, against the decision each was tried on.
+     *
+     * A single slot lost every verdict but the last: the agent retried about every six
+     * decisions and waited twelve before judging, so each attempt overwrote the pending one
+     * and fifty-four tries produced a single conclusion. One entry per door instead.
+     */
+    private final Map<String, Integer> doorsAwaitingVerdict = new HashMap<>();
 
     /**
      * How long to wait for a door to do something before concluding it does not.
@@ -189,16 +193,22 @@ public class ReflexPolicy implements Policy {
         // thirty-six times in three minutes and never moved an inch. Each failure left it in
         // the same map, so the map went on wearing out, so the door scored higher, so it tried
         // again. Noticing costs one comparison and breaks the loop.
-        if (portalJustTaken != null && decisionsMade - portalTakenAt > DOOR_SHOULD_HAVE_WORKED) {
-            mind.infer(portalJustTaken, "leads_to", NOWHERE, tick);
-            portalJustTaken = null;
+        for (var awaiting = doorsAwaitingVerdict.entrySet().iterator(); awaiting.hasNext(); ) {
+            var door = awaiting.next();
+            if (decisionsMade - door.getValue() > DOOR_SHOULD_HAVE_WORKED) {
+                mind.infer(door.getKey(), "leads_to", NOWHERE, tick);
+                awaiting.remove();
+            }
         }
 
         if (world.mapId() != lastMapId) {
-            if (portalJustTaken != null && lastMapId >= 0) {
-                // Learned the hard way, which is the only way available: that door goes here.
-                mind.infer(portalJustTaken, "leads_to", "map:" + world.mapId(), tick);
-                portalJustTaken = null;
+            if (!doorsAwaitingVerdict.isEmpty() && lastMapId >= 0) {
+                // Whichever door was tried most recently is the one that worked; the rest were
+                // tried from a map we are no longer in and can never be judged now.
+                String worked = doorsAwaitingVerdict.entrySet().stream()
+                        .max(Map.Entry.comparingByValue()).orElseThrow().getKey();
+                mind.infer(worked, "leads_to", "map:" + world.mapId(), tick);
+                doorsAwaitingVerdict.clear();
             }
             lastMapId = world.mapId();
             decisionsHere = 0;
@@ -413,6 +423,10 @@ public class ReflexPolicy implements Policy {
         WorldModel.PortalTarget door = alreadyOnTheWay ? committedPortal
                 : chooseDoor(world.portals(), mind, world.mapId(), "player:" + world.characterId());
         if (door == null) {
+            // Every door here has been tried and none of them did anything. An agent in a room
+            // with no working way out should get on with what is in the room, not keep walking
+            // into the walls - which is what fifty-two attempts at one tutorial portal looked
+            // like from the outside.
             return;
         }
 
@@ -442,8 +456,8 @@ public class ReflexPolicy implements Policy {
                     new Intent.EnterPortal(door.name(), door.position()),
                     "see where this goes", score,
                     () -> {
-                        portalJustTaken = portalRef(world.mapId(), door.name());
-                        portalTakenAt = decisionsMade;
+                        doorsAwaitingVerdict.put(portalRef(world.mapId(), door.name()),
+                                decisionsMade);
                         committedPortal = null;
                     }));
             return;
@@ -540,11 +554,13 @@ public class ReflexPolicy implements Policy {
         List<WorldModel.PortalTarget> towardsCompany = new ArrayList<>();
         List<WorldModel.PortalTarget> untried = new ArrayList<>();
         List<WorldModel.PortalTarget> towardsSomewhereNew = new ArrayList<>();
+        List<WorldModel.PortalTarget> worthTrying = new ArrayList<>();
         for (WorldModel.PortalTarget portal : portals) {
             Optional<String> leadsTo = destinationOf(mind, portalRef(mapId, portal.name()));
             if (leadsTo.filter(NOWHERE::equals).isPresent()) {
                 continue;       // tried it, nothing happened, not trying it again
             }
+            worthTrying.add(portal);
             if (leadsTo.isPresent() && companionsAre.contains(leadsTo.get())) {
                 towardsCompany.add(portal);
             } else if (leadsTo.isEmpty()) {
@@ -556,10 +572,16 @@ public class ReflexPolicy implements Policy {
 
         // Company first, and only because someone said where they were and this agent had
         // already learned which door goes there. Both halves are things it found out.
+        // The last resort is every door still worth trying, not every door there is. Falling
+        // back to the full list handed the duds straight back, which is how an agent walked
+        // into the same dead tutorial portal fifty-two times while believing it led nowhere.
+        if (worthTrying.isEmpty()) {
+            return null;        // no way out of here that works; get on with what is here
+        }
         List<WorldModel.PortalTarget> preferred = !towardsCompany.isEmpty() ? towardsCompany
                 : !untried.isEmpty() ? untried
                 : !towardsSomewhereNew.isEmpty() ? towardsSomewhereNew
-                : portals;
+                : worthTrying;
         return preferred.get(random.nextInt(preferred.size()));
     }
 
