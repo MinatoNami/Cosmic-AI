@@ -146,7 +146,40 @@ class MovementSoakTest {
                 "swings went out that no client can draw: " + swings);
 
         assertItDidMoreThanGrind(traces.resolve("soak.jsonl"));
+        assertItsDoorsWorked(traces.resolve("soak.jsonl"));
     }
+
+    /**
+     * Walking into doors should occasionally put you somewhere else.
+     *
+     * A wanderer found two in Amherst that do nothing - a tutorial portal and a shop entrance -
+     * and walked into them thirty-six times in three minutes without moving. Each failure left
+     * it in the same map, so the map went on wearing out, so the door scored higher, so it
+     * tried again: 88% of its decisions were spent walking to doors that did not work.
+     *
+     * <p>Not a unit test, because portals come from Map.wz and there is none of that in a unit
+     * test - there were no doors to fail to walk through.
+     */
+    private static void assertItsDoorsWorked(Path trace) throws Exception {
+        int tried = 0;
+        int arrived = 0;
+        for (String line : Files.readAllLines(trace)) {
+            if (line.contains("\"intent\":\"EnterPortal\"")) {
+                tried++;
+            }
+            if (line.contains("MapEntered")) {
+                arrived++;
+            }
+        }
+        if (tried >= DOORS_BEFORE_ONE_SHOULD_WORK) {
+            assertTrue(arrived > 0,
+                    "walked into " + tried + " doors and never arrived anywhere - nothing is "
+                            + "noticing that they do not work");
+        }
+    }
+
+    /** Below this, a run of unlucky doors is plausible. Above it, something is wrong. */
+    private static final int DOORS_BEFORE_ONE_SHOULD_WORK = 5;
 
     /**
      * An agent that fights must also do something that is not fighting.

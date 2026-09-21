@@ -148,6 +148,16 @@ public class ReflexPolicy implements Policy {
      */
     private String portalJustTaken;
 
+    /** When it was taken, so the agent can notice that nothing happened. */
+    private int portalTakenAt;
+
+    /**
+     * How long to wait for a door to do something before concluding it does not.
+     *
+     * Generous: a map change is several packets and the agent decides every 600ms.
+     */
+    private static final int DOOR_SHOULD_HAVE_WORKED = 12;
+
     /**
      * The portal currently being walked to.
      *
@@ -174,6 +184,16 @@ public class ReflexPolicy implements Policy {
 
     @Override
     public Decision decide(Mind mind, WorldModel world, long tick) {
+        // A door that did nothing is worth knowing about. An agent found two in Amherst -
+        // tuto00 and in00, a tutorial portal and a shop entrance - walked into them
+        // thirty-six times in three minutes and never moved an inch. Each failure left it in
+        // the same map, so the map went on wearing out, so the door scored higher, so it tried
+        // again. Noticing costs one comparison and breaks the loop.
+        if (portalJustTaken != null && decisionsMade - portalTakenAt > DOOR_SHOULD_HAVE_WORKED) {
+            mind.infer(portalJustTaken, "leads_to", NOWHERE, tick);
+            portalJustTaken = null;
+        }
+
         if (world.mapId() != lastMapId) {
             if (portalJustTaken != null && lastMapId >= 0) {
                 // Learned the hard way, which is the only way available: that door goes here.
@@ -423,6 +443,7 @@ public class ReflexPolicy implements Policy {
                     "see where this goes", score,
                     () -> {
                         portalJustTaken = portalRef(world.mapId(), door.name());
+                        portalTakenAt = decisionsMade;
                         committedPortal = null;
                     }));
             return;
@@ -521,6 +542,9 @@ public class ReflexPolicy implements Policy {
         List<WorldModel.PortalTarget> towardsSomewhereNew = new ArrayList<>();
         for (WorldModel.PortalTarget portal : portals) {
             Optional<String> leadsTo = destinationOf(mind, portalRef(mapId, portal.name()));
+            if (leadsTo.filter(NOWHERE::equals).isPresent()) {
+                continue;       // tried it, nothing happened, not trying it again
+            }
             if (leadsTo.isPresent() && companionsAre.contains(leadsTo.get())) {
                 towardsCompany.add(portal);
             } else if (leadsTo.isEmpty()) {
@@ -586,6 +610,9 @@ public class ReflexPolicy implements Policy {
                 .map(Belief::object)
                 .findFirst();
     }
+
+    /** Where a door goes when walking into it does nothing at all. */
+    private static final String NOWHERE = "nowhere";
 
     private static String portalRef(int mapId, String name) {
         return "portal:" + mapId + "/" + name;

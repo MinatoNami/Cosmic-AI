@@ -183,4 +183,5 @@ class ReflexPolicyTest {
                 "it never did anything but fight in " + (Disposition.FIGHTER.attentionSpan() * 3)
                         + " decisions, with an NPC standing right there");
     }
+
 }
