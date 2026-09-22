@@ -12,6 +12,7 @@ import agents.percept.Perceiver;
 import agents.social.Claim;
 import agents.social.Conversation;
 import agents.social.Voice;
+import agents.world.MapGeometry;
 import agents.world.WorldModel;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -77,6 +78,7 @@ public class Agent implements Runnable {
 
     private final Disposition disposition;
     private int steps;
+    private int nowhereToGo;
     private int nextToShare;
 
     public Agent(InWorld connection, Mind mind, Policy policy, Disposition disposition) {
@@ -151,7 +153,32 @@ public class Agent implements Runnable {
                 decision.fellBackBecause());
 
         executor.execute(decision.intent(), world);
+
+        // Some maps cannot be left. Map 1020100 is an empty tutorial staging room: one
+        // portal, and it is a spawn point, so there is nothing to walk through, nobody to
+        // talk to and nothing to climb. An agent warped into one by an NPC wanders an empty
+        // box until somebody notices. Counting the decisions spent with no way out at all
+        // is how it says so; the population does the rescue, because logging back in is not
+        // something an agent can do to itself.
+        nowhereToGo = world.mapId() > 0 && MapGeometry.usablePortalsIn(world.mapId()).isEmpty()
+                ? nowhereToGo + 1
+                : 0;
     }
+
+    /**
+     * Whether this agent is somewhere with no way out and has been for long enough to be
+     * sure it is not simply mid-transition.
+     *
+     * The server's own answer to this map is forcedReturn, which it applies on login - so
+     * the recovery is to log back in, and it is verified: an agent stuck in 1020100 came
+     * back in Split Road of Destiny, exactly as that map's returnMap specifies.
+     */
+    public boolean isTrapped() {
+        return nowhereToGo > TRAPPED_AFTER;
+    }
+
+    /** Half a minute at a 600ms tick: long past any ordinary map change. */
+    private static final int TRAPPED_AFTER = 50;
 
     /**
      * Keeps an NPC conversation going without understanding a word of it.
@@ -168,7 +195,7 @@ public class Agent implements Runnable {
         // than leave a conversation open with nobody attending it.
         if (dialogueReader == null || pendingDialogue != null) {
             connection.session().send(ClientPackets.npcTalkMore(
-                    (byte) dialogue.style(), NPC_YES_OR_NEXT, NO_SELECTION));
+                    (byte) dialogue.style(), withoutReading(dialogue.style()), NO_SELECTION));
             return;
         }
         pendingDialogue = new PendingDialogue((byte) dialogue.style(), dialogue.npcId(),
@@ -199,6 +226,10 @@ public class Agent implements Runnable {
                     .orElse(DialogueReader.CONTINUE);
         } else {
             pending.answer().cancel(true);
+            // Out of patience is not the same as having decided. Whatever the question was,
+            // nobody read it, so it gets the same answer as if there were no model at all.
+            reply = new DialogueReader.Reply(withoutReading(pending.style()),
+                    DialogueReader.Reply.NO_SELECTION, "nobody read it in time", null);
         }
 
         // An NPC that named a condition has given the agent a reason to come back. Recorded
@@ -219,7 +250,31 @@ public class Agent implements Runnable {
 
     /** Action 1 means yes, or next, depending on what was asked. */
     private static final byte NPC_YES_OR_NEXT = 1;
+    private static final byte NPC_NO = 0;
     private static final int NO_SELECTION = -1;
+
+    /** sendYesNo and sendAcceptDecline: the two styles that ask rather than tell. */
+    private static final int YES_OR_NO = 1;
+    private static final int ACCEPT_OR_DECLINE = 0x0C;
+
+    /**
+     * What to answer when nobody read the question.
+     *
+     * Saying yes to everything is how an agent left Maple Island at level three. NPC 2007
+     * stands a few steps from where every character starts and asks "would you like to skip
+     * the tutorials and head straight to Lith Harbor?"; another warped one into an empty
+     * tutorial room it could not walk out of. Both were offers, and both were accepted by
+     * something with no way of reading them.
+     *
+     * So a question gets a no and a statement gets an acknowledgement. This does cut both
+     * ways: a reflex agent will now decline the ferry it actually wants as readily as the
+     * shortcut it does not, because the control condition genuinely cannot tell them apart.
+     * That is the honest position for it to be in - accepting everything only looked like
+     * progress because nobody was counting what it agreed to.
+     */
+    static byte withoutReading(int style) {
+        return style == YES_OR_NO || style == ACCEPT_OR_DECLINE ? NPC_NO : NPC_YES_OR_NEXT;
+    }
 
     /**
      * Answers questions put to it, and picks up claims other agents make.

@@ -49,7 +49,12 @@ public class DialogueReader {
 
             Prefer CONTINUE when the NPC is offering you something, work, or information. \
             Prefer DECLINE when it would cost you something you cannot judge, or when the \
-            conversation is over.""";
+            conversation is over.
+
+            Take particular care with an offer to take you somewhere. Being moved is not \
+            easily undone: it can skip everything you were in the middle of, or put you \
+            somewhere with no way back. Say CONTINUE only if going there is what you \
+            actually wanted.""";
 
     /**
      * What to send back: the action byte, a menu selection when one was asked for, and

@@ -71,6 +71,7 @@ public class Population {
             });
 
     private String policyName = "reflex";
+    private Oracle oracle;
     private long startedAt;
 
     public Population(String host, int port, Path dataDirectory) {
@@ -82,8 +83,15 @@ public class Population {
                 SAVE_EVERY_SECONDS, SAVE_EVERY_SECONDS, TimeUnit.SECONDS);
     }
 
-    /** One agent, with everything needed to stop it and write it down. */
-    private record Running(String name, Agent agent, Thread thread, Mind mind) {
+    /**
+     * One agent, with everything needed to stop it, write it down, and wake it again.
+     *
+     * The index and the phase are kept because a reconnect has to produce the same agent it
+     * replaced - same disposition, same place in the deliberation cycle - rather than a
+     * fresh one that happens to share a name.
+     */
+    private record Running(String name, int index, int phase, Agent agent, Thread thread,
+                           Mind mind) {
     }
 
     public synchronized boolean isRunning() {
@@ -149,19 +157,11 @@ public class Population {
                             mind.semantic().size());
                 }
 
-                Policy reflex = new ReflexPolicy(random, disposition);
                 // Spread the asking evenly around the cycle rather than having everyone ask
                 // on their first decision: one laptop model, three prompts at once, is how
                 // three deliberations ran out of token budget together.
                 int phase = count <= 1 ? 0 : (i * LOCAL_DELIBERATE_EVERY) / count;
-                Policy policy = oracle == null ? reflex
-                        : new LlmPolicy(oracle, reflex, LOCAL_DELIBERATE_EVERY, phase);
-                Agent agent = new Agent(connection, mind, policy, disposition);
-                agent.resumeAt(resumedAt);
-
-                Thread thread = new Thread(agent, name);
-                thread.start();
-                running.add(new Running(name, agent, thread, mind));
+                running.add(wake(name, i, phase, connection, mind, resumedAt));
                 awake.add(name);
             } catch (Exception e) {
                 log.error("{} failed to enter the world", name, e);
@@ -169,6 +169,74 @@ public class Population {
         }
         startedAt = System.currentTimeMillis();
         return awake;
+    }
+
+    /**
+     * Builds and starts one agent around a mind and a live connection.
+     *
+     * Shared by the first start and by a reconnect, so the agent that comes back is the one
+     * that went away: same disposition, same policy, same place in the deliberation cycle.
+     */
+    private Running wake(String name, int index, int phase, InWorld connection, Mind mind,
+                         long resumedAt) {
+        Random random = new Random(name.hashCode());
+        Disposition disposition = Disposition.forAgent(index);
+        Policy reflex = new ReflexPolicy(random, disposition);
+        Policy policy = oracle == null ? reflex
+                : new LlmPolicy(oracle, reflex, LOCAL_DELIBERATE_EVERY, phase);
+        Agent agent = new Agent(connection, mind, policy, disposition);
+        agent.resumeAt(resumedAt);
+
+        Thread thread = new Thread(agent, name);
+        thread.start();
+        return new Running(name, index, phase, agent, thread, mind);
+    }
+
+    /**
+     * Logs back in any agent that has ended up somewhere with no way out.
+     *
+     * Some maps cannot be left by walking. Map 1020100 is an empty tutorial staging room -
+     * one portal, and it is a spawn point - and an agent warped into one by an NPC has no
+     * action available to it at all. The server's own answer is that map's forcedReturn,
+     * which it applies on login, so the recovery is to log back in. Verified: an agent stuck
+     * in 1020100 came back in Split Road of Destiny, exactly as its returnMap specifies.
+     *
+     * The mind is carried across rather than reloaded, so being rescued costs the agent
+     * nothing it had learned. The old session is stopped and joined before the new login,
+     * because two sessions for one character is the failure this class exists to avoid.
+     */
+    private synchronized void rescueTheTrapped() {
+        for (Running stuck : List.copyOf(running)) {
+            if (!stuck.agent().isTrapped()) {
+                continue;
+            }
+            log.warn("{} is in map {} with no way out - logging it back in",
+                    stuck.name(), stuck.agent().world().mapId());
+            long reachedTick = stuck.agent().tick();
+            stuck.agent().stop();
+            try {
+                stuck.thread().join(TimeUnit.SECONDS.toMillis(5));
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+                return;
+            }
+            running.remove(stuck);
+            try {
+                LoginFlow flow = new LoginFlow(host, port, WORLD, CHANNEL,
+                        new Random(stuck.name().hashCode()));
+                InWorld connection = flow.enterWorld(
+                        new Credentials(stuck.name().toLowerCase(), PASSWORD), stuck.name());
+                running.add(wake(stuck.name(), stuck.index(), stuck.phase(),
+                        connection, stuck.mind(), reachedTick));
+                log.info("{} is back in, now in map {}", stuck.name(),
+                        stuck.agent().world().mapId());
+            } catch (Exception couldNotReturn) {
+                // Its mind is still held and still saved; it simply is not in the world.
+                // Better than a half-started agent nobody can stop.
+                log.error("{} could not be logged back in", stuck.name(), couldNotReturn);
+                stuck.mind().close();
+            }
+        }
     }
 
     /** Stops everything and writes every mind down before letting go of it. */
@@ -205,6 +273,11 @@ public class Population {
             save();
         } catch (RuntimeException e) {
             log.error("Scheduled save failed", e);
+        }
+        try {
+            rescueTheTrapped();
+        } catch (RuntimeException e) {
+            log.error("Rescue failed", e);
         }
     }
 

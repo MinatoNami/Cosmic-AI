@@ -94,4 +94,20 @@ class MapGeometryTest {
         assertTrue(MapGeometry.climbTowards(2000000, 1600, 416, 420).isEmpty(),
                 "a four pixel difference is not worth a ladder");
     }
+
+    /**
+     * The trap. Map 1020100 is an empty tutorial staging room: its only portal is a spawn
+     * point, which is not somewhere you can go, and it has no ropes and nobody in it. An
+     * agent warped there by an NPC has no action available to it at all, and wandered an
+     * empty box until someone noticed. Its own returnMap is Split Road of Destiny, which
+     * the server applies on login - so the recovery is to log back in.
+     */
+    @Test
+    void knowsAMapWithNoWayOutOfIt() {
+        assertTrue(MapGeometry.usablePortalsIn(1020100).isEmpty(),
+                "1020100 has one portal and it is a spawn point");
+        assertTrue(MapGeometry.climbsIn(1020100).isEmpty(), "and nothing to climb either");
+        assertFalse(MapGeometry.usablePortalsIn(1020000).isEmpty(),
+                "Split Road of Destiny, where it returns to, does have ways out");
+    }
 }
