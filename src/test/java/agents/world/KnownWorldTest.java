@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class KnownWorldTest {
@@ -157,5 +158,43 @@ class KnownWorldTest {
 
         assertEquals(Optional.empty(),
                 world().destinationOf(KnownWorld.portalRef(10000, "east00")));
+    }
+
+    /**
+     * A shop entrance is a door that works and leads somewhere the agent has been, which is
+     * exactly what the last resort settles for - so an agent with nothing better to do went
+     * into a shop, came out, and did it again for hours, in two different towns.
+     */
+    @Test
+    void knowsWhenARoomHasNothingLeftInIt() {
+        sawDoor(1000001, "out00");                  // a shop: one way out
+        doorLedTo(1000001, "out00", 1000000);
+
+        assertTrue(world().isSpentRoom(KnownWorld.mapRef(1000001)));
+    }
+
+    @Test
+    void aRoomWithAnUnopenedDoorIsNotSpent() {
+        sawDoor(1000001, "out00");
+        sawDoor(1000001, "in00");                   // a back room it has never opened
+        doorLedTo(1000001, "out00", 1000000);
+
+        assertFalse(world().isSpentRoom(KnownWorld.mapRef(1000001)));
+    }
+
+    /** Never having been somewhere is not the same as having seen all of it. */
+    @Test
+    void somewhereItHasNeverEnteredIsNotARoom() {
+        assertFalse(world().isSpentRoom(KnownWorld.mapRef(1000001)));
+    }
+
+    @Test
+    void aTownWithSeveralExitsIsNotARoom() {
+        sawDoor(1000000, "east00");
+        sawDoor(1000000, "west00");
+        doorLedTo(1000000, "east00", 20000);
+        doorLedTo(1000000, "west00", 50000);
+
+        assertFalse(world().isSpentRoom(KnownWorld.mapRef(1000000)));
     }
 }

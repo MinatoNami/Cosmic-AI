@@ -148,6 +148,7 @@ public class ReflexPolicy implements Policy {
     /** There is always something to do, even if it is only walking about. */
     private static final double WANDERING_IS_BETTER_THAN_NOTHING = 0.05;
 
+
     /** Enough that something at your feet outranks a fight, whatever your disposition. */
     private static final double UNDERFOOT = 0.8;
 
@@ -951,12 +952,25 @@ public class ReflexPolicy implements Policy {
         }
 
         // No route either: the agent has opened every door it has ever seen, or the one it
-        // wants is not in this room. Back to picking the least stale door here.
+        // wants is not in this room. Back to picking the least stale door here - but not
+        // back into a room it has already seen all of. A shop entrance is a door that works
+        // and leads somewhere it has been, which is exactly what the last resort settles
+        // for, so an agent with nothing better to do would step into a shop, step out, and
+        // do it again for hours. It did, in two different towns.
+        List<WorldModel.PortalTarget> notBackIntoARoom = worthTrying.stream()
+                .filter(portal -> known
+                        .destinationOf(KnownWorld.portalRef(mapId, portal.name()))
+                        .map(destination -> !known.isSpentRoom(destination))
+                        .orElse(true))
+                .toList();
+        List<WorldModel.PortalTarget> lastResort =
+                notBackIntoARoom.isEmpty() ? worthTrying : notBackIntoARoom;
         List<WorldModel.PortalTarget> preferred = !towardsSomewhereNew.isEmpty()
                 ? towardsSomewhereNew
-                : !worthTrying.isEmpty() ? worthTrying : towardsCompany;
+                : !lastResort.isEmpty() ? lastResort : towardsCompany;
         whyThisDoor = (preferred == towardsSomewhereNew ? "somewhere new"
-                : preferred == towardsCompany ? "company" : "last resort")
+                : preferred == towardsCompany ? "company"
+                : preferred == notBackIntoARoom ? "not a room again" : "last resort")
                 + " " + preferred.size() + "/" + portals.size();
         return onwardOf(preferred);
     }

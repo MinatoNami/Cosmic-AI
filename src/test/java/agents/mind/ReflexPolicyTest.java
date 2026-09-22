@@ -407,4 +407,89 @@ class ReflexPolicyTest {
                 assertInstanceOf(Intent.MoveTo.class, intent).destination(),
                 "it was getting closer every decision; there was nothing wrong with it");
     }
+
+    /**
+     * A shop is a room, not a place: one way out, one shopkeeper, nothing to find.
+     *
+     * Generation one shuttled between Lith Harbor and four of its shop interiors for hours;
+     * generation two did the same between Southperry and its armoury. The waste is what
+     * happens *after* the shopkeeper has been dealt with - talking goes quiet for a while,
+     * and with nothing else in the room the agent falls back to wandering the furniture.
+     * Indoors it should take the door instead, because the door is the only other thing
+     * there is.
+     */
+    @Test
+    void leavesAShopOnceItHasDealtWithTheShopkeeper() {
+        WorldModel shop = new WorldModel();
+        shop.update(new Observation.MapEntered(1, 1000001, 0));
+        shop.movedTo(new Point(0, 0));
+        shop.update(new Observation.NpcAppeared(2, 7001, 2100, new Point(20, 0)));
+        assertEquals(1, shop.portals().size(),
+                "a shop interior has exactly one usable portal, which is what makes it a room");
+
+        ReflexPolicy wanderer = new ReflexPolicy(new Random(1), Disposition.WANDERER);
+        int wandered = 0;
+        int headedOut = 0;
+        for (int decision = 0; decision < 120; decision++) {
+            Policy.Decision made = wanderer.decide(mind, shop, decision);
+            if (made.goal().startsWith("wander")) {
+                wandered++;
+            }
+            if (made.goal().contains("way out") || made.intent() instanceof Intent.EnterPortal) {
+                headedOut++;
+            }
+            if (made.intent() instanceof Intent.MoveTo going) {
+                shop.movedTo(going.destination());
+            }
+        }
+
+        assertTrue(headedOut > wandered,
+                "in a room with one door it should be leaving, not milling about: "
+                        + headedOut + " towards the door against " + wandered + " wandering");
+    }
+
+    /**
+     * Two doors, both leading somewhere it has been. One goes back into a shop it has
+     * already seen all of; the other goes to a town with more to it. The shop teaches it
+     * nothing, and it went in and out of one for hours before this.
+     */
+    @Test
+    void willNotStepBackIntoAShopItHasAlreadySeenAllOf() {
+        mind.take(new Observation.MapEntered(1, 1000001, 0));   // the shop
+        mind.take(new Observation.MapEntered(2, 50000, 0));     // and a town
+        mind.take(new Observation.MapEntered(3, 10000, 0));     // now standing here
+        mind.saw(KnownWorld.mapRef(1000001), "has_door", "out00", 4);
+        mind.infer(KnownWorld.portalRef(1000001, "out00"), "leads_to",
+                KnownWorld.mapRef(10000), 4);
+        mind.saw(KnownWorld.mapRef(50000), "has_door", "east00", 4);
+        mind.saw(KnownWorld.mapRef(50000), "has_door", "west00", 4);
+        mind.infer(KnownWorld.portalRef(50000, "east00"), "leads_to",
+                KnownWorld.mapRef(10000), 4);
+        mind.infer(KnownWorld.portalRef(50000, "west00"), "leads_to",
+                KnownWorld.mapRef(10000), 4);
+        // Nothing unopened anywhere it knows of, so the frontier router finds no route and
+        // the fallback rank is what actually decides. Without that the routing answers
+        // first and this test proves nothing.
+        mind.saw(KnownWorld.mapRef(10000), "has_door", "in00", 4);
+        mind.saw(KnownWorld.mapRef(10000), "has_door", "east00", 4);
+        // From here: in00 goes into the spent shop, east00 goes to the town.
+        mind.infer(KnownWorld.portalRef(10000, "in00"), "leads_to",
+                KnownWorld.mapRef(1000001), 4);
+        mind.infer(KnownWorld.portalRef(10000, "east00"), "leads_to",
+                KnownWorld.mapRef(50000), 4);
+
+        ReflexPolicy policy = new ReflexPolicy(new Random(1), Disposition.WANDERER);
+        // Walked in at the origin, so the shop door is the far one - which is the door the
+        // "head onward rather than back" tie-break would pick on its own. Only knowing the
+        // shop is spent overrides that.
+        policy.cameInAt(new Point(0, 0));
+
+        WorldModel.PortalTarget chosen = policy.pickDoor(
+                List.of(new WorldModel.PortalTarget("in00", new Point(-600, 0)),
+                        new WorldModel.PortalTarget("east00", new Point(40, 0))),
+                mind, 10000, "player:1");
+
+        assertEquals("east00", chosen.name(),
+                "the shop has one door and it has already used it; there is nothing in there");
+    }
 }

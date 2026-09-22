@@ -109,6 +109,23 @@ public final class KnownWorld {
         return unopened;
     }
 
+    /**
+     * A room the agent has already seen all of: one way out, and nothing left unopened.
+     *
+     * A shop, a house, a stairwell. Worth knowing about because of what it does to the
+     * fallback rank: once a town's own doors have all been opened, every shop entrance is
+     * still "a door that works", so an agent would go in, come straight back out, and do it
+     * again. One spent hours between Lith Harbor and four of its shops that way. Going back
+     * into a room whose single exit you have already used cannot teach you anything.
+     *
+     * Derived from the doors the agent remembers seeing, so a map it has never entered is
+     * not a room - it is simply unknown, and worth a look.
+     */
+    public boolean isSpentRoom(String mapRef) {
+        Set<String> doors = doorsSeen.getOrDefault(mapRef, Set.of());
+        return doors.size() == 1 && unopenedDoorsIn(mapRef).isEmpty();
+    }
+
     /** Every map this agent has learned the name of by walking into it. */
     public Set<String> mapsReachable() {
         Set<String> maps = new HashSet<>(exits.keySet());
