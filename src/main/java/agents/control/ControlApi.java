@@ -57,6 +57,7 @@ public class ControlApi {
         http.createContext("/api/start", this::start);
         http.createContext("/api/stop", this::stop);
         http.createContext("/api/reset", this::reset);
+        http.createContext("/api/condense", this::condense);
         http.createContext("/api/beliefs/", this::beliefs);
         http.createContext("/api/trace/", this::trace);
         http.createContext("/", this::page);
@@ -115,6 +116,35 @@ public class ControlApi {
      * and a caller that has to stop, wait, then reset has been given a chore rather than a
      * button.
      */
+    /**
+     * Folds what this generation learned into the inheritance the next one is born with.
+     *
+     * Separate from reset on purpose. Condensing is a decision about the line; resetting is
+     * a decision about the bodies. Doing them in one call would mean you could never look at
+     * what was about to be inherited before the agents it came from were gone.
+     */
+    private void condense(HttpExchange exchange) throws IOException {
+        if (!"POST".equals(exchange.getRequestMethod())) {
+            send(exchange, 405, Map.of("error", "POST"));
+            return;
+        }
+        try {
+            agents.memory.Inheritance.Merged merged = population.condense();
+            send(exchange, 200, Map.of(
+                    "mindsRead", merged.minds(),
+                    "beliefsRead", merged.beliefsRead(),
+                    "inherited", merged.beliefsKept(),
+                    "agreedOn", merged.agreed(),
+                    "note", merged.minds() == 0
+                            ? "no saved minds to condense - have the agents run and stopped?"
+                            : "the next generation will be born knowing " + merged.beliefsKept()
+                              + " things"));
+        } catch (RuntimeException e) {
+            log.error("Condense failed", e);
+            send(exchange, 409, Map.of("error", String.valueOf(e.getMessage())));
+        }
+    }
+
     private void reset(HttpExchange exchange) throws IOException {
         if (!"POST".equals(exchange.getRequestMethod())) {
             send(exchange, 405, Map.of("error", "POST"));

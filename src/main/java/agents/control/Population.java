@@ -17,6 +17,8 @@ import agents.trace.Trace;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import agents.memory.Inheritance;
+
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
@@ -54,6 +56,9 @@ public class Population {
 
     private final String host;
     private final int port;
+    /** What one generation leaves the next, beside the agents' own saved minds. */
+    public static final String INHERITANCE = "inherited.mind";
+
     private final Path minds;
     private final Path traces;
 
@@ -131,10 +136,17 @@ public class Population {
                         new Credentials(name.toLowerCase(), PASSWORD), name);
 
                 Mind mind = new Mind(name, Trace.toFile(traces.resolve(name + ".jsonl"), name));
-                long resumedAt = mind.restoreFrom(minds.resolve(name + ".mind"));
+                Path own = minds.resolve(name + ".mind");
+                long resumedAt = mind.restoreFrom(own);
                 if (resumedAt > 0) {
                     log.info("{} woke up with {} beliefs from tick {}", name,
                             mind.semantic().size(), resumedAt);
+                } else if (Files.isRegularFile(minds.resolve(INHERITANCE))) {
+                    // No life of its own to resume, but a previous generation left something.
+                    // Bodies are cheap; a hundred maps of walking is not.
+                    mind.restoreFrom(minds.resolve(INHERITANCE));
+                    log.info("{} was born knowing {} things it has never seen", name,
+                            mind.semantic().size());
                 }
 
                 Policy reflex = new ReflexPolicy(random, disposition);
@@ -202,6 +214,26 @@ public class Population {
      * Refused while they are running, because a mind deleted underneath a living agent would
      * be written straight back out by the next save.
      */
+    /**
+     * Folds the current generation's minds into the inheritance.
+     *
+     * Agents must be stopped, because a mind is written on the way out and condensing a
+     * half-saved one would hand the next generation whatever happened to be on disk.
+     * Merging is cumulative: the existing inheritance is one of the sources, so what
+     * generation one learned survives generation four forgetting to look.
+     */
+    public synchronized Inheritance.Merged condense() {
+        if (isRunning()) {
+            throw new IllegalStateException("Stop the agents before condensing what they know");
+        }
+        List<Path> sources = new ArrayList<>(Inheritance.mindsIn(minds, INHERITANCE));
+        Path standing = minds.resolve(INHERITANCE);
+        if (Files.isRegularFile(standing)) {
+            sources.add(standing);
+        }
+        return Inheritance.merge(sources, standing, "Inherited");
+    }
+
     public synchronized int forgetMinds() {
         if (isRunning()) {
             throw new IllegalStateException("Stop the agents before wiping their minds");
@@ -213,6 +245,12 @@ public class Population {
             }
             try (var entries = Files.list(minds)) {
                 for (Path mind : entries.toList()) {
+                    // The inheritance is not one agent's memory, it is what the line has
+                    // learned, and a reset is meant to start a new generation rather than
+                    // disown every one before it. Deleted only on request.
+                    if (mind.getFileName().toString().equals(INHERITANCE)) {
+                        continue;
+                    }
                     Files.deleteIfExists(mind);
                     forgotten++;
                 }
