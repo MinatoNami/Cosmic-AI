@@ -197,4 +197,69 @@ class KnownWorldTest {
 
         assertFalse(world().isSpentRoom(KnownWorld.mapRef(1000000)));
     }
+
+    private void sawMonsterIn(int mapId, int monsterId) {
+        believe("monster:" + monsterId, "present_in", KnownWorld.mapRef(mapId));
+    }
+
+    /**
+     * What a world with nothing left to explore is for.
+     *
+     * Two agents inherited a map of a hundred and three places and had nowhere to go: their
+     * own island had been fully opened by the generation before, and the rest of that map
+     * was reached by an NPC warp, which leaves no edge to walk along. Every door fell to the
+     * weakest rule there is, which shuffled them between shops and tutorial rooms - and a
+     * fighter did no fighting for half an hour. The sightings were already in memory.
+     */
+    @Test
+    void headsForSomewhereItRemembersSomethingLiving() {
+        sawDoor(10000, "east00");
+        doorLedTo(10000, "east00", 20000);
+        sawDoor(20000, "west00");
+        doorLedTo(20000, "west00", 10000);
+        doorLedTo(20000, "east00", 30000);
+        sawMonsterIn(30000, 100100);
+
+        KnownWorld.Route route = world().routeToMonsters(KnownWorld.mapRef(10000))
+                .orElseThrow();
+
+        assertEquals("east00", route.firstDoor());
+        assertEquals(2, route.hops());
+        assertEquals("hunting", route.why());
+    }
+
+    /** Where it already is does not count, or it would set off for the room it stands in. */
+    @Test
+    void doesNotSetOffForTheMonstersUnderItsNose() {
+        sawDoor(10000, "east00");
+        doorLedTo(10000, "east00", 20000);
+        sawMonsterIn(10000, 100100);
+
+        assertTrue(world().routeToMonsters(KnownWorld.mapRef(10000)).isEmpty(),
+                "there is nothing to travel for; the fight is right here");
+    }
+
+    @Test
+    void ignoresSightingsOfThingsThatAreNotMonsters() {
+        believe("npc:22000", "present_in", KnownWorld.mapRef(2000000));
+        doorLedTo(10000, "east00", 2000000);
+
+        assertTrue(world().routeToMonsters(KnownWorld.mapRef(10000)).isEmpty(),
+                "a shopkeeper is not a hunting ground");
+    }
+
+    /** Exploring still comes first: an unopened door teaches more than a known monster. */
+    @Test
+    void prefersAnUnopenedDoorToAKnownHuntingGround() {
+        sawDoor(10000, "in00");                     // unopened, right here
+        sawDoor(10000, "east00");
+        doorLedTo(10000, "east00", 20000);
+        sawMonsterIn(20000, 100100);
+
+        KnownWorld world = world();
+        assertEquals("frontier",
+                world.routeToNearestFrontier(KnownWorld.mapRef(10000)).orElseThrow().why());
+        assertEquals("in00",
+                world.routeToNearestFrontier(KnownWorld.mapRef(10000)).orElseThrow().firstDoor());
+    }
 }

@@ -937,17 +937,23 @@ public class ReflexPolicy implements Policy {
         // arrival, which is the honest way for something that learns as it walks to hold a
         // plan. An errand - an NPC that named a price this agent can now pay - outranks
         // curiosity, because it is the one journey with a known reward at the end of it.
+        // Three reasons to travel, in order of how much is known about what is waiting: an
+        // NPC whose price the agent can now pay, a door nobody has opened, and somewhere it
+        // remembers something living. The last one is what a world with nothing left to
+        // explore needs - without it every door fell through to the weakest rule there is,
+        // which walked two agents between shops and tutorial rooms for half an hour while a
+        // fighter did no fighting at all.
         String here = KnownWorld.mapRef(mapId);
         Optional<KnownWorld.Route> route = Optional.ofNullable(errandMap)
                 .flatMap(target -> known.routeTo(here, target))
-                .or(() -> known.routeToNearestFrontier(here));
+                .or(() -> known.routeToNearestFrontier(here))
+                .or(() -> known.routeToMonsters(here));
         Optional<WorldModel.PortalTarget> planned = route.flatMap(plan -> portals.stream()
                 .filter(portal -> portal.name().equals(plan.firstDoor()))
                 .findFirst());
         if (planned.isPresent()) {
             KnownWorld.Route plan = route.orElseThrow();
-            boolean onAnErrand = plan.towards().equals(errandMap);
-            whyThisDoor = (onAnErrand ? "errand" : "frontier") + " " + plan.hops() + " maps off";
+            whyThisDoor = plan.why() + " " + plan.hops() + " maps off";
             return planned.get();
         }
 

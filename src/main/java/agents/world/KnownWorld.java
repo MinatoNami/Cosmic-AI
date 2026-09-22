@@ -43,6 +43,9 @@ public final class KnownWorld {
     /** Doors it has reached a verdict on, good or bad, by portal ref. */
     private final Set<String> settled = new HashSet<>();
 
+    /** Maps something was seen living in, which is where an agent can expect a fight. */
+    private final Set<String> hunting = new HashSet<>();
+
     private KnownWorld() {
     }
 
@@ -60,6 +63,11 @@ public final class KnownWorld {
                 case "has_door" -> world.doorsSeen
                         .computeIfAbsent(belief.subject(), map -> new HashSet<>())
                         .add(belief.object());
+                case "present_in" -> {
+                    if (belief.subject().startsWith("monster:")) {
+                        world.hunting.add(belief.object());
+                    }
+                }
                 case "leads_to" -> {
                     String portal = belief.subject();
                     world.settled.add(portal);
@@ -141,7 +149,26 @@ public final class KnownWorld {
      * it from here".
      */
     public Optional<Route> routeToNearestFrontier(String fromMap) {
-        return search(fromMap, map -> !unopenedDoorsIn(map).isEmpty());
+        return search(fromMap, map -> !unopenedDoorsIn(map).isEmpty(), "frontier");
+    }
+
+    /**
+     * The shortest walk from here to somewhere it remembers something living.
+     *
+     * The last thing to try, and the answer to a world that has run out of unopened doors.
+     * Two agents inherited a map of a hundred and three places and then had nothing to
+     * explore: their own island was fully opened by the generation before, and the rest of
+     * that map was reached by an NPC warp, which leaves no edge to walk along. So every door
+     * fell through to the weakest rule there is, which shuffled them between shops and
+     * tutorial rooms - none of which contain monsters. A fighter spent half an hour at 0%
+     * fighting and gained no levels.
+     *
+     * It already held three hundred and twenty-one sightings of monsters in named maps,
+     * inherited from the generation that killed them, and nothing whatsoever read them.
+     * Somewhere you remember something living is a reason to travel.
+     */
+    public Optional<Route> routeToMonsters(String fromMap) {
+        return search(fromMap, map -> !map.equals(fromMap) && hunting.contains(map), "hunting");
     }
 
     /** The shortest walk from here to a particular map, for when the agent has an errand. */
@@ -149,7 +176,7 @@ public final class KnownWorld {
         if (fromMap.equals(toMap)) {
             return Optional.empty();
         }
-        return search(fromMap, toMap::equals);
+        return search(fromMap, toMap::equals, "errand");
     }
 
     /**
@@ -159,10 +186,10 @@ public final class KnownWorld {
      * arrival from beliefs that may by then have changed, which is the honest way for
      * something that learns as it walks to follow a plan.
      */
-    private Optional<Route> search(String fromMap, Predicate<String> isGoal) {
+    private Optional<Route> search(String fromMap, Predicate<String> isGoal, String why) {
         if (isGoal.test(fromMap)) {
             return unopenedDoorsIn(fromMap).stream().sorted().findFirst()
-                    .map(door -> new Route(door, 0, fromMap));
+                    .map(door -> new Route(door, 0, fromMap, why));
         }
 
         Map<String, String> firstDoorTo = new HashMap<>();
@@ -183,7 +210,7 @@ public final class KnownWorld {
                         here.equals(fromMap) ? exit.getKey() : firstDoorTo.get(here));
                 if (isGoal.test(destination)) {
                     return Optional.of(new Route(firstDoorTo.get(destination),
-                            hopsTo.get(destination), destination));
+                            hopsTo.get(destination), destination, why));
                 }
                 queue.add(destination);
             }
@@ -197,8 +224,10 @@ public final class KnownWorld {
      * @param firstDoor the door to take from where it is standing
      * @param hops how many maps away the goal is, zero meaning this one
      * @param towards the map the journey is for, which is not where the first door leads
+     * @param why what this journey is for, so the trace says which of the three reasons to
+     *            travel won rather than leaving it to be inferred from positions
      */
-    public record Route(String firstDoor, int hops, String towards) {
+    public record Route(String firstDoor, int hops, String towards, String why) {
     }
 
     public static String portalRef(String mapRef, String door) {

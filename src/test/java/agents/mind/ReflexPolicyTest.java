@@ -492,4 +492,48 @@ class ReflexPolicyTest {
         assertEquals("east00", chosen.name(),
                 "the shop has one door and it has already used it; there is nothing in there");
     }
+
+    /**
+     * Nothing left to explore, so go where you remember something living.
+     *
+     * Two agents inherited a map of a hundred and three places and had nowhere to go: their
+     * island was fully opened by the generation before them, and the rest of that map was
+     * reached by an NPC warp, which leaves no edge to walk along. Every door fell through to
+     * the weakest rule available, which walked them between shops and tutorial rooms for
+     * half an hour - none of which hold monsters - and a fighter did no fighting and gained
+     * no levels. It was carrying three hundred sightings of monsters the whole time.
+     */
+    @Test
+    void whenThereIsNothingLeftToOpenItGoesHunting() {
+        for (int map : new int[]{10000, 40000, 50000, 60000}) {
+            mind.take(new Observation.MapEntered(1, map, 0));
+        }
+        // Every door everywhere is opened, so there is no frontier to route to.
+        record Door(int from, String name, int to) { }
+        List<Door> world = List.of(
+                new Door(10000, "west00", 40000), new Door(10000, "east00", 50000),
+                new Door(40000, "out00", 10000), new Door(40000, "in00", 10000),
+                new Door(50000, "west00", 10000), new Door(50000, "east00", 60000),
+                new Door(60000, "out00", 50000), new Door(60000, "in00", 50000));
+        for (Door door : world) {
+            mind.saw(KnownWorld.mapRef(door.from()), "has_door", door.name(), 4);
+            mind.infer(KnownWorld.portalRef(door.from(), door.name()), "leads_to",
+                    KnownWorld.mapRef(door.to()), 4);
+        }
+        // The only thing it remembers living is two maps east.
+        mind.infer("monster:100100", "present_in", KnownWorld.mapRef(60000), 4);
+
+        ReflexPolicy policy = new ReflexPolicy(new Random(1), Disposition.FIGHTER);
+        // Walked in at the origin, so west00 is the far door - the one the "head onward"
+        // tie-break takes on its own. Only remembering the monsters points east.
+        policy.cameInAt(new Point(0, 0));
+
+        WorldModel.PortalTarget chosen = policy.pickDoor(
+                List.of(new WorldModel.PortalTarget("west00", new Point(-600, 0)),
+                        new WorldModel.PortalTarget("east00", new Point(40, 0))),
+                mind, 10000, "player:1");
+
+        assertEquals("east00", chosen.name(),
+                "nothing left to open, so the remembered hunting ground is the reason to move");
+    }
 }
