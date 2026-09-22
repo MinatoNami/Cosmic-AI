@@ -435,6 +435,17 @@ public class Agent implements Runnable {
         running = false;
     }
 
+    /**
+     * What is actually deciding for this agent.
+     *
+     * Reported per agent rather than taken from what was requested, because those came
+     * apart once: a start with policy=local built every agent on the reflex, and the status
+     * endpoint went on echoing "local" for an hour while nothing asked the model anything.
+     */
+    public String policyName() {
+        return policy.name();
+    }
+
     public Mind mind() {
         return mind;
     }

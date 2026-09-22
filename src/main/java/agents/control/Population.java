@@ -124,7 +124,11 @@ public class Population {
             throw new IllegalStateException("Already running - stop first");
         }
         this.policyName = requestedPolicy == null ? "reflex" : requestedPolicy.toLowerCase();
-        Oracle oracle = oracleFor(policyName);
+        // The field, not a local. A local here shadowed it, wake() read the field, and so
+        // every agent was built with a null oracle and quietly ran on the reflex while the
+        // status endpoint reported "local" and the log said the model had been found. The
+        // per-agent policy is now in the status for exactly this reason.
+        this.oracle = oracleFor(policyName);
 
         try {
             Files.createDirectories(minds);
@@ -342,6 +346,7 @@ public class Population {
             all.add(new AgentStatus(
                     r.name(),
                     r.agent().disposition().name(),
+                    r.agent().policyName(),
                     r.thread().isAlive(),
                     r.agent().world().mapId(),
                     mapName(r.agent().world().mapId()),
@@ -394,7 +399,8 @@ public class Population {
         return name == null || name.isBlank() ? ref : name;
     }
 
-    public record AgentStatus(String name, String disposition, boolean alive, int mapId,
+    public record AgentStatus(String name, String disposition, String policy,
+                             boolean alive, int mapId,
                               String mapName, int level, int hp, int maxHp, int episodes,
                               int beliefs, int liveBeliefs, long tick, String goal, String intent) {
     }
