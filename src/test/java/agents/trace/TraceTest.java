@@ -46,11 +46,32 @@ class TraceTest {
         Path file = directory.resolve(by.replace(':', '-') + ".jsonl");
         Mind mind = new Mind("Test", Trace.toFile(file, "Test"));
         mind.decided(7, "hit what is in front of me", "Attack", Map.of("target", 9001),
-                List.of(), List.of("door=0.42", "wander=0.05"), by, fellBackBecause);
+                List.of(), List.of("door=0.42", "wander=0.05"), by, fellBackBecause, null);
         mind.flush();
 
         return Files.readAllLines(file).stream()
                 .filter(l -> l.contains("\"kind\":\"deliberate\""))
                 .findFirst().orElseThrow();
+    }
+
+    /**
+     * Where the agent was standing, not only where it meant to go.
+     *
+     * Every question about movement was answered by inference before this, and the
+     * inferences were wrong as often as right: the same destination repeated eleven times
+     * read as "committed to a long walk" one day and "frozen against a wall" the next. The
+     * intent's detail is the target; this is the agent.
+     */
+    @Test
+    void recordsWhereTheAgentWasStanding() throws IOException {
+        Path file = directory.resolve("standing.jsonl");
+        Mind mind = new Mind("Test", Trace.toFile(file, "Test"));
+        mind.decided(9, "walk to a way out: west00", "MoveTo", Map.of("x", -426, "y", 212),
+                List.of(), List.of(), "reflex", null, new java.awt.Point(627, 155));
+        mind.flush();
+
+        String written = Files.readString(file);
+        assertTrue(written.contains("\"at\":[627,155]"),
+                "the act line should carry the position it acted from, got: " + written);
     }
 }

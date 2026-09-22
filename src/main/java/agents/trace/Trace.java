@@ -132,12 +132,24 @@ public class Trace implements AutoCloseable {
         return id;
     }
 
-    public String acted(long tick, String intent, Map<String, Object> detail, String because) {
+    /**
+     * @param at where the agent was standing when it acted, or null if it does not know yet
+     *
+     * The position is here because every question about movement has had to be answered by
+     * inference, and the inferences were wrong as often as right. Was it walking to the door
+     * or stuck against a wall? Did the climb work? Is a journey closing? The intent's own
+     * detail says where the agent meant to go, never where it was, so "it emitted the same
+     * destination eleven times" read as both "committed" and "frozen" on different days. One
+     * pair of numbers per action settles all of it.
+     */
+    public String acted(long tick, String intent, Map<String, Object> detail, String because,
+                        java.awt.Point at) {
         String id = "a" + nextActionId++;
         Map<String, Object> fields = new LinkedHashMap<>();
         fields.put("id", id);
         fields.put("intent", intent);
         fields.put("detail", detail);
+        fields.put("at", at == null ? null : List.of(at.x, at.y));
         fields.put("because", because);
         write("act", tick, fields);
         return id;

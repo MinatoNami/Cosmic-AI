@@ -150,7 +150,7 @@ public class Agent implements Runnable {
         mind.decided(tick, decision.goal(), decision.intent().name(),
                 decision.intent().detail(), decision.consultedBeliefs(), decision.considered(),
                 decision.decidedBy() != null ? decision.decidedBy() : policy.name(),
-                decision.fellBackBecause());
+                decision.fellBackBecause(), world.selfPosition());
 
         executor.execute(decision.intent(), world);
 

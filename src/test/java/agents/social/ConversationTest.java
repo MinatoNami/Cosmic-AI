@@ -44,7 +44,7 @@ class ConversationTest {
         mind.take(new Observation.MonsterAppeared(2, 9001, 100100, new Point(10, 0)));
         List<String> used = mind.semantic().liveBeliefs().stream().map(Belief::ref).toList();
         mind.decided(2, "hit what is in front of me", "Attack", Map.of("target", 9001), used,
-                List.of(), "reflex:wanderer", null);
+                List.of(), "reflex:wanderer", null, null);
 
         String answer = Conversation.answer("why", mind, world).orElseThrow();
 
@@ -88,7 +88,7 @@ class ConversationTest {
         List<String> used = mind.semantic().liveBeliefs().stream().map(Belief::ref).toList();
         mind.decided(50, "a goal so long it would never fit in a single line of game chat "
                 + "and then some more words after that as well", "Attack", Map.of(), used,
-                List.of(), "reflex:wanderer", null);
+                List.of(), "reflex:wanderer", null, null);
 
         String answer = Conversation.answer("why", mind, world).orElseThrow();
 

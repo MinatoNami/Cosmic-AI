@@ -83,13 +83,14 @@ public class Mind implements AutoCloseable {
      *
      * @param by the policy that made this one, which the agent knows and the mind does not
      * @param fellBackBecause why the policy that was asked did not make it, or null
+     * @param at where the agent was standing, so a replay can tell walking from standing still
      * @return the action's ref, for anything that wants to point at it
      */
     public String decided(long tick, String goal, String intent, Map<String, Object> detail,
                           List<String> usedBeliefs, List<String> considered,
-                          String by, String fellBackBecause) {
+                          String by, String fellBackBecause, java.awt.Point at) {
         String because = trace.deliberated(tick, goal, usedBeliefs, considered, by, fellBackBecause);
-        String actionRef = trace.acted(tick, intent, detail, because);
+        String actionRef = trace.acted(tick, intent, detail, because, at);
 
         decisions.addLast(new DecisionRecord(tick, actionRef, intent, goal, usedBeliefs));
         while (decisions.size() > DECISIONS_REMEMBERED) {
