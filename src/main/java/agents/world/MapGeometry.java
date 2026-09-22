@@ -9,9 +9,11 @@ import tools.StringUtil;
 
 import java.awt.Point;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 /**
  * The portals an agent can see in the map it is standing in.
@@ -30,6 +32,7 @@ import java.util.Map;
 public class MapGeometry {
     private static final Map<Integer, List<PortalSighting>> CACHE = new HashMap<>();
     private static final Map<Integer, List<Ground>> GROUND = new HashMap<>();
+    private static final Map<Integer, List<Climb>> CLIMBS = new HashMap<>();
 
     /** A portal as it appears on screen: somewhere to stand, and a name to refer to it by. */
     public record PortalSighting(String name, Point position, int type) {
@@ -166,6 +169,110 @@ public class MapGeometry {
             }
         }
         return List.copyOf(ground);
+    }
+
+    /**
+     * A rope or a ladder: the only way up, and the reason an agent needs to know about them.
+     *
+     * Read from the same file as the floor and the doors, and drawn on every player's
+     * screen, so noticing one is looking rather than privilege. Without them an agent is
+     * confined to whatever foothold it happens to land on. Shanks, who sells the only
+     * passage off Maple Island, stands at y=-105 in Southperry while an agent arrives at
+     * y=500 - six hundred pixels above a character that could only ever walk sideways.
+     * Every NPC on a platform, every drop on a ledge and every door up a flight of stairs
+     * had the same problem, and it looked like a dozen different bugs.
+     *
+     * @param top the smaller y, because the screen's y grows downwards
+     */
+    public record Climb(int x, int top, int bottom, boolean ladder) {
+
+        /** The end a character would board it at, coming from this height. */
+        public int endNearest(int y) {
+            return Math.abs(y - top) <= Math.abs(y - bottom) ? top : bottom;
+        }
+
+        /** The end it would carry them to, having boarded it from this height. */
+        public int endAwayFrom(int y) {
+            return endNearest(y) == top ? bottom : top;
+        }
+
+        public int height() {
+            return bottom - top;
+        }
+    }
+
+    /**
+     * How far from an end of a rope a character may be and still get on it. Generous,
+     * because the floor beside a rope rarely sits at exactly the height the rope stops.
+     */
+    private static final int REACH = 60;
+
+    /**
+     * A rope or ladder that would get a character closer to a height it cannot walk to.
+     *
+     * Deliberately one rung of the journey rather than a route. A climb qualifies when a
+     * character could board it - the floor at its x is level with one of its ends - and when
+     * riding it would leave them vertically nearer the target than they are now. Chaining
+     * happens by itself: each decision picks the best next climb from wherever the last one
+     * left the agent, so a two-rope ascent needs no planner, and an agent that finds itself
+     * somewhere unexpected re-decides from there instead of following a stale plan.
+     *
+     * Nearest by walking distance rather than by height covered, because the rope beside you
+     * is worth more than the better rope across the map.
+     */
+    public static Optional<Climb> climbTowards(int mapId, int x, int fromY, int toY) {
+        int gap = Math.abs(fromY - toY);
+        return climbsIn(mapId).stream()
+                .filter(climb -> canBoard(mapId, climb, fromY))
+                .filter(climb -> Math.abs(climb.endAwayFrom(boardingHeight(mapId, climb, fromY)) - toY) < gap)
+                .min(Comparator.comparingInt(climb -> Math.abs(climb.x() - x)));
+    }
+
+    /** The height a character ends up at by walking to this rope's foot. */
+    private static int boardingHeight(int mapId, Climb climb, int fromY) {
+        return groundUnder(mapId, climb.x(), fromY);
+    }
+
+    /**
+     * Whether walking to this rope would put a character at one of its ends.
+     *
+     * Checked against the floor at the rope's x rather than the character's current height,
+     * because walking there changes how high it is standing - which is the whole reason the
+     * first attempt at this rejected every rope in Southperry.
+     */
+    private static boolean canBoard(int mapId, Climb climb, int fromY) {
+        int standing = boardingHeight(mapId, climb, fromY);
+        return Math.abs(standing - climb.endNearest(standing)) <= REACH;
+    }
+
+    public static synchronized List<Climb> climbsIn(int mapId) {
+        return CLIMBS.computeIfAbsent(mapId, MapGeometry::loadClimbs);
+    }
+
+    private static List<Climb> loadClimbs(int mapId) {
+        DataProvider provider = DataProviderFactory.getDataProvider(WZFiles.MAP);
+        Data mapData = provider.getData(pathFor(mapId));
+        if (mapData == null) {
+            return List.of();
+        }
+        Data ropes = mapData.getChildByPath("ladderRope");
+        if (ropes == null) {
+            return List.of();
+        }
+
+        List<Climb> climbs = new ArrayList<>();
+        for (Data rope : ropes) {
+            Data x = rope.getChildByPath("x");
+            if (x == null) {
+                continue;
+            }
+            int y1 = DataTool.getInt(rope.getChildByPath("y1"), 0);
+            int y2 = DataTool.getInt(rope.getChildByPath("y2"), 0);
+            climbs.add(new Climb(DataTool.getInt(x, 0),
+                    Math.min(y1, y2), Math.max(y1, y2),
+                    DataTool.getInt(rope.getChildByPath("l"), 0) != 0));
+        }
+        return List.copyOf(climbs);
     }
 
     /** @see server.maps.MapFactory#getMapName */
