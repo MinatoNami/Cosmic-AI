@@ -353,6 +353,41 @@ class ReflexPolicyTest {
                 "after fifteen decisions that got it no closer it should have given up");
     }
 
+    /**
+     * An NPC that moves you must not get a door blamed for it.
+     *
+     * NPC 2007 stands a few steps from where every new character appears and asks "would you
+     * like to skip the tutorials and head straight to Lith Harbor?". An agent said yes,
+     * crossed an ocean, and credited the journey to portal glBmsg1 - which the map data
+     * gives no destination and no script, and which cannot move anybody anywhere. The belief
+     * graph gained a road that was never there, and routing plans along those.
+     */
+    @Test
+    void willNotBlameADoorForAJourneyAnNpcGaveIt() {
+        ReflexPolicy policy = new ReflexPolicy(new Random(1), Disposition.WANDERER);
+        for (int decision = 0; decision < 400 && policy.doorsAwaitingVerdict() == 0; decision++) {
+            Intent intent = policy.decide(mind, world, decision).intent();
+            if (intent instanceof Intent.MoveTo going) {
+                world.movedTo(going.destination());     // let it actually get there
+            }
+        }
+        assertTrue(policy.doorsAwaitingVerdict() > 0,
+                "it walked into a door, so it should be waiting to see what that did");
+
+        // Someone turns up and it says hello. Whatever moves the agent after this, the door
+        // it touched a moment ago is no longer the obvious culprit.
+        world.update(new Observation.NpcAppeared(50, 7001, 2100, world.selfPosition()));
+        for (int decision = 400; decision < 800 && policy.doorsAwaitingVerdict() > 0; decision++) {
+            Intent intent = policy.decide(mind, world, decision).intent();
+            if (intent instanceof Intent.MoveTo going) {
+                world.movedTo(going.destination());
+            }
+        }
+
+        assertEquals(0, policy.doorsAwaitingVerdict(),
+                "talking to someone who could move you voids the door's pending verdict");
+    }
+
     /** The other half: a journey that is working must not be called off for being long. */
     @Test
     void keepsGoingWhileItIsStillGettingCloser() {

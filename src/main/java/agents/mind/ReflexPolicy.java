@@ -556,6 +556,27 @@ public class ReflexPolicy implements Policy {
         journeyTo = null;
     }
 
+    /**
+     * Anything said to an NPC voids whatever verdict a door was awaiting.
+     *
+     * An NPC can move you. One of them - standing a few steps from where every new character
+     * appears - asks "would you like to skip the tutorials and head straight to Lith
+     * Harbor?" and warps you clean off the island. An agent that had walked into a door
+     * shortly before, and was still waiting to see whether it did anything, credited the
+     * door with the journey: {@code portal:10000/glBmsg1 leads_to Lith Harbor}, about a
+     * portal the map data gives no destination and no script, and which therefore cannot
+     * move anybody at all.
+     *
+     * A false edge is worse than a missing one. A missing edge costs a walk to rediscover; a
+     * false one is a road on the map that was never there, and everything that plans a route
+     * plans along it. Declining to guess is the cheaper mistake - and it matters more now
+     * that minds are inherited, because a wrong edge would be handed to every generation
+     * after this one.
+     */
+    private void spokeToSomeone() {
+        doorsAwaitingVerdict.clear();
+    }
+
     /** 1 when standing on it, 0 at the edge of what the agent would cross for it. */
     private static double nearness(double distance, double range) {
         return distance >= range ? 0 : 1 - distance / range;
@@ -627,6 +648,7 @@ public class ReflexPolicy implements Policy {
                     "see if what I owe is done", score,
                     () -> {
                         lastHandIn.put(errand.questId(), decisionsMade);
+                        spokeToSomeone();
                         arrived();
                     }));
         });
@@ -666,6 +688,7 @@ public class ReflexPolicy implements Policy {
                         "take whatever this one is offering", score,
                         () -> {
                             questsTried.add(offer.get());
+                            spokeToSomeone();
                             arrived();
                         }));
                 return;
@@ -675,6 +698,7 @@ public class ReflexPolicy implements Policy {
                     "say hello and see what happens", score,
                     () -> {
                         greetedAt.put(npc.typeId(), decisionsMade);
+                        spokeToSomeone();
                         arrived();
                     }));
         });
@@ -840,6 +864,11 @@ public class ReflexPolicy implements Policy {
     /** Lets a test say where the agent walked in, which is otherwise set on a map change. */
     void cameInAt(Point where) {
         this.arrivedAt = where;
+    }
+
+    /** Visible for testing: how many doors are still waiting to be judged. */
+    int doorsAwaitingVerdict() {
+        return doorsAwaitingVerdict.size();
     }
 
     /** Visible for testing: which door the agent would set off for. */
