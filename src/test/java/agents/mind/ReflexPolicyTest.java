@@ -536,4 +536,45 @@ class ReflexPolicyTest {
         assertEquals("east00", chosen.name(),
                 "nothing left to open, so the remembered hunting ground is the reason to move");
     }
+
+    /**
+     * A journey gets harder to abandon the nearer it is to done.
+     *
+     * A flat bonus lost to neglect and always did: neglect adds up to 1.5 and commitment was
+     * 1.2, so everything the agent was not doing overtook the thing it was, as soon as it
+     * had been walking long enough. Journeys are hundreds of pixels wide. One agent finished
+     * two of eleven, and the trace named what replaced them - an NPC, a quest it owed, a
+     * door, each outbidding the last while it walked.
+     */
+    @Test
+    void aJourneyGetsHarderToAbandonTheNearerItIsToDone() {
+        ReflexPolicy policy = new ReflexPolicy(new Random(1), Disposition.TALKER);
+        Point npc = new Point(2400, 0);
+        policy.settingOff("talk", npc, new Point(0, 0));
+
+        double settingOut = policy.commitmentTo("talk", npc, new Point(0, 0));
+        double halfway = policy.commitmentTo("talk", npc, new Point(1200, 0));
+        double almostThere = policy.commitmentTo("talk", npc, new Point(2340, 0));
+
+        assertTrue(settingOut < halfway && halfway < almostThere,
+                "commitment should grow along the walk, got " + settingOut + ", "
+                        + halfway + ", " + almostThere);
+        assertTrue(almostThere > 1.5,
+                "the last steps must outrank the strongest pull neglect can offer, which is "
+                        + "1.5 - otherwise a walk is abandoned just before it pays off");
+        assertTrue(settingOut < 0.5,
+                "and a journey just begun should stay cheap to think better of");
+    }
+
+    @Test
+    void owesNothingToAJourneyItIsNotOn() {
+        ReflexPolicy policy = new ReflexPolicy(new Random(1), Disposition.TALKER);
+        Point npc = new Point(2400, 0);
+        policy.settingOff("talk", npc, new Point(0, 0));
+
+        assertEquals(0, policy.commitmentTo("fight", npc, new Point(0, 0)),
+                "a different kind of errand is a different errand");
+        assertEquals(0, policy.commitmentTo("talk", new Point(-2400, 0), new Point(0, 0)),
+                "and so is the same kind somewhere else entirely");
+    }
 }
