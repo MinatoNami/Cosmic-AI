@@ -80,6 +80,10 @@ public class Agent implements Runnable {
     private final Disposition disposition;
     private int steps;
     private int nowhereToGo;
+
+    /** The last NPC whose offer this agent accepted, so a dead end has somebody to blame. */
+    private int wentAlongWith = -1;
+    private boolean blamedThemAlready;
     private int nextToShare;
 
     public Agent(InWorld connection, Mind mind, Policy policy, Disposition disposition) {
@@ -164,6 +168,30 @@ public class Agent implements Runnable {
         nowhereToGo = world.mapId() > 0 && MapGeometry.usablePortalsIn(world.mapId()).isEmpty()
                 ? nowhereToGo + 1
                 : 0;
+        if (nowhereToGo == 0) {
+            blamedThemAlready = false;
+        } else if (isTrapped() && wentAlongWith > 0 && !blamedThemAlready) {
+            // Somebody offered, this agent said yes, and here it is somewhere with no way
+            // out. Saying yes again next time is how a rescue becomes a loop: both agents
+            // were pulled back into map 1020100 four times in ninety seconds.
+            mind.infer("npc:" + wentAlongWith, "strands_you", "true", perceiver.currentTick());
+            log.warn("{} blames npc:{} for stranding it in map {}", mind.name(),
+                    wentAlongWith, world.mapId());
+            blamedThemAlready = true;
+        }
+    }
+
+    /**
+     * Whether this one has taken the agent somewhere with no way out before.
+     *
+     * An ordinary belief, formed the same way a dud door is, and read back the same way. The
+     * agent cannot read what it is being offered, but it can remember how the last such
+     * offer turned out.
+     */
+    private boolean strandedMeBefore(int npcId) {
+        String who = "npc:" + npcId;
+        return mind.semantic().liveBeliefs().stream()
+                .anyMatch(b -> b.subject().equals(who) && b.predicate().equals("strands_you"));
     }
 
     /**
@@ -195,9 +223,14 @@ public class Agent implements Runnable {
         // No model, or already thinking about the last thing it said: answer by reflex rather
         // than leave a conversation open with nobody attending it.
         if (dialogueReader == null || pendingDialogue != null) {
+            byte answer = strandedMeBefore(dialogue.npcId())
+                    ? NPC_NO
+                    : withoutReading(dialogue.style(), nowhereLeftToGo());
+            if (answer == NPC_YES_OR_NEXT && isAQuestion(dialogue.style())) {
+                wentAlongWith = dialogue.npcId();
+            }
             connection.session().send(ClientPackets.npcTalkMore(
-                    (byte) dialogue.style(),
-                    withoutReading(dialogue.style(), nowhereLeftToGo()), NO_SELECTION));
+                    (byte) dialogue.style(), answer, NO_SELECTION));
             return;
         }
         pendingDialogue = new PendingDialogue((byte) dialogue.style(), dialogue.npcId(),
@@ -280,8 +313,12 @@ public class Agent implements Runnable {
      * It is still an answer given without reading the words. What makes it defensible is
      * that the agent refuses until its own map says refusing costs it everything.
      */
+    static boolean isAQuestion(int style) {
+        return style == YES_OR_NO || style == ACCEPT_OR_DECLINE;
+    }
+
     static byte withoutReading(int style, boolean nowhereLeftToGo) {
-        if (style != YES_OR_NO && style != ACCEPT_OR_DECLINE) {
+        if (!isAQuestion(style)) {
             return NPC_YES_OR_NEXT;
         }
         return nowhereLeftToGo ? NPC_YES_OR_NEXT : NPC_NO;

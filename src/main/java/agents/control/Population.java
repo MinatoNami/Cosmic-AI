@@ -225,19 +225,9 @@ public class Population {
                 return;
             }
             running.remove(stuck);
-            try {
-                LoginFlow flow = new LoginFlow(host, port, WORLD, CHANNEL,
-                        new Random(stuck.name().hashCode()));
-                InWorld connection = flow.enterWorld(
-                        new Credentials(stuck.name().toLowerCase(), PASSWORD), stuck.name());
-                running.add(wake(stuck.name(), stuck.index(), stuck.phase(),
-                        connection, stuck.mind(), reachedTick));
-                log.info("{} is back in, now in map {}", stuck.name(),
-                        stuck.agent().world().mapId());
-            } catch (Exception couldNotReturn) {
+            if (!logBackIn(stuck, reachedTick)) {
                 // Its mind is still held and still saved; it simply is not in the world.
                 // Better than a half-started agent nobody can stop.
-                log.error("{} could not be logged back in", stuck.name(), couldNotReturn);
                 stuck.mind().close();
             }
         }
@@ -260,6 +250,50 @@ public class Population {
         running.forEach(r -> r.mind().close());
         running.clear();
     }
+
+    /**
+     * Logs one agent back in, waiting for the server to notice it has gone.
+     *
+     * The first version did not wait at all and failed every time: session closed, login
+     * attempted nine milliseconds later, "Login rejected, reason 7" - already logged in. The
+     * account is held until the server processes the disconnect, which is the same hazard
+     * {@link Agent#run} closes its session to avoid and which I then walked straight into.
+     * Both agents were dropped out of the world by a rescue meant to save them.
+     *
+     * Backs off rather than hammering, because the wait is the server's to serve.
+     */
+    private boolean logBackIn(Running stuck, long reachedTick) {
+        long waitMillis = 1000;
+        for (int attempt = 1; attempt <= LOGIN_ATTEMPTS; attempt++) {
+            try {
+                Thread.sleep(waitMillis);
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+                return false;
+            }
+            try {
+                LoginFlow flow = new LoginFlow(host, port, WORLD, CHANNEL,
+                        new Random(stuck.name().hashCode()));
+                InWorld connection = flow.enterWorld(
+                        new Credentials(stuck.name().toLowerCase(), PASSWORD), stuck.name());
+                Running woken = wake(stuck.name(), stuck.index(), stuck.phase(),
+                        connection, stuck.mind(), reachedTick);
+                running.add(woken);
+                log.info("{} is back in after {} attempt(s), now in map {}", stuck.name(),
+                        attempt, woken.agent().world().mapId());
+                return true;
+            } catch (Exception notYet) {
+                log.warn("{} could not be logged back in on attempt {}: {}", stuck.name(),
+                        attempt, notYet.getMessage());
+                waitMillis = Math.min(waitMillis * 2, 8000);
+            }
+        }
+        log.error("{} could not be logged back in at all", stuck.name());
+        return false;
+    }
+
+    /** Enough tries, with backoff, to outlast the server holding a disconnected account. */
+    private static final int LOGIN_ATTEMPTS = 5;
 
     /** Writes every mind down without interrupting anyone. */
     public synchronized void save() {
