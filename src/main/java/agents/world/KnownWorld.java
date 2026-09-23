@@ -46,6 +46,10 @@ public final class KnownWorld {
     /** Maps something was seen living in, which is where an agent can expect a fight. */
     private final Set<String> hunting = new HashSet<>();
 
+    /** Who is standing where, and which of them this agent has actually spoken to. */
+    private final Map<String, Set<String>> peopleIn = new HashMap<>();
+    private final Set<String> spokenTo = new HashSet<>();
+
     private KnownWorld() {
     }
 
@@ -66,7 +70,20 @@ public final class KnownWorld {
                 case "present_in" -> {
                     if (belief.subject().startsWith("monster:")) {
                         world.hunting.add(belief.object());
+                    } else if (belief.subject().startsWith("npc:")) {
+                        world.peopleIn.computeIfAbsent(belief.object(), m -> new HashSet<>())
+                                .add(belief.subject());
                     }
+                }
+                case "talks_in" -> {
+                    // First-hand only. An inherited conversation is one a predecessor had:
+                    // this agent has never met them, and going to find out what they say is
+                    // exactly the journey worth making.
+                    if (belief.provenance() == Belief.Provenance.FIRST_HAND) {
+                        world.spokenTo.add(belief.subject());
+                    }
+                    world.peopleIn.computeIfAbsent(belief.object(), m -> new HashSet<>())
+                            .add(belief.subject());
                 }
                 case "leads_to" -> {
                     String portal = belief.subject();
@@ -169,6 +186,31 @@ public final class KnownWorld {
      */
     public Optional<Route> routeToMonsters(String fromMap) {
         return search(fromMap, map -> !map.equals(fromMap) && hunting.contains(map), "hunting");
+    }
+
+    /**
+     * The shortest walk from here to somebody this agent has never spoken to.
+     *
+     * Ranked above hunting because of what each can change. Another snail is calories; a
+     * stranger might be holding the only way off the island - which is exactly the case this
+     * was written for. Both agents remembered NPCs in Southperry, had never met the one who
+     * sells passage, and had no reason to walk back there: no unopened doors anywhere, and
+     * no monsters remembered in that map. They spent half an hour going between two maps.
+     *
+     * Spoken-to counts only first-hand conversations. An inherited one belonged to a
+     * predecessor, and finding out for yourself what somebody says is the whole point.
+     */
+    public Optional<Route> routeToStrangers(String fromMap) {
+        return search(fromMap, map -> !map.equals(fromMap) && hasAStranger(map), "a stranger");
+    }
+
+    private boolean hasAStranger(String mapRef) {
+        for (String person : peopleIn.getOrDefault(mapRef, Set.of())) {
+            if (!spokenTo.contains(person)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** The shortest walk from here to a particular map, for when the agent has an errand. */

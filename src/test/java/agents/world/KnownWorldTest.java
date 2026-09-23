@@ -262,4 +262,64 @@ class KnownWorldTest {
         assertEquals("in00",
                 world.routeToNearestFrontier(KnownWorld.mapRef(10000)).orElseThrow().firstDoor());
     }
+
+    private void sawNpcIn(int mapId, int npcId) {
+        believe("npc:" + npcId, "present_in", KnownWorld.mapRef(mapId));
+    }
+
+    private void spokeTo(int mapId, int npcId) {
+        remembered.add(new Belief(remembered.size(), "npc:" + npcId, "talks_in",
+                KnownWorld.mapRef(mapId), 0.9, Belief.Provenance.FIRST_HAND, List.of(1L),
+                0, 0, null, null));
+    }
+
+    private void heardAboutConversation(int mapId, int npcId) {
+        remembered.add(new Belief(remembered.size(), "npc:" + npcId, "talks_in",
+                KnownWorld.mapRef(mapId), 0.5, Belief.Provenance.HEARSAY, List.of(1L),
+                0, 0, null, null));
+    }
+
+    /**
+     * The journey that was missing. Both agents remembered NPCs in Southperry, had never met
+     * the one who sells passage off the island, and had no reason to walk back there - every
+     * door was opened and no monsters were remembered in that map. They spent half an hour
+     * going between two maps instead.
+     */
+    @Test
+    void walksToSomebodyItHasNeverSpokenTo() {
+        doorLedTo(10000, "east00", 20000);
+        doorLedTo(20000, "east00", 2000000);
+        sawNpcIn(2000000, 22000);
+
+        KnownWorld.Route route = world().routeToStrangers(KnownWorld.mapRef(10000))
+                .orElseThrow();
+
+        assertEquals("east00", route.firstDoor());
+        assertEquals(2, route.hops());
+        assertEquals("a stranger", route.why());
+    }
+
+    @Test
+    void doesNotWalkBackToSomebodyItHasAlreadyMet() {
+        doorLedTo(10000, "east00", 20000);
+        sawNpcIn(20000, 2100);
+        spokeTo(20000, 2100);
+
+        assertTrue(world().routeToStrangers(KnownWorld.mapRef(10000)).isEmpty(),
+                "it has heard what that one has to say");
+    }
+
+    /**
+     * Hearing that a predecessor spoke to somebody is not the same as having met them, and
+     * finding out for yourself is the whole point of going.
+     */
+    @Test
+    void anInheritedConversationDoesNotCountAsHavingMetThem() {
+        doorLedTo(10000, "east00", 20000);
+        sawNpcIn(20000, 2100);
+        heardAboutConversation(20000, 2100);
+
+        assertEquals("a stranger",
+                world().routeToStrangers(KnownWorld.mapRef(10000)).orElseThrow().why());
+    }
 }

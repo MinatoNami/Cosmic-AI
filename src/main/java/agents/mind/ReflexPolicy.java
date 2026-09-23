@@ -937,16 +937,20 @@ public class ReflexPolicy implements Policy {
         // arrival, which is the honest way for something that learns as it walks to hold a
         // plan. An errand - an NPC that named a price this agent can now pay - outranks
         // curiosity, because it is the one journey with a known reward at the end of it.
-        // Three reasons to travel, in order of how much is known about what is waiting: an
-        // NPC whose price the agent can now pay, a door nobody has opened, and somewhere it
-        // remembers something living. The last one is what a world with nothing left to
-        // explore needs - without it every door fell through to the weakest rule there is,
-        // which walked two agents between shops and tutorial rooms for half an hour while a
-        // fighter did no fighting at all.
+        // Four reasons to travel, ordered by what each could change rather than by how
+        // certain it is: an NPC whose price the agent can now pay, a door nobody has opened,
+        // somebody it has never spoken to, and somewhere it remembers something living.
+        //
+        // Strangers outrank monsters because of the difference in what they can do for an
+        // agent. Another snail is calories. A stranger might be holding the only way off the
+        // island - which is literally the case here: both agents remembered NPCs in
+        // Southperry, had never met the one who sells passage, and had no reason to go back
+        // there, since nothing was unopened and no monsters were remembered in that map.
         String here = KnownWorld.mapRef(mapId);
         Optional<KnownWorld.Route> route = Optional.ofNullable(errandMap)
                 .flatMap(target -> known.routeTo(here, target))
                 .or(() -> known.routeToNearestFrontier(here))
+                .or(() -> known.routeToStrangers(here))
                 .or(() -> known.routeToMonsters(here));
         Optional<WorldModel.PortalTarget> planned = route.flatMap(plan -> portals.stream()
                 .filter(portal -> portal.name().equals(plan.firstDoor()))
