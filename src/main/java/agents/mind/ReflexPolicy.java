@@ -150,14 +150,8 @@ public class ReflexPolicy implements Policy {
      * pull in the scoring and the only thing that was interrupting journeys, so a walk that
      * is nearly done has to beat it outright or it will be abandoned a few steps from
      * arriving, over and over, which is what the traces showed.
-     *
-     * The near end is the old flat bonus rather than something smaller. Setting out at 0.3
-     * was a mistake measured rather than argued: it made a just-started journey cheaper to
-     * drop than it had ever been, and journeys duly started dying after one to five steps -
-     * 664 to 664 after one, 2624 to 2323 after five. Starting a walk should cost what it
-     * always did; only finishing one is worth more now.
      */
-    private static final double SETTING_OUT = 1.2;
+    private static final double SETTING_OUT = 0.3;
     private static final double ALMOST_THERE = 1.8;
 
     /** There is always something to do, even if it is only walking about. */

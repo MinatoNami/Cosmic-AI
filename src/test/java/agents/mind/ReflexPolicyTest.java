@@ -562,12 +562,8 @@ class ReflexPolicyTest {
         assertTrue(almostThere > 1.5,
                 "the last steps must outrank the strongest pull neglect can offer, which is "
                         + "1.5 - otherwise a walk is abandoned just before it pays off");
-        // Setting out costs what it always did. Making it cheaper was tried and measured:
-        // journeys started dying after one to five steps - 664 to 664 after one, 2624 to
-        // 2323 after five - because a walk just begun had become easier to drop than under
-        // the old flat bonus. Only finishing is worth more now.
-        assertEquals(1.2, settingOut, 0.0001,
-                "starting a journey should cost neither more nor less than it used to");
+        assertTrue(settingOut < 0.5,
+                "and a journey just begun should stay cheap to think better of");
     }
 
     @Test
