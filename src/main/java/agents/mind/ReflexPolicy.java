@@ -143,16 +143,7 @@ public class ReflexPolicy implements Policy {
      * Three separate versions of this bug have now cost a night between them - 199 MoveTos
      * without leaving the starting town, a door abandoned every six decisions, and this.
      */
-    /**
-     * What a journey is worth at its start and at its end.
-     *
-     * The far end sits above {@link #NEGLECT_MATTERS} on purpose: neglect is the strongest
-     * pull in the scoring and the only thing that was interrupting journeys, so a walk that
-     * is nearly done has to beat it outright or it will be abandoned a few steps from
-     * arriving, over and over, which is what the traces showed.
-     */
-    private static final double SETTING_OUT = 0.3;
-    private static final double ALMOST_THERE = 1.8;
+    private static final double COMMITTED = 1.2;
 
     /** There is always something to do, even if it is only walking about. */
     private static final double WANDERING_IS_BETTER_THAN_NOTHING = 0.05;
@@ -263,9 +254,6 @@ public class ReflexPolicy implements Policy {
 
     /** The closest the agent has got to {@link #journeyTo}, and how long since it improved. */
     private double closestApproach = Double.MAX_VALUE;
-
-    /** How far there was to go when this journey was taken on, so progress has a scale. */
-    private double journeyBegan;
     private int stalledFor;
 
     /**
@@ -466,32 +454,11 @@ public class ReflexPolicy implements Policy {
      * Keyed on where it was going as well as what kind, so a new monster does not inherit the
      * commitment earned walking towards a different one.
      */
-    /**
-     * How much a journey already begun is worth, which depends on how nearly it is done.
-     *
-     * A flat bonus loses to neglect and always did: neglect adds up to 1.5 and the flat
-     * commitment was 1.2, so every option the agent was not doing overtook the one it was,
-     * as soon as it had been walking long enough. Journeys are hundreds of pixels; nothing
-     * finished. One agent completed two of eleven, and the trace shows what replaced them -
-     * an NPC, then a quest it owed, then a door, each outbidding the last while it walked.
-     *
-     * So commitment starts cheap and ends dear. A journey just begun is easy to think better
-     * of, which is right - the agent has spent nothing on it. One nearly finished outranks
-     * anything neglect can offer, which is also right, because the last few steps are the
-     * cheapest progress available anywhere and giving them up wastes everything before them.
-     */
-    double commitmentTo(String kind, Point target, Point self) {
+    private double commitmentTo(String kind, Point target) {
         if (!kind.equals(journeyKind) || journeyTo == null) {
             return 0;
         }
-        if (journeyTo.distance(target) >= SAME_ERRAND) {
-            return 0;
-        }
-        double remaining = self.distance(journeyTo);
-        double howFarAlong = journeyBegan <= 0
-                ? 1
-                : Math.clamp(1 - remaining / journeyBegan, 0, 1);
-        return SETTING_OUT + howFarAlong * (ALMOST_THERE - SETTING_OUT);
+        return journeyTo.distance(target) < SAME_ERRAND ? COMMITTED : 0;
     }
 
     /** Close enough to count as the same destination between one decision and the next. */
@@ -529,7 +496,7 @@ public class ReflexPolicy implements Policy {
     private static final int WORTH_TRYING_AGAIN = 300;
 
     /** Remembers a journey begun, so the next decision knows it is already under way. */
-    void settingOff(String kind, Point target, Point from) {
+    private void settingOff(String kind, Point target) {
         // A new journey, not the same one re-confirmed. A monster drifts a few pixels every
         // decision and re-registers its journey each time; resetting the progress watch on
         // that would mean it never notices anything is wrong.
@@ -538,9 +505,6 @@ public class ReflexPolicy implements Policy {
         if (somewhereElse) {
             closestApproach = Double.MAX_VALUE;
             stalledFor = 0;
-        }
-        if (somewhereElse) {
-            journeyBegan = from.distance(target);
         }
         journeyKind = kind;
         journeyTo = target;
@@ -646,7 +610,7 @@ public class ReflexPolicy implements Policy {
             }
             double score = (0.2 + disposition.aggression()) * near
                     + NEGLECT_MATTERS * neglect("fight") + urgeFor("fight")
-                    + commitmentTo("fight", monster.position(), self);
+                    + commitmentTo("fight", monster.position());
             boolean withinReach = distance < MELEE_RANGE;
             Intent intent = withinReach
                     ? new Intent.Attack(monster.objectId(), monster.position())
@@ -656,7 +620,7 @@ public class ReflexPolicy implements Policy {
                     : "get closer to the thing I can see";
             Point where = monster.position();
             choices.add(new Choice("fight", intent, goal, score,
-                    withinReach ? this::arrived : () -> settingOff("fight", where, self)));
+                    withinReach ? this::arrived : () -> settingOff("fight", where)));
         });
     }
 
@@ -672,12 +636,12 @@ public class ReflexPolicy implements Policy {
             WorldModel.Entity host = errand.npc();
             double distance = host.position().distance(self);
             double score = 0.8 + NEGLECT_MATTERS * neglect("errand") + urgeFor("errand")
-                    + commitmentTo("errand", host.position(), self);
+                    + commitmentTo("errand", host.position());
             if (distance >= NPC_RANGE) {
                 Point where = host.position();
                 choices.add(new Choice("errand", new Intent.MoveTo(host.position()),
                         "go back to the one I owe something", score,
-                        () -> settingOff("errand", where, self)));
+                        () -> settingOff("errand", where)));
                 return;
             }
             choices.add(new Choice("errand",
@@ -710,13 +674,13 @@ public class ReflexPolicy implements Policy {
             double appeal = cameBackFor ? 1.0
                     : offer.isPresent() ? 0.7 : 0.2 + disposition.curiosity() * 0.3;
             double score = appeal + NEGLECT_MATTERS * neglect("talk") + urgeFor("talk")
-                    + commitmentTo("talk", npc.position(), self);
+                    + commitmentTo("talk", npc.position());
 
             if (distance >= NPC_RANGE) {
                 Point where = npc.position();
                 choices.add(new Choice("talk", new Intent.MoveTo(npc.position()),
                         "go and see what that one wants", score,
-                        () -> settingOff("talk", where, self)));
+                        () -> settingOff("talk", where)));
                 return;
             }
             if (offer.isPresent()) {
@@ -784,7 +748,7 @@ public class ReflexPolicy implements Policy {
                 + (stale ? 1.0 : 0)
                 + (errandMap != null ? ERRAND : 0)
                 + urgeFor("door")
-                + commitmentTo("door", door.position(), self);
+                + (alreadyOnTheWay ? COMMITTED : 0);
 
         if (door.position().distance(self) < PORTAL_RANGE) {
             choices.add(new Choice("door",
@@ -817,7 +781,7 @@ public class ReflexPolicy implements Policy {
                     // "under way" at once, each adding its bonus, which is the oscillation
                     // this was all meant to stop. settingOff overwrites, so there is exactly
                     // one thing an agent is in the middle of.
-                    settingOff("door", door.position(), self);
+                    settingOff("door", door.position());
                 }));
     }
 
