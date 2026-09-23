@@ -19,18 +19,33 @@ class AgentAnswersTest {
     private static final byte NO = 0;
 
     @Test
-    void declinesAQuestionItCannotRead() {
-        assertEquals(NO, Agent.withoutReading(1), "style 1 is sendYesNo");
-        assertEquals(NO, Agent.withoutReading(0x0C), "style 12 is sendAcceptDecline");
+    void declinesAQuestionItCannotReadWhileItStillHasSomewhereToGo() {
+        assertEquals(NO, Agent.withoutReading(1, false), "style 1 is sendYesNo");
+        assertEquals(NO, Agent.withoutReading(0x0C, false), "style 12 is sendAcceptDecline");
     }
 
     /**
-     * A statement still needs acknowledging, or the conversation sits open forever with
+     * The same question, asked of an agent that has run out of world.
+     *
+     * This is the distinction the reflex could not previously draw. NPC 2007 offers to skip
+     * the tutorials on the first morning, with an entire island unexplored - refuse. Shanks
+     * offers passage off that island once every door on it has been opened - accept, because
+     * refusing leaves the agent with nothing to do for the rest of its life.
+     */
+    @Test
+    void acceptsAnOfferToBeTakenSomewhereWhenThereIsNowhereLeft() {
+        assertEquals(YES_OR_NEXT, Agent.withoutReading(1, true));
+        assertEquals(YES_OR_NEXT, Agent.withoutReading(0x0C, true));
+    }
+
+    /**
+     * A statement still needs acknowledging either way, or the conversation sits open with
      * nobody attending it and the agent never gets another decision out of that NPC.
      */
     @Test
     void acknowledgesAStatement() {
-        assertEquals(YES_OR_NEXT, Agent.withoutReading(0), "style 0 is sendNext");
-        assertEquals(YES_OR_NEXT, Agent.withoutReading(4), "a menu is not a yes-or-no");
+        assertEquals(YES_OR_NEXT, Agent.withoutReading(0, false), "style 0 is sendNext");
+        assertEquals(YES_OR_NEXT, Agent.withoutReading(0, true));
+        assertEquals(YES_OR_NEXT, Agent.withoutReading(4, false), "a menu is not a yes-or-no");
     }
 }

@@ -12,6 +12,7 @@ import agents.percept.Perceiver;
 import agents.social.Claim;
 import agents.social.Conversation;
 import agents.social.Voice;
+import agents.world.KnownWorld;
 import agents.world.MapGeometry;
 import agents.world.WorldModel;
 import org.slf4j.Logger;
@@ -195,7 +196,8 @@ public class Agent implements Runnable {
         // than leave a conversation open with nobody attending it.
         if (dialogueReader == null || pendingDialogue != null) {
             connection.session().send(ClientPackets.npcTalkMore(
-                    (byte) dialogue.style(), withoutReading(dialogue.style()), NO_SELECTION));
+                    (byte) dialogue.style(),
+                    withoutReading(dialogue.style(), nowhereLeftToGo()), NO_SELECTION));
             return;
         }
         pendingDialogue = new PendingDialogue((byte) dialogue.style(), dialogue.npcId(),
@@ -228,7 +230,8 @@ public class Agent implements Runnable {
             pending.answer().cancel(true);
             // Out of patience is not the same as having decided. Whatever the question was,
             // nobody read it, so it gets the same answer as if there were no model at all.
-            reply = new DialogueReader.Reply(withoutReading(pending.style()),
+            reply = new DialogueReader.Reply(
+                    withoutReading(pending.style(), nowhereLeftToGo()),
                     DialogueReader.Reply.NO_SELECTION, "nobody read it in time", null);
         }
 
@@ -266,14 +269,38 @@ public class Agent implements Runnable {
      * tutorial room it could not walk out of. Both were offers, and both were accepted by
      * something with no way of reading them.
      *
-     * So a question gets a no and a statement gets an acknowledgement. This does cut both
-     * ways: a reflex agent will now decline the ferry it actually wants as readily as the
-     * shortcut it does not, because the control condition genuinely cannot tell them apart.
-     * That is the honest position for it to be in - accepting everything only looked like
-     * progress because nobody was counting what it agreed to.
+     * So a question gets a no and a statement gets an acknowledgement - unless the agent has
+     * nowhere left to go, which is something it can check rather than be told. An agent that
+     * can reach no unopened door anywhere it knows of is finished with where it is, and an
+     * offer to be taken somewhere is the only way on that remains. That is the difference
+     * the reflex previously could not see between two identically-shaped questions: the
+     * tutorial skip is offered on the first morning with a whole island unexplored, and the
+     * ferry is worth taking once the island is done.
+     *
+     * It is still an answer given without reading the words. What makes it defensible is
+     * that the agent refuses until its own map says refusing costs it everything.
      */
-    static byte withoutReading(int style) {
-        return style == YES_OR_NO || style == ACCEPT_OR_DECLINE ? NPC_NO : NPC_YES_OR_NEXT;
+    static byte withoutReading(int style, boolean nowhereLeftToGo) {
+        if (style != YES_OR_NO && style != ACCEPT_OR_DECLINE) {
+            return NPC_YES_OR_NEXT;
+        }
+        return nowhereLeftToGo ? NPC_YES_OR_NEXT : NPC_NO;
+    }
+
+    /**
+     * Whether the agent can still reach anywhere it has not opened.
+     *
+     * Read from its own beliefs through the same graph that plans its journeys, so "nowhere
+     * left to go" means here exactly what it means everywhere else: no route, along doors it
+     * has walked, to a door it has seen and never opened.
+     */
+    private boolean nowhereLeftToGo() {
+        if (world.mapId() <= 0) {
+            return false;       // it does not know where it is yet, so it knows nothing
+        }
+        return KnownWorld.rememberedBy(mind.semantic().liveBeliefs())
+                .routeToNearestFrontier(KnownWorld.mapRef(world.mapId()))
+                .isEmpty();
     }
 
     /**
