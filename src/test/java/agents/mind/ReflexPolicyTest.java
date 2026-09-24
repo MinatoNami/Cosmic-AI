@@ -536,4 +536,43 @@ class ReflexPolicyTest {
         assertEquals("east00", chosen.name(),
                 "nothing left to open, so the remembered hunting ground is the reason to move");
     }
+
+    /**
+     * The one it has not met, not the one it is standing next to.
+     *
+     * Both agents spent half an hour in Southperry among people they had already spoken to,
+     * while Shanks - who sells the only passage off Maple Island - stood two platforms above
+     * them. They perceived him fourteen times and never once approached: the talk choice
+     * only ever considered the nearest NPC, and one agent's highest point in the map was
+     * y=140, which is exactly the height of the NPC it had already talked to.
+     */
+    @Test
+    void crossesTheMapForSomebodyItHasNeverSpokenTo() {
+        world.update(new Observation.NpcAppeared(2, 7001, 2100, new Point(20, 0)));
+        world.update(new Observation.NpcAppeared(3, 7002, 22000, new Point(900, -400)));
+        // It has already heard what the near one has to say, first-hand.
+        mind.take(new Observation.DialogueShown(4, 2100, "hello again", 0));
+
+        Policy talker = new ReflexPolicy(new Random(1), Disposition.TALKER);
+        Intent intent = talker.decide(mind, world, 5).intent();
+
+        Point heading = assertInstanceOf(Intent.MoveTo.class, intent).destination();
+        assertEquals(new Point(900, -400), heading,
+                "the stranger is nine hundred pixels away and worth the walk; the one "
+                        + "underfoot has already been heard");
+    }
+
+    /** With nobody new about, the nearest is still the sensible one to bother. */
+    @Test
+    void otherwiseItTalksToWhoeverIsNearest() {
+        world.update(new Observation.NpcAppeared(2, 7001, 2100, new Point(20, 0)));
+        world.update(new Observation.NpcAppeared(3, 7002, 22000, new Point(900, -400)));
+
+        Policy talker = new ReflexPolicy(new Random(1), Disposition.TALKER);
+        Intent intent = talker.decide(mind, world, 4).intent();
+
+        assertTrue(intent instanceof Intent.TalkTo || intent instanceof Intent.StartQuest,
+                "neither has been met, so the one underfoot wins and gets talked to, got "
+                        + intent.getClass().getSimpleName());
+    }
 }

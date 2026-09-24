@@ -360,7 +360,7 @@ public class ReflexPolicy implements Policy {
         lootNearby(choices, world, self);
         somethingToFight(choices, world, self);
         unfinishedBusiness(choices, world, self, unfinished);
-        someoneToTalkTo(choices, world, self);
+        someoneToTalkTo(choices, world, mind, self);
         awayOutOfHere(choices, world, mind, self, stale);
         choices.add(new Choice("wander", new Intent.MoveTo(
                 new Point(self.x + random.nextInt(2 * WANDER_STEP) - WANDER_STEP, self.y)),
@@ -655,8 +655,43 @@ public class ReflexPolicy implements Policy {
         });
     }
 
-    private void someoneToTalkTo(List<Choice> choices, WorldModel world, Point self) {
-        world.nearestNpc().ifPresent(npc -> {
+    /**
+     * Which visible NPC is worth a decision.
+     *
+     * The nearest one used to win by default, and that is how an agent stood in Southperry
+     * for half an hour among people it had already met while Shanks - who sells the only
+     * passage off the island - waited two platforms above it, seen fourteen times and never
+     * approached. One agent's high-water mark was y=140, which is exactly the height of the
+     * NPC it had already spoken to.
+     *
+     * So somebody it has never spoken to outranks somebody it has, and among equals the
+     * nearest still wins. First-hand conversations only: an inherited one was a
+     * predecessor's, and finding out for yourself is the point.
+     */
+    private static Optional<WorldModel.Entity> worthTalkingTo(WorldModel world, Mind mind,
+                                                              Point self) {
+        Set<String> met = spokenTo(mind);
+        Comparator<WorldModel.Entity> strangersFirst = Comparator.comparingInt(
+                npc -> met.contains("npc:" + npc.typeId()) ? 1 : 0);
+        return world.visibleNpcs().stream()
+                .min(strangersFirst.thenComparingDouble(
+                        npc -> npc.position().distance(self)));
+    }
+
+    /** Everyone this agent has heard speak for itself, rather than been told about. */
+    private static Set<String> spokenTo(Mind mind) {
+        Set<String> met = new HashSet<>();
+        for (Belief belief : mind.semantic().liveBeliefs()) {
+            if (belief.predicate().equals("talks_in")
+                    && belief.provenance() == Belief.Provenance.FIRST_HAND) {
+                met.add(belief.subject());
+            }
+        }
+        return met;
+    }
+
+    private void someoneToTalkTo(List<Choice> choices, WorldModel world, Mind mind, Point self) {
+        worthTalkingTo(world, mind, self).ifPresent(npc -> {
             double distance = npc.position().distance(self);
             Optional<Integer> offer = QuestBoard.offeredBy(npc.typeId()).stream()
                     .filter(q -> !questsTried.contains(q))
