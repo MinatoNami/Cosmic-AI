@@ -575,4 +575,42 @@ class ReflexPolicyTest {
                 "neither has been met, so the one underfoot wins and gets talked to, got "
                         + intent.getClass().getSimpleName());
     }
+
+    /**
+     * One NPC that will not answer must not cost the agent the whole decision.
+     *
+     * Some NPCs never open a dialogue - the server logs "NPC 21000 is not coded" - so no
+     * conversation is ever recorded and they stay strangers forever. An agent in Southperry
+     * picked the nearest such stranger, got nothing, was barred from asking it again for six
+     * hundred decisions, and offered no talk option at all in the meantime. Shanks stood
+     * three platforms up, the only reason to be in that map, and was never considered
+     * because the selection had already been spent on somebody who would not speak.
+     */
+    @Test
+    void looksPastAnNpcItHasJustAskedAndGotNothingFrom() {
+        Point nearAndSilent = new Point(20, 0);
+        Point fartherAndWorthIt = new Point(900, -400);
+        world.update(new Observation.NpcAppeared(2, 7001, 21000, nearAndSilent));
+        world.update(new Observation.NpcAppeared(3, 7002, 22000, fartherAndWorthIt));
+
+        ReflexPolicy policy = new ReflexPolicy(new Random(1), Disposition.TALKER);
+
+        // It tries the near one first - nothing is known about either yet.
+        Intent first = policy.decide(mind, world, 0).intent();
+        assertTrue(first instanceof Intent.TalkTo || first instanceof Intent.MoveTo,
+                "it should engage the nearest of two strangers, got "
+                        + first.getClass().getSimpleName());
+
+        // That one never answers, so no conversation is recorded. It should now look past it
+        // rather than spend every decision on somebody who will not speak.
+        boolean reachedForTheOtherOne = false;
+        for (int decision = 1; decision < 40 && !reachedForTheOtherOne; decision++) {
+            Intent intent = policy.decide(mind, world, decision).intent();
+            reachedForTheOtherOne = intent instanceof Intent.MoveTo going
+                    && going.destination().equals(fartherAndWorthIt);
+        }
+
+        assertTrue(reachedForTheOtherOne,
+                "the silent one is asked and set aside; the other is still worth crossing to");
+    }
 }

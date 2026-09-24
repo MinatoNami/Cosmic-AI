@@ -668,14 +668,40 @@ public class ReflexPolicy implements Policy {
      * nearest still wins. First-hand conversations only: an inherited one was a
      * predecessor's, and finding out for yourself is the point.
      */
-    private static Optional<WorldModel.Entity> worthTalkingTo(WorldModel world, Mind mind,
-                                                              Point self) {
+    private Optional<WorldModel.Entity> worthTalkingTo(WorldModel world, Mind mind,
+                                                       Point self) {
         Set<String> met = spokenTo(mind);
         Comparator<WorldModel.Entity> strangersFirst = Comparator.comparingInt(
                 npc -> met.contains("npc:" + npc.typeId()) ? 1 : 0);
         return world.visibleNpcs().stream()
+                .filter(this::stillWorthAsking)
                 .min(strangersFirst.thenComparingDouble(
                         npc -> npc.position().distance(self)));
+    }
+
+    /**
+     * Whether this one is worth choosing at all just now.
+     *
+     * The check used to happen after the choice was made, which meant one rejected candidate
+     * cost the agent the whole decision - nobody else was considered. It mattered because
+     * some NPCs never answer: the server logs "NPC 21000 is not coded", no dialogue window
+     * opens, so no conversation is ever recorded and they stay strangers forever. An agent
+     * in Southperry picked the nearest such stranger, got nothing, was barred from asking it
+     * again for six hundred decisions, and produced no talk option at all in the meantime -
+     * while Shanks, three platforms up and the only reason to be in that map, went
+     * unconsidered because the selection had already been spent.
+     */
+    private boolean stillWorthAsking(WorldModel.Entity npc) {
+        if (npc.typeId() == errandNpc) {
+            return true;
+        }
+        boolean hasSomethingToOffer = QuestBoard.offeredBy(npc.typeId()).stream()
+                .anyMatch(quest -> !questsTried.contains(quest));
+        if (hasSomethingToOffer) {
+            return true;
+        }
+        Integer greeted = greetedAt.get(npc.typeId());
+        return greeted == null || decisionsMade - greeted >= WORTH_ANOTHER_ASK;
     }
 
     /** Everyone this agent has heard speak for itself, rather than been told about. */
