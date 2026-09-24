@@ -53,8 +53,10 @@ public class DialogueReader {
 
             Take particular care with an offer to take you somewhere. Being moved is not \
             easily undone: it can skip everything you were in the middle of, or put you \
-            somewhere with no way back. Say CONTINUE only if going there is what you \
-            actually wanted.""";
+            somewhere with no way back. You are told how you are placed before the NPC's \
+            words - weigh the offer against that. Somewhere to go and things unfinished \
+            mean an offer of passage is a distraction; nothing left within walking distance \
+            means it is the only way on.""";
 
     /**
      * What to send back: the action byte, a menu selection when one was asked for, and
@@ -86,8 +88,18 @@ public class DialogueReader {
      * @return what to say back, or empty when the model could not be reached - the caller
      *         should fall back to the reflex rather than leave the NPC hanging
      */
-    public Optional<Reply> read(Observation.DialogueShown dialogue) {
-        String question = "The NPC says:\n\n" + dialogue.text().strip()
+    /**
+     * @param situation how the agent is placed, in its own terms
+     *
+     * Without it the model answered every offer of passage with DECLINE, and was right to:
+     * the prompt tells it to accept only if going there is what the agent wanted, and
+     * nothing told it what the agent wanted. Shanks asks "do you want to go to Victoria
+     * Island? It costs 150 mesos" - an excellent offer to somebody who has opened every door
+     * on the island, and a distraction to somebody who has not.
+     */
+    public Optional<Reply> read(Observation.DialogueShown dialogue, String situation) {
+        String question = "How you are placed: " + situation
+                + "\n\nThe NPC says:\n\n" + dialogue.text().strip()
                 + "\n\nWhat do you answer?";
         String answer = oracle.ask(SYSTEM, question);
         if (answer == null || answer.isBlank()) {

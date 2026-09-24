@@ -237,7 +237,8 @@ public class Agent implements Runnable {
         }
         pendingDialogue = new PendingDialogue((byte) dialogue.style(), dialogue.npcId(),
                 System.currentTimeMillis(),
-                CompletableFuture.supplyAsync(() -> dialogueReader.read(dialogue), reading));
+                CompletableFuture.supplyAsync(() -> dialogueReader.read(dialogue, situation()),
+                        reading));
     }
 
     /**
@@ -347,6 +348,34 @@ public class Agent implements Runnable {
         return KnownWorld.rememberedBy(mind.semantic().liveBeliefs())
                 .routeToNearestFrontier(KnownWorld.mapRef(world.mapId()))
                 .isEmpty();
+    }
+
+    /**
+     * How the agent is placed, in the only terms it has: what it is, what it carries, and
+     * whether anywhere is left.
+     *
+     * Handed to the model with every NPC's words, because without it every offer of passage
+     * came back DECLINE - correctly, given a prompt that says to accept only if going there
+     * is what the agent wanted, and nothing anywhere saying what it wanted. The same
+     * condition the reflex uses to decide the same question, so the two cannot drift.
+     */
+    private String situation() {
+        StringBuilder placed = new StringBuilder("you are level ").append(world.level());
+        mesosHeld().ifPresent(mesos -> placed.append(", carrying ").append(mesos).append(" mesos"));
+        placed.append(nowhereLeftToGo()
+                ? ". You have opened every door you know of and there is nowhere left to "
+                  + "walk to that you have not already seen."
+                : ". There is still somewhere you have not been, or somebody here you have "
+                  + "not spoken to.");
+        return placed.toString();
+    }
+
+    /** What the server last told this agent about its own purse. */
+    private java.util.Optional<String> mesosHeld() {
+        return mind.semantic().liveBeliefs().stream()
+                .filter(b -> b.subject().equals("self") && b.predicate().equals("meso"))
+                .map(Belief::object)
+                .findFirst();
     }
 
     /** Whether anyone on screen here has never been heard from first-hand. */
