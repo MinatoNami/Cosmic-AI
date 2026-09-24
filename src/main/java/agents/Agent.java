@@ -77,7 +77,16 @@ public class Agent implements Runnable {
     }
 
     /** After this the NPC has waited long enough and gets the thoughtless answer. */
-    private static final long DIALOGUE_PATIENCE_MILLIS = 20_000;
+    /**
+     * How long an NPC waits for an answer.
+     *
+     * Twenty seconds was chosen for a model that answered in about fifteen. This one takes
+     * seven to eighteen on its own and longer when anything else is asking, so conversations
+     * were being handed back to the reflex with "nobody read it in time" - the one thing the
+     * model is actually good at, timed out. A conversation is worth waiting for; there is
+     * nothing else the agent needs to be doing while an NPC holds a window open.
+     */
+    private static final long DIALOGUE_PATIENCE_MILLIS = 45_000;
 
     private final Disposition disposition;
     private int steps;

@@ -134,7 +134,7 @@ public class LlmPolicy implements Policy {
         collectAnswer();
         List<Belief> recalled = mind.recall(situationTopic(world), tick, BELIEFS_IN_PROMPT);
 
-        if (pending == null && decisions++ % deliberateEvery == 0) {
+        if (pending == null && decisions++ % deliberateEvery == 0 && worthAsking()) {
             String question = describe(mind, world, recalled);
             pending = CompletableFuture.supplyAsync(() -> oracle.ask(SYSTEM, question), thinking);
         }
@@ -172,6 +172,41 @@ public class LlmPolicy implements Policy {
     }
 
     /** Reflexes decide this one, and the trace says so and why. */
+    /**
+     * Whether the model is worth asking for a whole decision just now.
+     *
+     * A model that answers nothing still costs everything. This one reasons its way to the
+     * token limit on the deliberation prompt every single time, and LM Studio serves one
+     * request at a time - so each failed deliberation held the model for the better part of
+     * a minute while an NPC stood waiting, and the dialogue it was asked to read timed out
+     * instead. Two conversations in ten minutes, one of them answered by the reflex with
+     * "nobody read it in time", while the agent was standing in front of the person who
+     * sells passage off the island.
+     *
+     * Reading an NPC is the more valuable of the two and the one this model is good at, so
+     * deliberation gets out of its way after a run of failures and tries again later.
+     */
+    private boolean worthAsking() {
+        if (failuresInARow < GIVE_IT_A_REST) {
+            return true;
+        }
+        if (--restingFor > 0) {
+            return false;
+        }
+        failuresInARow = 0;         // one more try, and back to resting if it fails again
+        restingFor = REST_FOR;
+        return true;
+    }
+
+    /** How many answerless replies before deliberation stops competing for the model. */
+    private static final int GIVE_IT_A_REST = 3;
+
+    /** And how many decisions it stays out of the way for. */
+    private static final int REST_FOR = 200;
+
+    private int failuresInARow;
+    private int restingFor = REST_FOR;
+
     private Decision fellBack(Mind mind, WorldModel world, long tick, String because) {
         return fallback.decide(mind, world, tick).creditedTo(fallback.name(), because);
     }
@@ -208,7 +243,9 @@ public class LlmPolicy implements Policy {
         pending = null;
         if (reply != null && !reply.isBlank()) {
             unreadReply = reply;
+            failuresInARow = 0;
         } else if (unusedAnswer == null) {
+            failuresInARow++;
             // Null covers a timeout, a refused connection and a reasoning model that spent its
             // whole budget thinking. Which one it was is in the log; that this decision was
             // not the model's belongs in the trace.
