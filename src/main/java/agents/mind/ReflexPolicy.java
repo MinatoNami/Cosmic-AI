@@ -752,7 +752,14 @@ public class ReflexPolicy implements Policy {
             //
             // So somebody never heard from gets listened to first. The quest is still there
             // afterwards; the sentence might not be.
-            boolean neverHeardThemSpeak = !spokenTo(mind).contains("npc:" + npc.typeId());
+            // Having tried counts, even when nothing came back. Some NPCs never answer -
+            // the server calls them "not coded" - so no conversation is ever recorded, and
+            // insisting on one first meant an agent said hello to somebody who cannot speak
+            // three hundred and eighty-five times in half an hour and did nothing else. The
+            // quest kept them permanently worth asking; the silence kept them permanently
+            // unheard. Say hello once, then take what they are offering.
+            boolean neverHeardThemSpeak = !spokenTo(mind).contains("npc:" + npc.typeId())
+                    && !greetedAt.containsKey(npc.typeId());
             if (offer.isPresent() && !neverHeardThemSpeak) {
                 choices.add(new Choice("talk",
                         new Intent.StartQuest(offer.get(), npc.typeId(), npc.position()),

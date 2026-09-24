@@ -646,4 +646,31 @@ class ReflexPolicyTest {
         assertInstanceOf(Intent.StartQuest.class, then,
                 "the conversation has been had; now the quest is what is left");
     }
+
+    /**
+     * One hello is enough to have asked. Some NPCs never answer - the server calls them
+     * "not coded" - so no conversation is ever recorded, and an agent that waits for one
+     * before taking their quest waits for ever. One said hello three hundred and eighty-five
+     * times in half an hour and did nothing else at all.
+     */
+    @Test
+    void takesTheQuestAfterOneUnansweredHello() {
+        world.update(new Observation.NpcAppeared(2, 7001, 2100, new Point(20, 0)));
+        Policy talker = new ReflexPolicy(new Random(1), Disposition.TALKER);
+
+        assertInstanceOf(Intent.TalkTo.class, talker.decide(mind, world, 2).intent(),
+                "first it says hello, because nobody has heard this one speak");
+
+        // No dialogue comes back - this one never answers anybody.
+        Intent next = null;
+        for (int decision = 3; decision < 12; decision++) {
+            next = talker.decide(mind, world, decision).intent();
+            if (next instanceof Intent.StartQuest) {
+                break;
+            }
+        }
+
+        assertInstanceOf(Intent.StartQuest.class, next,
+                "having asked once and got nothing, it should take the quest and move on");
+    }
 }
