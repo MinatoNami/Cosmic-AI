@@ -322,4 +322,33 @@ class KnownWorldTest {
         assertEquals("a stranger",
                 world().routeToStrangers(KnownWorld.mapRef(10000)).orElseThrow().why());
     }
+
+    /**
+     * Do not cross the island to meet a stranger while one is standing in front of you.
+     *
+     * An agent spent an afternoon in Southperry with three NPCs in sight - Shanks, who sells
+     * the only passage off Maple Island, among them - and its goal the whole time was the
+     * door, because a stranger one map away was a reason to travel and a stranger underfoot
+     * was not a reason to stay.
+     */
+    @Test
+    void staysPutWhenTheStrangerIsRightHere() {
+        doorLedTo(10000, "east00", 20000);
+        sawNpcIn(10000, 22000);      // unmet, in this very map
+        sawNpcIn(20000, 2100);       // also unmet, one map away
+
+        assertTrue(world().routeToStrangers(KnownWorld.mapRef(10000)).isEmpty(),
+                "there is somebody new here; the journey is pointless");
+    }
+
+    @Test
+    void travelsOnceEverybodyHereHasBeenMet() {
+        doorLedTo(10000, "east00", 20000);
+        sawNpcIn(10000, 22000);
+        spokeTo(10000, 22000);
+        sawNpcIn(20000, 2100);
+
+        assertEquals("east00",
+                world().routeToStrangers(KnownWorld.mapRef(10000)).orElseThrow().firstDoor());
+    }
 }

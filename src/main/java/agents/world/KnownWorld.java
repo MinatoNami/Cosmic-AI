@@ -201,6 +201,13 @@ public final class KnownWorld {
      * predecessor, and finding out for yourself what somebody says is the whole point.
      */
     public Optional<Route> routeToStrangers(String fromMap) {
+        if (hasAStranger(fromMap)) {
+            // Somebody new is already here. Walking to the next map to meet a stranger while
+            // one stands in front of you is how an agent spent an afternoon in Southperry
+            // with three people in sight and Shanks - who sells the only passage off the
+            // island - among them, heading for the door the whole time.
+            return Optional.empty();
+        }
         return search(fromMap, map -> !map.equals(fromMap) && hasAStranger(map), "a stranger");
     }
 
