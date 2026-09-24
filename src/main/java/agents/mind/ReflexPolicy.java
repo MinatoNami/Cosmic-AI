@@ -744,7 +744,16 @@ public class ReflexPolicy implements Policy {
                         () -> settingOff("talk", where)));
                 return;
             }
-            if (offer.isPresent()) {
+            // Taking what somebody offers and hearing what they have to say are different
+            // things, and the quest marker used to win both. Shanks offers quest 1028, so an
+            // agent standing in front of him took the quest every time and never once opened
+            // a conversation - which is where "do you want to go to Victoria Island? It costs
+            // 150 mesos" lives. The model could read that perfectly and was never shown it.
+            //
+            // So somebody never heard from gets listened to first. The quest is still there
+            // afterwards; the sentence might not be.
+            boolean neverHeardThemSpeak = !spokenTo(mind).contains("npc:" + npc.typeId());
+            if (offer.isPresent() && !neverHeardThemSpeak) {
                 choices.add(new Choice("talk",
                         new Intent.StartQuest(offer.get(), npc.typeId(), npc.position()),
                         "take whatever this one is offering", score,

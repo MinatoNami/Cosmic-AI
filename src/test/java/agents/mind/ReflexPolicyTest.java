@@ -613,4 +613,37 @@ class ReflexPolicyTest {
         assertTrue(reachedForTheOtherOne,
                 "the silent one is asked and set aside; the other is still worth crossing to");
     }
+
+    /**
+     * Hear somebody out before taking what they are handing you.
+     *
+     * Shanks offers quest 1028, so an agent standing in front of him took the quest every
+     * single time and never opened a conversation - and "do you want to go to Victoria
+     * Island? It costs 150 mesos" only exists inside the conversation. The model could read
+     * that line correctly in isolation and was never once shown it.
+     */
+    @Test
+    void listensToSomebodyBeforeTakingTheirQuest() {
+        // 2100 starts quest 1031 and this agent has never heard it speak.
+        world.update(new Observation.NpcAppeared(2, 7001, 2100, new Point(20, 0)));
+
+        Policy talker = new ReflexPolicy(new Random(1), Disposition.TALKER);
+        Intent first = talker.decide(mind, world, 2).intent();
+
+        assertInstanceOf(Intent.TalkTo.class, first,
+                "it has a quest to give, but nobody has heard what else it has to say");
+    }
+
+    /** Once heard, the quest is the useful thing about them. */
+    @Test
+    void takesTheQuestOnceItHasHeardThemSpeak() {
+        world.update(new Observation.NpcAppeared(2, 7001, 2100, new Point(20, 0)));
+        mind.take(new Observation.DialogueShown(3, 2100, "good day to you", 0));
+
+        Policy talker = new ReflexPolicy(new Random(1), Disposition.TALKER);
+        Intent then = talker.decide(mind, world, 4).intent();
+
+        assertInstanceOf(Intent.StartQuest.class, then,
+                "the conversation has been had; now the quest is what is left");
+    }
 }
