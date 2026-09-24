@@ -704,6 +704,34 @@ public class ReflexPolicy implements Policy {
         return greeted == null || decisionsMade - greeted >= WORTH_ANOTHER_ASK;
     }
 
+    /**
+     * Who the agent has spoken to, got nothing from, and has left alone long enough.
+     *
+     * Somebody who named a price is finished with - the agent already holds what they had to
+     * give, and wants_first will bring it back when it can pay. Somebody who said nothing
+     * useful is a different case entirely and had no way back at all: met, therefore not a
+     * stranger, therefore nowhere worth travelling to. That is how an agent came away from
+     * Shanks empty-handed during the window when dialogues were timing out and never
+     * returned to the one person holding the way off the island.
+     *
+     * The cooldown is the same one that stops it pestering anybody else, so this cannot
+     * become a loop: it will travel back, and then wait its turn to ask.
+     */
+    private Set<String> worthHearingAgain(KnownWorld known) {
+        Set<String> again = new HashSet<>();
+        Set<String> alreadyTold = known.whoNamedAPrice();
+        for (String who : known.everyoneSpokenTo()) {
+            if (alreadyTold.contains(who)) {
+                continue;
+            }
+            Integer asked = greetedAt.get(npcIdIn(who));
+            if (asked == null || decisionsMade - asked >= WORTH_ANOTHER_ASK) {
+                again.add(who);
+            }
+        }
+        return again;
+    }
+
     /** Everyone this agent has heard speak for itself, rather than been told about. */
     private static Set<String> spokenTo(Mind mind) {
         Set<String> met = new HashSet<>();
@@ -1028,6 +1056,7 @@ public class ReflexPolicy implements Policy {
                 .flatMap(target -> known.routeTo(here, target))
                 .or(() -> known.routeToNearestFrontier(here))
                 .or(() -> known.routeToStrangers(here))
+                .or(() -> known.routeToUnfinishedTalk(here, worthHearingAgain(known)))
                 .or(() -> known.routeToMonsters(here));
         Optional<WorldModel.PortalTarget> planned = route.flatMap(plan -> portals.stream()
                 .filter(portal -> portal.name().equals(plan.firstDoor()))

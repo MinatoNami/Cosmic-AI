@@ -50,6 +50,9 @@ public final class KnownWorld {
     private final Map<String, Set<String>> peopleIn = new HashMap<>();
     private final Set<String> spokenTo = new HashSet<>();
 
+    /** Those who stated a condition, so the agent already has what they had to give. */
+    private final Set<String> namedAPrice = new HashSet<>();
+
     private KnownWorld() {
     }
 
@@ -75,6 +78,7 @@ public final class KnownWorld {
                                 .add(belief.subject());
                     }
                 }
+                case "wants_first" -> world.namedAPrice.add(belief.subject());
                 case "talks_in" -> {
                     // First-hand only. An inherited conversation is one a predecessor had:
                     // this agent has never met them, and going to find out what they say is
@@ -218,6 +222,39 @@ public final class KnownWorld {
             }
         }
         return false;
+    }
+
+    /**
+     * The shortest walk to somebody worth hearing from again.
+     *
+     * There has always been a way back to an NPC that named a price - that is what
+     * wants_first is - and no way back to one the agent spoke to and got nothing from. An
+     * agent asked Shanks a question during the window when every dialogue was timing out,
+     * came away with nothing, and filed him as met; after that nothing in the world would
+     * take it back to the one person holding the way off the island, because a met NPC is
+     * not a stranger and a map of met NPCs is not worth travelling to.
+     *
+     * Who is worth hearing again is the caller's judgement, because the cooldown that stops
+     * an agent pestering somebody lives with the policy. This only knows where they stand.
+     */
+    public Optional<Route> routeToUnfinishedTalk(String fromMap, Set<String> worthHearingAgain) {
+        if (worthHearingAgain.isEmpty()) {
+            return Optional.empty();
+        }
+        return search(fromMap, map -> !map.equals(fromMap)
+                        && peopleIn.getOrDefault(map, Set.of()).stream()
+                                .anyMatch(worthHearingAgain::contains),
+                "unfinished talk");
+    }
+
+    /** Everyone this agent has heard speak, whether or not it learned anything. */
+    public Set<String> everyoneSpokenTo() {
+        return Set.copyOf(spokenTo);
+    }
+
+    /** Whoever this agent is holding a stated condition from, so it need not ask again. */
+    public Set<String> whoNamedAPrice() {
+        return Set.copyOf(namedAPrice);
     }
 
     /** The shortest walk from here to a particular map, for when the agent has an errand. */

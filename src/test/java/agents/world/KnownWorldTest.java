@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Test;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -350,5 +351,56 @@ class KnownWorldTest {
 
         assertEquals("east00",
                 world().routeToStrangers(KnownWorld.mapRef(10000)).orElseThrow().firstDoor());
+    }
+
+    private void toldAPrice(int npcId, String price) {
+        believe("npc:" + npcId, "wants_first", price);
+    }
+
+    /**
+     * There has always been a way back to somebody who named a price - that is what
+     * wants_first is - and no way back to somebody the agent spoke to and got nothing from.
+     *
+     * An agent asked Shanks a question during the window when every dialogue was timing out,
+     * came away with nothing, and filed him as met. After that nothing would take it back:
+     * a met NPC is not a stranger, and a map of met NPCs is not worth travelling to. It
+     * wandered two maps away from the only person holding the way off the island.
+     */
+    @Test
+    void goesBackToSomebodyItLearnedNothingFrom() {
+        doorLedTo(10000, "east00", 20000);
+        doorLedTo(20000, "east00", 2000000);
+        sawNpcIn(2000000, 22000);
+        spokeTo(2000000, 22000);        // met, and told nothing
+
+        KnownWorld.Route route = world()
+                .routeToUnfinishedTalk(KnownWorld.mapRef(10000), Set.of("npc:22000"))
+                .orElseThrow();
+
+        assertEquals("east00", route.firstDoor());
+        assertEquals(2, route.hops());
+        assertEquals("unfinished talk", route.why());
+    }
+
+    /** Somebody who named a price is finished with; wants_first brings the agent back. */
+    @Test
+    void doesNotGoBackToSomebodyWhoAlreadyNamedTheirPrice() {
+        doorLedTo(10000, "east00", 2000000);
+        sawNpcIn(2000000, 22000);
+        spokeTo(2000000, 22000);
+        toldAPrice(22000, "150 mesos");
+
+        KnownWorld world = world();
+        assertTrue(world.whoNamedAPrice().contains("npc:22000"));
+        assertTrue(world.routeToUnfinishedTalk(KnownWorld.mapRef(10000), Set.of()).isEmpty(),
+                "the caller excludes them, and with nobody left there is no journey");
+    }
+
+    @Test
+    void offersNoJourneyWhenThereIsNobodyWorthHearingAgain() {
+        doorLedTo(10000, "east00", 2000000);
+        sawNpcIn(2000000, 22000);
+
+        assertTrue(world().routeToUnfinishedTalk(KnownWorld.mapRef(10000), Set.of()).isEmpty());
     }
 }
