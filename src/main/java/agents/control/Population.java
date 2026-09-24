@@ -381,6 +381,10 @@ public class Population {
                     r.name(),
                     r.agent().disposition().name(),
                     r.agent().policyName(),
+                    // In sight, not remembered. Every question about why an agent will not
+                    // talk to somebody has come down to whether it can currently see them,
+                    // and that was the one thing nothing reported.
+                    r.agent().world().visibleNpcs().size(),
                     r.thread().isAlive(),
                     r.agent().world().mapId(),
                     mapName(r.agent().world().mapId()),
@@ -434,6 +438,7 @@ public class Population {
     }
 
     public record AgentStatus(String name, String disposition, String policy,
+                             int npcsInSight,
                              boolean alive, int mapId,
                               String mapName, int level, int hp, int maxHp, int episodes,
                               int beliefs, int liveBeliefs, long tick, String goal, String intent) {
