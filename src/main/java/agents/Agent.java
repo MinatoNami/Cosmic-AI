@@ -21,6 +21,8 @@ import org.slf4j.LoggerFactory;
 import java.time.Duration;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Set;
+import java.util.HashSet;
 import java.util.Optional;
 import java.util.Random;
 import java.util.concurrent.CompletableFuture;
@@ -335,9 +337,29 @@ public class Agent implements Runnable {
         if (world.mapId() <= 0) {
             return false;       // it does not know where it is yet, so it knows nothing
         }
+        if (somebodyHereIsStillAStranger()) {
+            // Not yet. Accepting a lift while somebody in this room has never been spoken to
+            // is how both agents kept being carried out of Southperry - the one map holding
+            // the person who sells passage off the island - by whoever offered first. What
+            // you are looking for might be them.
+            return false;
+        }
         return KnownWorld.rememberedBy(mind.semantic().liveBeliefs())
                 .routeToNearestFrontier(KnownWorld.mapRef(world.mapId()))
                 .isEmpty();
+    }
+
+    /** Whether anyone on screen here has never been heard from first-hand. */
+    private boolean somebodyHereIsStillAStranger() {
+        Set<String> met = new HashSet<>();
+        for (Belief belief : mind.semantic().liveBeliefs()) {
+            if (belief.predicate().equals("talks_in")
+                    && belief.provenance() == Belief.Provenance.FIRST_HAND) {
+                met.add(belief.subject());
+            }
+        }
+        return world.visibleNpcs().stream()
+                .anyMatch(npc -> !met.contains("npc:" + npc.typeId()));
     }
 
     /**
