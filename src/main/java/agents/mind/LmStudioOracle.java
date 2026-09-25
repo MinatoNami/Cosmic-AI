@@ -127,6 +127,66 @@ public class LmStudioOracle implements Oracle {
         return askOpenAiShaped(system, user);
     }
 
+    /**
+     * Holds the model to a JSON schema, which is also what keeps it from reasoning.
+     *
+     * Only the OpenAI-shaped endpoint takes a schema, and that endpoint will not switch
+     * reasoning off - but a schema constrains the output from its first token, which leaves
+     * no room to think: the deliberation prompt comes back as valid JSON in under a second.
+     * LM Studio then files that JSON as reasoning rather than as the answer, because the
+     * model's template opens in thinking mode, so the answer is read from either field.
+     */
+    @Override
+    public String ask(String system, String user, String jsonSchema) {
+        if (jsonSchema == null) {
+            return ask(system, user);
+        }
+        try {
+            ObjectNode body = json.createObjectNode();
+            body.put("model", model != null ? model : "local-model");
+            body.put("max_tokens", ANSWER_TOKENS);
+            body.put("temperature", TEMPERATURE);
+            ArrayNode messages = body.putArray("messages");
+            messages.addObject().put("role", "system").put("content", system);
+            messages.addObject().put("role", "user").put("content", user);
+            ObjectNode format = body.putObject("response_format");
+            format.put("type", "json_schema");
+            ObjectNode schema = format.putObject("json_schema");
+            schema.put("name", "answer");
+            schema.put("strict", true);
+            schema.set("schema", json.readTree(jsonSchema));
+
+            HttpRequest request = HttpRequest.newBuilder(endpoint)
+                    .timeout(TIMEOUT)
+                    .header("Content-Type", "application/json")
+                    .POST(HttpRequest.BodyPublishers.ofString(json.writeValueAsString(body)))
+                    .build();
+            HttpResponse<String> response = http.send(request, HttpResponse.BodyHandlers.ofString());
+            if (response.statusCode() != 200) {
+                log.warn("LM Studio answered {}: {}", response.statusCode(),
+                        abbreviate(response.body()));
+                return null;
+            }
+            JsonNode message = json.readTree(response.body()).path("choices").path(0).path("message");
+            for (String field : new String[]{"content", "reasoning_content"}) {
+                String text = message.path(field).asText("").trim();
+                if (text.startsWith("{")) {
+                    return text;
+                }
+            }
+            log.warn("LM Studio returned no JSON answer. finish_reason={}",
+                    json.readTree(response.body()).path("choices").path(0)
+                            .path("finish_reason").asText("?"));
+            return null;
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return null;
+        } catch (Exception e) {
+            log.warn("Could not reach LM Studio at {}, falling back", endpoint, e);
+            return null;
+        }
+    }
+
     /** Thrown only when the endpoint is missing, so the fallback is not taken for a bad answer. */
     private static class NoNativeEndpoint extends Exception {
         NoNativeEndpoint(String message) {

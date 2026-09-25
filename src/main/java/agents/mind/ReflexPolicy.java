@@ -93,14 +93,26 @@ public class ReflexPolicy implements Policy {
      * Decisions since anything went right, which is how an agent notices it has outstayed a
      * place.
      *
-     * Levelling is the only progress signal an agent gets for free - it is told its own level
-     * and nothing about what a map is worth - so "no level in a long time" stands in for "this
-     * has stopped paying". Crude, and honest about being crude: it is a conclusion drawn from
-     * the agent's own experience rather than a table of which map suits which level, which is
-     * knowledge it is supposed to have to earn.
+     * Progress is finding something out - a level, a map never stood in, a door, a monster, a
+     * person, a quest moving on; {@link Mind#novelties()} says exactly what counts. It used to
+     * be a level or any change of map, which missed both ways an agent actually got stuck: a
+     * fighter at level 23 levels too slowly to ever look stale while learning nothing, and an
+     * agent bouncing between two maps reset the count on every bounce and so never did either.
      */
     private int decisionsSinceProgress;
-    private int lastLevel = -1;
+    private long lastNovelties = -1;
+
+    /** Whether the last decision was made feeling stuck. Read by whoever wants to step in. */
+    private boolean stale;
+
+    /**
+     * How many stretches of patience a quest holds an agent in place for.
+     *
+     * An agent holding a quest has no idea what it asked for, and staying is likelier to
+     * advance it than leaving - so some extra patience. It used to be unlimited, and a quest
+     * that was never going to be finished held a fighter in one field for hours.
+     */
+    private static final int QUEST_PATIENCE = 3;
 
     /**
      * Decisions spent in a row on loot and monsters.
@@ -318,7 +330,6 @@ public class ReflexPolicy implements Policy {
             }
             lastMapId = world.mapId();
             decisionsHere = 0;
-            decisionsSinceProgress = 0;
             committedPortal = null;     // the old map's doors are gone
             doorInMind = null;
             journeyKind = null;         // and nothing here is where we were going
@@ -336,8 +347,8 @@ public class ReflexPolicy implements Policy {
         decisionsMade++;
         watchTheJourney(world.selfPosition());
 
-        if (world.level() > lastLevel) {
-            lastLevel = world.level();
+        if (mind.novelties() != lastNovelties) {
+            lastNovelties = mind.novelties();
             decisionsSinceProgress = 0;
         } else {
             decisionsSinceProgress++;
@@ -347,10 +358,9 @@ public class ReflexPolicy implements Policy {
 
         Set<Integer> unfinished = startedQuests(mind);
 
-        // Stopped getting anywhere. An agent holding a quest is exempt: it has no idea what the
-        // quest asked for - that is deliberately unreadable - but whatever it was, staying is
-        // likelier to advance it than leaving.
-        boolean stale = unfinished.isEmpty() && decisionsSinceProgress > disposition.patience();
+        // Stopped finding anything out. A quest buys more patience, not an exemption.
+        stale = decisionsSinceProgress
+                > disposition.patience() * (unfinished.isEmpty() ? 1 : QUEST_PATIENCE);
 
         List<String> consulted = mind.recall("map monster danger", tick, 3)
                 .stream().map(Belief::ref).toList();
@@ -422,6 +432,16 @@ public class ReflexPolicy implements Policy {
      * intent achieves nothing, because an NPC or a door is many decisions away. An urge
      * outlives the decision that set it.
      */
+    /** True when nothing new has been found for longer than this agent's patience. */
+    public boolean isStale() {
+        return stale;
+    }
+
+    /** Decisions since this agent last found something out. */
+    public int decisionsSinceProgress() {
+        return decisionsSinceProgress;
+    }
+
     public void urge(String kind, int forDecisions) {
         urgedFor.merge(kind, forDecisions, Math::max);
     }

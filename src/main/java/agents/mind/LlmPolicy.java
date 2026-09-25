@@ -3,6 +3,8 @@ package agents.mind;
 import agents.Mind;
 import agents.memory.Belief;
 import agents.world.WorldModel;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.awt.Point;
 import java.util.ArrayList;
@@ -57,6 +59,41 @@ public class LlmPolicy implements Policy {
 
     /** The same reasoning, for the people standing about. */
     private static final int NPCS_IN_PROMPT = 4;
+
+    /**
+     * The fewest decisions between two asks that something happening can prompt.
+     *
+     * The timer still asks on its own schedule; this only stops a run of events - a bounce
+     * between two maps every few seconds, a string of discoveries in a new town - from
+     * putting a question on every decision.
+     */
+    private static final int EVENT_GAP = 10;
+
+    /** How long a lean lasts. Longer than the gap between asks, so one answer bridges to the next. */
+    private static final int LEAN_FOR = 60;
+
+    /** How far back to look for an agent going back and forth. */
+    private static final int MAPS_REMEMBERED = 8;
+
+    /**
+     * The shape a model that honours it must answer in, so the answer always parses.
+     *
+     * Field names match the line format in {@link #SYSTEM}, which a model that does not take a
+     * schema still answers in. Intent is free text rather than an enum of verbs because the
+     * arguments are ids from this moment, which no schema written in advance can list.
+     */
+    static final String SCHEMA = """
+            {"type":"object","additionalProperties":false,
+             "required":["goal","pursue","intent","learned"],
+             "properties":{
+               "goal":{"type":"string","maxLength":120},
+               "pursue":{"type":"string","enum":["fighting","looting","talking","exploring","errands"]},
+               "intent":{"type":"string","maxLength":80},
+               "learned":{"type":"array","maxItems":3,"items":{
+                 "type":"object","additionalProperties":false,
+                 "required":["subject","predicate","object"],
+                 "properties":{"subject":{"type":"string"},"predicate":{"type":"string"},
+                               "object":{"type":"string"}}}}}}""";
 
     private static final String SYSTEM = """
             You are playing a character in an online game world you have never seen before.
@@ -113,6 +150,20 @@ public class LlmPolicy implements Policy {
     private int decisions;
 
     /**
+     * Something that happened and is worth asking about, kept until it is asked about.
+     *
+     * Held rather than checked on the spot, because the moment it happens is often a moment
+     * a question is already out or the last one was too recent, and an arrival in a new map
+     * should not be forgotten because of that.
+     */
+    private String waitingToAsk;
+    private int decisionsSinceAsk = EVENT_GAP;
+    private int lastMapId = -1;
+    private long lastNovelties = -1;
+    private boolean wasStale;
+    private final java.util.ArrayDeque<Integer> mapsEntered = new java.util.ArrayDeque<>();
+
+    /**
      * Why the last answer was no use, waiting to be written to the trace.
      *
      * Read once and cleared: a failed answer explains exactly one fallback, and the decisions
@@ -148,9 +199,13 @@ public class LlmPolicy implements Policy {
         collectAnswer();
         List<Belief> recalled = mind.recall(situationTopic(world), tick, BELIEFS_IN_PROMPT);
 
-        if (pending == null && decisions++ % deliberateEvery == 0 && worthAsking()) {
-            String question = describe(mind, world, recalled);
-            pending = CompletableFuture.supplyAsync(() -> oracle.ask(SYSTEM, question), thinking);
+        String askingBecause = reasonToAsk(mind, world);
+        if (pending == null && askingBecause != null && worthAsking()) {
+            String question = describe(mind, world, recalled, askingBecause, stuckFor(), mapsEntered);
+            pending = CompletableFuture.supplyAsync(() -> oracle.ask(SYSTEM, question, SCHEMA),
+                    thinking);
+            waitingToAsk = null;
+            decisionsSinceAsk = 0;
         }
 
         if (unreadReply == null) {
@@ -166,7 +221,7 @@ public class LlmPolicy implements Policy {
         // leans on the reflexes until the next answer arrives and they work out the how.
         parsed.pursue().ifPresent(kind -> {
             if (fallback instanceof ReflexPolicy reflexes) {
-                reflexes.urge(kind, deliberateEvery * 2);
+                reflexes.urge(kind, LEAN_FOR);
             }
         });
 
@@ -192,6 +247,56 @@ public class LlmPolicy implements Policy {
                 recalled.stream().map(Belief::ref).toList(),
                 List.of("MoveTo", "Attack", "PickUp", "TalkTo", "Say", "EnterPortal", "Wait"))
                 .creditedTo(name(), null);
+    }
+
+    /**
+     * Why the model should be asked now, or null if it should not.
+     *
+     * Asking on a timer alone put questions at arbitrary moments - halfway down a corridor, in
+     * the middle of a fight, in a map that had been bare for an hour - and never at the ones
+     * that matter: arriving somewhere, finding something, running out of things to do. Those
+     * ask now, no more often than {@link #EVENT_GAP}, and the timer carries on underneath as
+     * a floor.
+     */
+    private String reasonToAsk(Mind mind, WorldModel world) {
+        boolean onTheTimer = decisions++ % deliberateEvery == 0;
+        decisionsSinceAsk++;
+
+        String happened = null;
+        if (world.mapId() != lastMapId) {
+            lastMapId = world.mapId();
+            mapsEntered.addLast(world.mapId());
+            while (mapsEntered.size() > MAPS_REMEMBERED) {
+                mapsEntered.removeFirst();
+            }
+            happened = "you have just arrived in map:" + world.mapId();
+        } else if (mind.novelties() != lastNovelties && lastNovelties >= 0) {
+            happened = "you have just found out something new";
+        }
+        lastNovelties = mind.novelties();
+
+        boolean stale = fallback instanceof ReflexPolicy reflexes && reflexes.isStale();
+        if (stale && !wasStale) {
+            happened = "nothing new has turned up here for a long while";
+        }
+        wasStale = stale;
+
+        // Being stuck outranks arriving, which outranks a find: keep the weightiest until asked.
+        if (happened != null && (waitingToAsk == null || weight(happened) >= weight(waitingToAsk))) {
+            waitingToAsk = happened;
+        }
+        if (waitingToAsk != null && decisionsSinceAsk >= EVENT_GAP) {
+            return waitingToAsk;
+        }
+        return onTheTimer ? "it is time to take stock" : null;
+    }
+
+    private static int weight(String happened) {
+        return happened.startsWith("nothing new") ? 3 : happened.startsWith("you have just arrived") ? 2 : 1;
+    }
+
+    private int stuckFor() {
+        return fallback instanceof ReflexPolicy reflexes ? reflexes.decisionsSinceProgress() : 0;
     }
 
     /**
@@ -288,8 +393,11 @@ public class LlmPolicy implements Policy {
         return topic.toString();
     }
 
-    private static String describe(Mind mind, WorldModel world, List<Belief> recalled) {
+    private static String describe(Mind mind, WorldModel world, List<Belief> recalled,
+                                   String because, int stuckFor,
+                                   java.util.Collection<Integer> mapsEntered) {
         StringBuilder out = new StringBuilder();
+        out.append("You are being asked because ").append(because).append(".\n\n");
 
         out.append("You are ").append(mind.name())
                 .append(", level ").append(world.level())
@@ -328,6 +436,15 @@ public class LlmPolicy implements Policy {
                     .append(" - you do not know where it goes\n");
         }
 
+        // The two ways an agent gets stuck that it cannot see from one moment: learning nothing
+        // for a long time, and going back and forth. Both are only visible over many decisions,
+        // which is exactly the view a model asked now and then does not have.
+        if (stuckFor >= STUCK_WORTH_MENTIONING) {
+            out.append("\nYou have found out nothing new for ").append(stuckFor)
+                    .append(" decisions.\n");
+        }
+        bouncing(mapsEntered).ifPresent(line -> out.append('\n').append(line).append('\n'));
+
         out.append("\nWhat you believe, most relevant first:\n");
         if (recalled.isEmpty()) {
             out.append("  nothing yet\n");
@@ -338,6 +455,34 @@ public class LlmPolicy implements Policy {
                     .append(", ").append(belief.provenance().name().toLowerCase()).append(")\n");
         }
         return out.toString();
+    }
+
+    /** Below this, a spell without news is just a walk across a big map. */
+    private static final int STUCK_WORTH_MENTIONING = 60;
+
+    /**
+     * A line saying so, if the maps recently entered alternate between two.
+     *
+     * Visible for tests.
+     */
+    static Optional<String> bouncing(java.util.Collection<Integer> mapsEntered) {
+        List<Integer> maps = new ArrayList<>(mapsEntered);
+        int n = maps.size();
+        if (n < 4) {
+            return Optional.empty();
+        }
+        int a = maps.get(n - 1);
+        int b = maps.get(n - 2);
+        int run = 2;
+        while (run < n && maps.get(n - 1 - run) == (run % 2 == 0 ? a : b)) {
+            run++;
+        }
+        if (run < 4 || a == b) {
+            return Optional.empty();
+        }
+        return Optional.of("You have gone back and forth between map:" + a + " and map:" + b
+                + " " + (run - 1) + " times in a row. Whatever you were looking for is not"
+                + " in either; go somewhere else.");
     }
 
     private static String point(Point p) {
@@ -377,6 +522,9 @@ public class LlmPolicy implements Policy {
         }
 
         static Reply parse(String text, WorldModel world) {
+            if (text.trim().startsWith("{")) {
+                return parseJson(text, world);
+            }
             Optional<String> goal = Optional.empty();
             Optional<String> pursue = Optional.empty();
             Resolved resolved = Resolved.not("no action given");
@@ -396,6 +544,33 @@ public class LlmPolicy implements Policy {
             }
             return new Reply(goal, resolved.intent(), pursue, learned, resolved.problem());
         }
+
+        /**
+         * The same answer from a model held to {@link #SCHEMA}. Same fields, same checks
+         * against the world; only the wrapping differs.
+         */
+        private static Reply parseJson(String text, WorldModel world) {
+            JsonNode root;
+            try {
+                root = JSON.readTree(text);
+            } catch (Exception e) {
+                // Cut off mid-object - a schema guarantees the shape, not that it finished.
+                return new Reply(Optional.empty(), Optional.empty(), Optional.empty(), List.of(),
+                        "answer cut short");
+            }
+            Optional<String> goal = Optional.of(root.path("goal").asText("").trim())
+                    .filter(g -> !g.isEmpty());
+            Optional<String> pursue = asKind(root.path("pursue").asText(""));
+            Resolved resolved = parseIntent(root.path("intent").asText("").trim(), world);
+            List<Triple> learned = new ArrayList<>();
+            for (JsonNode t : root.path("learned")) {
+                parseTriple(t.path("subject").asText("") + "|" + t.path("predicate").asText("")
+                        + "|" + t.path("object").asText("")).ifPresent(learned::add);
+            }
+            return new Reply(goal, resolved.intent(), pursue, learned, resolved.problem());
+        }
+
+        private static final ObjectMapper JSON = new ObjectMapper();
 
         /**
          * Turns what the model called it into what the reflexes call it.

@@ -48,8 +48,12 @@ public class Population {
     private static final int CHANNEL = 1;
     private static final String PASSWORD = "agentpass";
 
-    /** At a 600ms tick, about one question every eighteen seconds - what a local model can keep up with. */
-    private static final int LOCAL_DELIBERATE_EVERY = 30;
+    /**
+     * The floor, at a 600ms tick about one question a minute. Most questions now come from
+     * something happening - arriving somewhere, finding something, getting stuck - so the
+     * timer only covers the long quiet stretches in between.
+     */
+    private static final int LOCAL_DELIBERATE_EVERY = 100;
 
     /** Often enough that a crash costs a minute of learning, rare enough to be invisible. */
     private static final long SAVE_EVERY_SECONDS = 60;

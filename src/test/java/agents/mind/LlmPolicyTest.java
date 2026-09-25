@@ -427,6 +427,83 @@ class LlmPolicyTest {
         assertEquals("no action given; model leaning explore", deliberate(policy, 1).fellBackBecause());
     }
 
+    /**
+     * Arriving somewhere is the moment worth a question, not whenever a timer comes round.
+     * The timer here is set so long it would only ever ask on the first decision.
+     */
+    @Test
+    void asksOnArrivingSomewhereRatherThanWaitingForTheTimer() {
+        StubOracle oracle = new StubOracle("GOAL: x\nPURSUE: exploring");
+        LlmPolicy policy = new LlmPolicy(oracle, reflex, 10_000);
+        for (int decision = 0; decision < 15; decision++) {
+            policy.decide(mind, world, decision);
+            waitFor(policy);
+        }
+        int askedBefore = oracle.prompts.size();
+
+        world.update(new Observation.MapEntered(20, 20000, 0));
+        policy.decide(mind, world, 20);
+        waitFor(policy);
+
+        assertEquals(askedBefore + 1, oracle.prompts.size());
+        assertTrue(oracle.prompts.get(askedBefore).contains("just arrived in map:20000"),
+                oracle.prompts.get(askedBefore));
+    }
+
+    /** A run of events is still no more than one question per gap. */
+    @Test
+    void aBurstOfArrivalsDoesNotAskOnEveryDecision() {
+        StubOracle oracle = new StubOracle("GOAL: x\nPURSUE: exploring");
+        LlmPolicy policy = new LlmPolicy(oracle, reflex, 10_000);
+
+        for (int decision = 0; decision < 10; decision++) {
+            world.update(new Observation.MapEntered(decision, decision % 2 == 0 ? 20000 : 30000, 0));
+            policy.decide(mind, world, decision);
+            waitFor(policy);
+        }
+
+        assertEquals(1, oracle.prompts.size(), "ten arrivals inside one gap asked " + oracle.prompts.size());
+    }
+
+    @Test
+    void noticesGoingBackAndForth() {
+        assertTrue(LlmPolicy.bouncing(List.of(1, 2, 1, 2, 1)).orElseThrow()
+                .contains("back and forth between map:1 and map:2"));
+        assertTrue(LlmPolicy.bouncing(List.of(5, 1, 2, 1)).isEmpty(), "three is a return trip, not a loop");
+        assertTrue(LlmPolicy.bouncing(List.of(1, 2, 3, 4, 5)).isEmpty());
+    }
+
+    /** What a model held to the schema sends back, read the same as the line format. */
+    @Test
+    void readsAnAnswerGivenAsJson() {
+        world.update(new Observation.NpcAppeared(2, 700, 2100, new Point(50, 0)));
+        mind.take(new Observation.NpcAppeared(2, 700, 2100, new Point(50, 0)));
+        LlmPolicy policy = policyReturning("""
+                {"goal": "meet them", "pursue": "talking", "intent": "TalkTo 700",
+                 "learned": [{"subject": "npc:2100", "predicate": "stands in", "object": "map:10000"}]}""");
+
+        Policy.Decision decision = deliberate(policy, 2);
+
+        assertEquals(700, assertInstanceOf(Intent.TalkTo.class, decision.intent()).objectId());
+        assertEquals("meet them", decision.goal());
+        assertTrue(mind.semantic().liveBeliefs().stream()
+                .anyMatch(b -> b.predicate().equals("stands_in")));
+    }
+
+    @Test
+    void anAnswerCutShortSaysSo() {
+        LlmPolicy policy = policyReturning("{\"goal\": \"meet th");
+
+        assertEquals("answer cut short", deliberate(policy, 1).fellBackBecause());
+    }
+
+    private static void waitFor(LlmPolicy policy) {
+        long deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(5);
+        while (policy.isThinking() && System.nanoTime() < deadline) {
+            Thread.onSpinWait();
+        }
+    }
+
     /** Answers whatever it was built with, immediately. */
     private record FixedOracle(String answer) implements Oracle {
         @Override

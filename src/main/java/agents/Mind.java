@@ -15,9 +15,11 @@ import agents.trace.Trace;
 import java.nio.file.Path;
 import java.util.ArrayDeque;
 import java.util.Deque;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * One agent's memory, and the path an observation takes through it.
@@ -41,6 +43,21 @@ public class Mind implements AutoCloseable {
      * in memory - the trace file has the rest.
      */
     private static final int DECISIONS_REMEMBERED = 20;
+
+    /**
+     * How many times this agent has found out something it did not know, and when it last did.
+     *
+     * Not the same as forming a new belief. A fighter's experience and mesos change on every
+     * kill and each change is a new belief, so by that count an agent that had ground one map
+     * for nine thousand decisions was learning all the time - 930 of its 950 "new" beliefs
+     * were its own numbers going up. Walking back into a map it knows forms a new belief too,
+     * which let an agent bouncing between two maps look busy for hours. What counts is below.
+     */
+    private long novelties;
+    private long lastNoveltyTick = -1;
+
+    /** Every map this agent has stood in, built from memory the first time it is needed. */
+    private Set<String> mapsBeenIn;
 
     public Mind(String name, Trace trace) {
         this.name = name;
@@ -66,6 +83,7 @@ public class Mind implements AutoCloseable {
                     episode.id(), episode.tick(), triple.provenance());
 
             trace.believed(assertion.belief(), !assertion.isNew());
+            noticeNovelty(assertion, episode.tick());
             if (assertion.contradicted() != null) {
                 // Re-read it: assertTriple stored the invalidated version in place.
                 semantic.byId(assertion.contradicted().id())
@@ -149,10 +167,66 @@ public class Mind implements AutoCloseable {
                 latestEpisode, tick, provenance);
 
         trace.believed(assertion.belief(), !assertion.isNew());
+        noticeNovelty(assertion, tick);
         if (assertion.contradicted() != null) {
             semantic.byId(assertion.contradicted().id())
                     .ifPresent(invalidated -> trace.revised(invalidated, assertion.belief()));
         }
+    }
+
+    /**
+     * Counts a belief as news if it is.
+     *
+     * News is: something first seen about anything other than itself - a door, a monster, a
+     * person, a quest moving on; a door found to lead somewhere, which is concluded rather
+     * than seen; a level; and a map it has never stood in before. Hearsay is not, because
+     * being told the same thing twice by another player is not finding it out, and neither is
+     * anything the model says it worked out, which would let a talkative model hold staleness
+     * off indefinitely.
+     */
+    private void noticeNovelty(SemanticMemory.Assertion assertion, long tick) {
+        if (!assertion.isNew()) {
+            return;
+        }
+        Belief belief = assertion.belief();
+        boolean news;
+        if (belief.subject().equals("self")) {
+            news = switch (belief.predicate()) {
+                case "level" -> true;
+                case "in_map" -> mapsBeenIn().add(belief.object());
+                default -> false;
+            };
+        } else {
+            news = belief.provenance() == Belief.Provenance.FIRST_HAND
+                    || (belief.provenance() == Belief.Provenance.INFERRED
+                        && belief.predicate().equals("leads_to"));
+        }
+        if (news) {
+            novelties++;
+            lastNoveltyTick = tick;
+        }
+    }
+
+    private Set<String> mapsBeenIn() {
+        if (mapsBeenIn == null) {
+            mapsBeenIn = new HashSet<>();
+            for (Belief belief : semantic.all()) {
+                if (belief.subject().equals("self") && belief.predicate().equals("in_map")) {
+                    mapsBeenIn.add(belief.object());
+                }
+            }
+        }
+        return mapsBeenIn;
+    }
+
+    /** How many things this agent has found out, counting only what {@link #noticeNovelty} does. */
+    public long novelties() {
+        return novelties;
+    }
+
+    /** The tick it last found something out, or -1 if it has not this life. */
+    public long lastNoveltyTick() {
+        return lastNoveltyTick;
     }
 
     /**
@@ -180,6 +254,7 @@ public class Mind implements AutoCloseable {
             return 0;
         }
         trace.resumed(restored.tick(), restored.episodes(), restored.beliefs());
+        mapsBeenIn = null;      // rebuilt from what was just restored, when next needed
         for (Belief belief : semantic.all()) {
             trace.carried(belief);
         }

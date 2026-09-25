@@ -99,6 +99,30 @@ class LmStudioOracleTest {
         assertEquals(2, openAiRequests.size());
     }
 
+    /**
+     * LM Studio files schema-held JSON as reasoning when the model's template opens in thinking
+     * mode. The answer is the answer wherever it was put.
+     */
+    @Test
+    void takesTheSchemaAnswerFromWhicheverFieldItLandedIn() {
+        server.removeContext("/v1/chat/completions");
+        server.createContext("/v1/chat/completions", exchange -> {
+            openAiRequests.add(read(exchange));
+            respond(exchange, 200, """
+                    {"choices":[{"message":{"content":"",
+                      "reasoning_content":"{\\"goal\\": \\"meet them\\"}"},"finish_reason":"stop"}]}""");
+        });
+
+        String answer = oracle().ask("s", "u", "{\"type\":\"object\"}");
+
+        assertEquals("{\"goal\": \"meet them\"}", answer);
+        JsonNode sent = openAiRequests.get(0);
+        assertEquals("json_schema", sent.path("response_format").path("type").asText());
+        assertEquals("object", sent.path("response_format").path("json_schema")
+                .path("schema").path("type").asText());
+        assertTrue(nativeRequests.isEmpty(), "only the OpenAI-shaped endpoint takes a schema");
+    }
+
     private static JsonNode read(HttpExchange exchange) throws IOException {
         return new ObjectMapper().readTree(exchange.getRequestBody().readAllBytes());
     }

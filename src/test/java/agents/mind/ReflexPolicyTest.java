@@ -673,4 +673,42 @@ class ReflexPolicyTest {
         assertInstanceOf(Intent.StartQuest.class, next,
                 "having asked once and got nothing, it should take the quest and move on");
     }
+
+    /**
+     * A quest used to exempt an agent from ever feeling stuck, and a quest nobody was going to
+     * finish held a fighter in one field for hours. Now it buys patience, and runs out.
+     */
+    @Test
+    void aQuestDelaysFeelingStuckButDoesNotPreventIt() {
+        mind.take(new Observation.MapEntered(1, 10000, 0));
+        mind.saw("quest:1031", "state", "1", 1);
+        ReflexPolicy reflexes = new ReflexPolicy(new Random(1), Disposition.FIGHTER);
+        int patience = Disposition.FIGHTER.patience();
+
+        for (int decision = 0; decision <= patience + 1; decision++) {
+            reflexes.decide(mind, world, decision);
+        }
+        assertFalse(reflexes.isStale(), "one stretch of patience is not enough while a quest is open");
+
+        for (int decision = patience + 2; decision <= 3 * patience + 2; decision++) {
+            reflexes.decide(mind, world, decision);
+        }
+        assertTrue(reflexes.isStale(), "three stretches with nothing found is stuck, quest or not");
+    }
+
+    /** Finding something out is what resets it - not a level, not a change of map. */
+    @Test
+    void findingSomethingOutIsProgress() {
+        mind.take(new Observation.MapEntered(1, 10000, 0));
+        ReflexPolicy reflexes = new ReflexPolicy(new Random(1), Disposition.FIGHTER);
+        for (int decision = 0; decision < 50; decision++) {
+            reflexes.decide(mind, world, decision);
+        }
+        assertTrue(reflexes.decisionsSinceProgress() > 40, "" + reflexes.decisionsSinceProgress());
+
+        mind.saw("npc:2005", "present_in", "map:10000", 60);
+        reflexes.decide(mind, world, 61);
+
+        assertEquals(0, reflexes.decisionsSinceProgress());
+    }
 }
