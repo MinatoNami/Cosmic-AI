@@ -13,6 +13,7 @@ import java.awt.Point;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Random;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -729,5 +730,77 @@ class ReflexPolicyTest {
                     "walked back up to the one that stranded it at decision " + decision);
             assertFalse(intent instanceof Intent.StartQuest quest && quest.npcId() == 10203);
         }
+    }
+
+    /**
+     * Agent0's loop, from the trace: in Southperry the errand rule sent it to Split Road;
+     * there, with the errand in the room, the stranger rule sent it back; in Southperry, with
+     * the stranger in the room, the errand rule sent it again. Four hundred door decisions in
+     * five minutes. Having just been somewhere for a reason is now part of what it is worth.
+     */
+    @Test
+    void doesNotHeadStraightBackToWhereItJustWentFor() {
+        int southperry = 2000000;
+        int splitRoad = 1020000;
+        mind.take(new Observation.MapEntered(1, splitRoad, 0));
+        mind.take(new Observation.MapEntered(2, southperry, 0));
+        mind.saw(KnownWorld.mapRef(southperry), "has_door", "west00", 3);
+        mind.saw(KnownWorld.mapRef(splitRoad), "has_door", "east00", 3);
+        mind.infer(KnownWorld.portalRef(southperry, "west00"), "leads_to", KnownWorld.mapRef(splitRoad), 3);
+        mind.infer(KnownWorld.portalRef(splitRoad, "east00"), "leads_to", KnownWorld.mapRef(southperry), 3);
+        // Somebody waiting in Split Road whose price it can pay, and a stranger in Southperry.
+        mind.take(new Observation.StatsChanged(4, Map.of("LEVEL", 12, "MESO", 900)));
+        mind.hear("npc:10200", "wants_first", "be level 10", 4);
+        mind.infer("npc:10200", "present_in", KnownWorld.mapRef(splitRoad), 4);
+        mind.infer("npc:2101", "present_in", KnownWorld.mapRef(southperry), 4);
+        List<WorldModel.PortalTarget> southperryDoors =
+                List.of(new WorldModel.PortalTarget("west00", new Point(-500, 0)));
+        List<WorldModel.PortalTarget> splitRoadDoors =
+                List.of(new WorldModel.PortalTarget("east00", new Point(500, 0)));
+
+        ReflexPolicy policy = new ReflexPolicy(new Random(1), Disposition.WANDERER);
+        world.update(new Observation.MapEntered(5, southperry, 0));
+        world.update(new Observation.StatsChanged(5, Map.of("LEVEL", 12)));
+        policy.decide(mind, world, 5);
+        assertEquals("west00", policy.pickDoor(southperryDoors, mind, southperry, "player:1").name());
+        assertEquals(Optional.of(KnownWorld.mapRef(splitRoad)), policy.destination());
+
+        // It gets there. Whatever it did about the errand, it went for it.
+        world.update(new Observation.MapEntered(6, splitRoad, 0));
+        mind.take(new Observation.MapEntered(6, splitRoad, 0));
+        policy.decide(mind, world, 6);
+        assertEquals(Optional.empty(), policy.destination(), "arrived, so nowhere to be heading");
+        assertEquals("east00", policy.pickDoor(splitRoadDoors, mind, splitRoad, "player:1").name(),
+                "the stranger in Southperry is a reason to go back");
+
+        // And back in Southperry, Split Road is somewhere it has just been for that errand.
+        world.update(new Observation.MapEntered(7, southperry, 0));
+        mind.take(new Observation.MapEntered(7, southperry, 0));
+        policy.decide(mind, world, 7);
+        policy.pickDoor(southperryDoors, mind, southperry, "player:1");
+        assertFalse(policy.destination().filter(KnownWorld.mapRef(splitRoad)::equals).isPresent(),
+                "heading straight back to where it has just been for the same errand");
+    }
+
+    /**
+     * The model looked at every place the agent knows the way to and picked one. An unopened
+     * door in this room would ordinarily come first; it is still there on the way back.
+     */
+    @Test
+    void goesWhereTheModelChoseEvenPastAnUnopenedDoor() {
+        mind.take(new Observation.MapEntered(1, 20000, 0));
+        mind.take(new Observation.MapEntered(2, 10000, 0));
+        mind.infer(KnownWorld.portalRef(10000, "west00"), "leads_to", KnownWorld.mapRef(20000), 3);
+        ReflexPolicy policy = new ReflexPolicy(new Random(1), Disposition.WANDERER);
+        List<WorldModel.PortalTarget> doors = List.of(
+                new WorldModel.PortalTarget("west00", new Point(-500, 0)),
+                new WorldModel.PortalTarget("east00", new Point(500, 0)));   // never opened
+
+        assertEquals("east00", policy.pickDoor(doors, mind, 10000, "player:1").name(),
+                "left to itself, the unopened door comes first");
+
+        policy.headFor(KnownWorld.mapRef(20000), "somebody you have never spoken to");
+
+        assertEquals("west00", policy.pickDoor(doors, mind, 10000, "player:1").name());
     }
 }

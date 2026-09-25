@@ -257,6 +257,65 @@ public final class KnownWorld {
         return Set.copyOf(namedAPrice);
     }
 
+    /**
+     * Every map reachable from here along doors the agent has walked, with how far each is
+     * and which door starts the walk.
+     *
+     * The same breadth-first walk as the routes above, but finished rather than stopped at
+     * the first goal, so something can weigh every place against every other instead of
+     * asking one question at a time and taking the first yes.
+     */
+    public Map<String, Hop> reachableFrom(String fromMap) {
+        Map<String, Hop> reached = new HashMap<>();
+        Deque<String> queue = new ArrayDeque<>();
+        queue.add(fromMap);
+        reached.put(fromMap, new Hop(0, null));
+        while (!queue.isEmpty()) {
+            String here = queue.poll();
+            Hop sofar = reached.get(here);
+            for (Map.Entry<String, String> exit : exits.getOrDefault(here, Map.of()).entrySet()) {
+                String destination = exit.getValue();
+                if (reached.containsKey(destination)) {
+                    continue;
+                }
+                reached.put(destination, new Hop(sofar.hops() + 1,
+                        here.equals(fromMap) ? exit.getKey() : sofar.firstDoor()));
+                queue.add(destination);
+            }
+        }
+        return reached;
+    }
+
+    /** How many doors away a map is, and the door to take first. Null door means here. */
+    public record Hop(int hops, String firstDoor) {
+    }
+
+    /** People known to stand in this map that this agent has not heard speak, leaving some out. */
+    public int strangersIn(String mapRef, Set<String> leavingOut) {
+        int count = 0;
+        for (String person : peopleIn.getOrDefault(mapRef, Set.of())) {
+            if (!spokenTo.contains(person) && !leavingOut.contains(person)) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    /** Whether any of these people is known to stand in this map. */
+    public boolean anyOfIn(String mapRef, Set<String> people) {
+        for (String person : peopleIn.getOrDefault(mapRef, Set.of())) {
+            if (people.contains(person)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** Whether something living has been seen in this map. */
+    public boolean huntingIn(String mapRef) {
+        return hunting.contains(mapRef);
+    }
+
     /** The shortest walk from here to a particular map, for when the agent has an errand. */
     public Optional<Route> routeTo(String fromMap, String toMap) {
         if (fromMap.equals(toMap)) {

@@ -3,6 +3,7 @@ package agents.mind;
 import agents.Mind;
 import agents.memory.Belief;
 import agents.world.KnownWorld;
+import agents.world.Places;
 import agents.world.QuestBoard;
 import agents.world.WorldModel;
 
@@ -291,6 +292,36 @@ public class ReflexPolicy implements Policy {
     private String errandMap;
     private int errandNpc = -1;
 
+    /**
+     * The map the agent is on its way to, which it keeps heading for until it gets there.
+     *
+     * Chosen once from {@link Places} and held across maps, rather than re-derived in every
+     * room from whichever rule happened to have something to say there - which is how an
+     * agent went Southperry, Split Road, Southperry four hundred times in five minutes, each
+     * leg a sensible answer to a different question.
+     */
+    private String destination;
+    private String destinationWhy;
+    private boolean destinationFromModel;
+    private int destinationSince;
+
+    /** Maps the agent reached as a destination, against the decision it arrived. */
+    private final Map<String, Integer> reachedAsDestination = new HashMap<>();
+
+    /**
+     * How long a destination is worth pursuing before concluding the way there does not work.
+     * Long, because a destination four maps off is a lot of walking; the map changes along the
+     * way are what show it is going somewhere.
+     */
+    private static final int DESTINATION_PATIENCE = 900;
+
+    /**
+     * How long a place stays less attractive after the agent went there for something. Long
+     * enough that the trip back is not the next thing it does, short enough that a town it
+     * will need again is not written off.
+     */
+    private static final int JUST_BEEN_FOR = 1500;
+
     public ReflexPolicy(Random random) {
         this(random, Disposition.WANDERER);
     }
@@ -330,6 +361,11 @@ public class ReflexPolicy implements Policy {
             }
             lastMapId = world.mapId();
             decisionsHere = 0;
+            String arrivedIn = KnownWorld.mapRef(world.mapId());
+            if (arrivedIn.equals(destination)) {
+                reachedAsDestination.put(arrivedIn, decisionsMade);
+                destination = null;
+            }
             committedPortal = null;     // the old map's doors are gone
             doorInMind = null;
             journeyKind = null;         // and nothing here is where we were going
@@ -892,7 +928,11 @@ public class ReflexPolicy implements Policy {
                 + (stale ? 1.0 : 0)
                 + (errandMap != null ? ERRAND : 0)
                 + urgeFor("door")
-                + (alreadyOnTheWay ? COMMITTED : 0);
+                + (alreadyOnTheWay ? COMMITTED : 0)
+                // The model looked at every place the agent could go and picked one. That is a
+                // decision about the next few minutes, and letting the nearest snail outvote it
+                // made the model's choices lean rather than decide.
+                + (destinationFromModel && destination != null ? COMMITTED : 0);
 
         if (door.position().distance(self) < PORTAL_RANGE) {
             choices.add(new Choice("door",
@@ -1064,7 +1104,9 @@ public class ReflexPolicy implements Policy {
         // An unopened door in this very room beats any plan, because it is the cheapest
         // possible way to learn something and the plan would only be a longer way round to
         // an equivalent door.
-        if (!untried.isEmpty()) {
+        // Unless the model chose where to go: it was shown this room's doors and every place
+        // worth going, and picked. An unopened door here is still there on the way back.
+        if (!untried.isEmpty() && !(destinationFromModel && destination != null)) {
             whyThisDoor = "untried " + untried.size() + "/" + portals.size();
             return onwardOf(untried);
         }
@@ -1091,19 +1133,10 @@ public class ReflexPolicy implements Policy {
         // Southperry, had never met the one who sells passage, and had no reason to go back
         // there, since nothing was unopened and no monsters were remembered in that map.
         String here = KnownWorld.mapRef(mapId);
-        Optional<KnownWorld.Route> route = Optional.ofNullable(errandMap)
-                .flatMap(target -> known.routeTo(here, target))
-                .or(() -> known.routeToNearestFrontier(here))
-                .or(() -> known.routeToStrangers(here))
-                .or(() -> known.routeToUnfinishedTalk(here, worthHearingAgain(known)))
-                .or(() -> known.routeToMonsters(here));
-        Optional<WorldModel.PortalTarget> planned = route.flatMap(plan -> portals.stream()
-                .filter(portal -> portal.name().equals(plan.firstDoor()))
-                .findFirst());
-        if (planned.isPresent()) {
-            KnownWorld.Route plan = route.orElseThrow();
-            whyThisDoor = plan.why() + " " + plan.hops() + " maps off";
-            return planned.get();
+        Optional<WorldModel.PortalTarget> towardsDestination =
+                towardsDestination(known, here, portals, mind, mapId);
+        if (towardsDestination.isPresent()) {
+            return towardsDestination.get();
         }
 
         // No route either: the agent has opened every door it has ever seen, or the one it
@@ -1128,6 +1161,136 @@ public class ReflexPolicy implements Policy {
                 : preferred == notBackIntoARoom ? "not a room again" : "last resort")
                 + " " + preferred.size() + "/" + portals.size();
         return onwardOf(preferred);
+    }
+
+    /**
+     * The first door towards wherever the agent is going, choosing somewhere if it is going
+     * nowhere yet.
+     *
+     * A destination is kept until it is reached, until it has taken too long, or until the
+     * way there stops being in this room. Only then is a new one chosen - which is what stops
+     * each map re-arguing the journey.
+     */
+    private Optional<WorldModel.PortalTarget> towardsDestination(
+            KnownWorld known, String here, List<WorldModel.PortalTarget> portals, Mind mind, int mapId) {
+        if (destination != null && decisionsMade - destinationSince > DESTINATION_PATIENCE) {
+            destination = null;
+        }
+        if (destination != null) {
+            Optional<WorldModel.PortalTarget> door = firstDoorTo(known, here, destination, portals);
+            if (door.isPresent()) {
+                whyThisDoor = "heading for " + destination
+                        + (destinationFromModel ? " (model's choice)" : "") + ": " + destinationWhy;
+                return door;
+            }
+            destination = null;         // no longer a way there from here
+        }
+        for (Places.Place place : places(known, here, mind)) {
+            Optional<WorldModel.PortalTarget> door = portals.stream()
+                    .filter(portal -> portal.name().equals(place.firstDoor()))
+                    .findFirst();
+            if (door.isEmpty()) {
+                continue;
+            }
+            setOffFor(place.map(), String.join(", ", place.reasons()), false);
+            whyThisDoor = "heading for " + place.map() + ", " + place.hops() + " maps off: "
+                    + destinationWhy;
+            return door;
+        }
+        return Optional.empty();
+    }
+
+    private Optional<WorldModel.PortalTarget> firstDoorTo(KnownWorld known, String here, String to,
+                                                           List<WorldModel.PortalTarget> portals) {
+        return known.routeTo(here, to).flatMap(route -> portals.stream()
+                .filter(portal -> portal.name().equals(route.firstDoor()))
+                .findFirst());
+    }
+
+    private void setOffFor(String map, String why, boolean fromModel) {
+        destination = map;
+        destinationWhy = why;
+        destinationFromModel = fromModel;
+        destinationSince = decisionsMade;
+    }
+
+    private List<Places.Place> places(KnownWorld known, String here, Mind mind) {
+        Map<String, Double> justBeen = new HashMap<>();
+        reachedAsDestination.forEach((map, at) -> {
+            double left = 1.0 - (double) (decisionsMade - at) / JUST_BEEN_FOR;
+            if (left > 0) {
+                justBeen.put(map, left);
+            }
+        });
+        Places.Facts facts = new Places.Facts(here, visitsTo(mind), errandMap,
+                worthHearingAgain(known), strandedBy(mind), justBeen);
+        return Places.worthGoing(known, facts, weights());
+    }
+
+    /**
+     * What each reason to travel is worth to this agent.
+     *
+     * An errand first, a door nobody has opened next, then strangers, then the rest: the
+     * order the rules used to be asked in, now as sizes rather than turns, so enough of a
+     * lesser reason can outweigh a greater one and the whole lot is paid for by distance.
+     * A fighter weighs a hunting ground far more heavily; a curious agent weighs strangers.
+     */
+    private Places.Weights weights() {
+        return new Places.Weights(
+                2.0,                                        // a door never opened
+                1.2 + disposition.curiosity() * 0.6,        // somebody never spoken to
+                0.8,                                        // somebody worth hearing again
+                3.0,                                        // somebody owed a visit
+                0.4 + disposition.aggression() * 1.2,       // something to hunt
+                1.5,                                        // somewhere never stood in
+                0.3,                                        // the less visited, the better
+                0.35,                                       // each door of walking
+                1.0,                                        // a room already seen all of
+                1.0);                                       // just went there: wipes its reasons, for now
+    }
+
+    /** How many times this agent has walked into each map, counting every arrival. */
+    private static Map<String, Integer> visitsTo(Mind mind) {
+        Map<String, Integer> visits = new HashMap<>();
+        for (Belief belief : mind.semantic().all()) {
+            if (belief.subject().equals("self") && belief.predicate().equals("in_map")) {
+                visits.merge(belief.object(), 1, Integer::sum);
+            }
+        }
+        return visits;
+    }
+
+    /**
+     * The places worth going, best first, for something slower and wider-eyed to choose from.
+     *
+     * The same list the reflexes pick from, so whatever the model is offered is somewhere the
+     * agent knows the way to.
+     */
+    public List<Places.Place> placesWorthGoing(Mind mind, WorldModel world, int limit) {
+        KnownWorld known = KnownWorld.rememberedBy(mind.semantic().liveBeliefs());
+        String here = KnownWorld.mapRef(world.mapId());
+        return places(known, here, mind).stream()
+                .filter(place -> world.portals().stream()
+                        .anyMatch(portal -> portal.name().equals(place.firstDoor())))
+                .limit(limit)
+                .toList();
+    }
+
+    /**
+     * Sets off for a map the model chose, and holds to it until it arrives.
+     *
+     * The door in mind is dropped so the next decision picks the first door of this journey
+     * rather than finishing a walk to a door that led somewhere else.
+     */
+    public void headFor(String map, String why) {
+        setOffFor(map, why, true);
+        doorInMind = null;
+        committedPortal = null;
+    }
+
+    /** Where the agent is heading, if anywhere. */
+    public Optional<String> destination() {
+        return Optional.ofNullable(destination);
     }
 
     /**
@@ -1204,6 +1367,7 @@ public class ReflexPolicy implements Policy {
         errandMap = null;
         errandNpc = -1;
         int mesos = mesosHeld(mind);
+        Set<String> stranders = strandedBy(mind);
         String here = KnownWorld.mapRef(world.mapId());
         for (Belief belief : mind.semantic().liveBeliefs()) {
             if (!belief.predicate().equals("wants_first")
@@ -1212,6 +1376,9 @@ public class ReflexPolicy implements Policy {
             }
             if (!canPay(belief.object(), world.level(), mesos)) {
                 continue;
+            }
+            if (stranders.contains(belief.subject())) {
+                continue;       // it will not accept anything from them, so there is no errand
             }
             int npcId = npcIdIn(belief.subject());
             Integer spokenAt = greetedAt.get(npcId);

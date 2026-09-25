@@ -2,6 +2,8 @@ package agents.mind;
 
 import agents.Mind;
 import agents.memory.Belief;
+import agents.world.KnownWorld;
+import agents.world.Places;
 import agents.world.WorldModel;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -84,9 +86,10 @@ public class LlmPolicy implements Policy {
      */
     static final String SCHEMA = """
             {"type":"object","additionalProperties":false,
-             "required":["goal","pursue","intent","learned"],
+             "required":["goal","go","pursue","intent","learned"],
              "properties":{
                "goal":{"type":"string","maxLength":120},
+               "go":{"type":"string","maxLength":8},
                "pursue":{"type":"string","enum":["fighting","looting","talking","exploring","errands"]},
                "intent":{"type":"string","maxLength":80},
                "learned":{"type":"array","maxItems":3,"items":{
@@ -110,11 +113,18 @@ public class LlmPolicy implements Policy {
             Reply in exactly this form, one item per line, and nothing else:
 
             GOAL: <a few words on what you are trying to achieve>
+            GO: <the letter of a place to head for, or stay>
             PURSUE: <one of: fighting, looting, talking, exploring, errands>
             INTENT: <one of the actions below>
             LEARNED: <subject> | <predicate> | <object>
 
-            PURSUE matters most. It is what you want to keep doing for the next half a minute
+            GO is where to be. You are shown the places you know the way to, each with why it
+            might be worth going. Pick one by its letter and you will walk there, however many
+            doors away it is, and keep going until you arrive. Say stay to remain where you are,
+            if there is still something here worth doing. Somewhere you have just been for the
+            same reason is rarely worth going back to straight away.
+
+            PURSUE is what you want to keep doing for the next half a minute
             or so. Reflexes carry it out between your answers; you are saying which way to
             lean, not giving an order. Talking to somebody you have never spoken to is often
             how you find out what a place is for.
@@ -164,6 +174,17 @@ public class LlmPolicy implements Policy {
     private final java.util.ArrayDeque<Integer> mapsEntered = new java.util.ArrayDeque<>();
 
     /**
+     * The places offered with the question out now, in letter order.
+     *
+     * Kept with the question because the answer arrives later, by which time the list the
+     * reflexes would draw up may have changed - the letter means what it meant when asked.
+     */
+    private List<Places.Place> offered = List.of();
+
+    /** How many places to offer. Few enough to read, enough to include somewhere unlikely. */
+    private static final int PLACES_OFFERED = 5;
+
+    /**
      * Why the last answer was no use, waiting to be written to the trace.
      *
      * Read once and cleared: a failed answer explains exactly one fallback, and the decisions
@@ -201,7 +222,11 @@ public class LlmPolicy implements Policy {
 
         String askingBecause = reasonToAsk(mind, world);
         if (pending == null && askingBecause != null && worthAsking()) {
-            String question = describe(mind, world, recalled, askingBecause, stuckFor(), mapsEntered);
+            offered = fallback instanceof ReflexPolicy reflexes
+                    ? reflexes.placesWorthGoing(mind, world, PLACES_OFFERED)
+                    : List.of();
+            String question = describe(mind, world, recalled, askingBecause, stuckFor(), mapsEntered,
+                    offered);
             pending = CompletableFuture.supplyAsync(() -> oracle.ask(SYSTEM, question, SCHEMA),
                     thinking);
             waitingToAsk = null;
@@ -225,6 +250,16 @@ public class LlmPolicy implements Policy {
             }
         });
 
+        // Where to go outlives the moment as well as what to do, and is the one decision the
+        // reflexes are worst at: they can only weigh the places they can see reasons for, one
+        // map at a time. A letter that no longer names anything was simply not an answer.
+        Optional<Places.Place> headingFor = parsed.go().flatMap(this::placeLettered);
+        headingFor.ifPresent(place -> {
+            if (fallback instanceof ReflexPolicy reflexes) {
+                reflexes.headFor(place.map(), String.join(", ", place.reasons()));
+            }
+        });
+
         // What it worked out is worth keeping whether or not its action still makes sense:
         // the conclusion was drawn from what it saw, not from where the monster is now.
         parsed.learned().forEach(triple ->
@@ -238,7 +273,8 @@ public class LlmPolicy implements Policy {
                     // The reflexes call exploring "door"; the trace is read by people.
                     .map(kind -> parsed.problem() + "; model leaning "
                             + (kind.equals("door") ? "explore" : kind))
-                    .orElse(parsed.problem());
+                    .orElse(parsed.problem())
+                    + headingFor.map(place -> "; model heading for " + place.map()).orElse("");
             return fellBack(mind, world, tick, because);
         }
 
@@ -289,6 +325,15 @@ public class LlmPolicy implements Policy {
             return waitingToAsk;
         }
         return onTheTimer ? "it is time to take stock" : null;
+    }
+
+    private Optional<Places.Place> placeLettered(String letter) {
+        String said = letter.trim().toUpperCase();
+        if (said.length() != 1 || said.charAt(0) < 'A') {
+            return Optional.empty();
+        }
+        int index = said.charAt(0) - 'A';
+        return index < offered.size() ? Optional.of(offered.get(index)) : Optional.empty();
     }
 
     private static int weight(String happened) {
@@ -395,7 +440,8 @@ public class LlmPolicy implements Policy {
 
     private static String describe(Mind mind, WorldModel world, List<Belief> recalled,
                                    String because, int stuckFor,
-                                   java.util.Collection<Integer> mapsEntered) {
+                                   java.util.Collection<Integer> mapsEntered,
+                                   List<Places.Place> places) {
         StringBuilder out = new StringBuilder();
         out.append("You are being asked because ").append(because).append(".\n\n");
 
@@ -435,10 +481,26 @@ public class LlmPolicy implements Policy {
         world.visiblePlayers().forEach((id, name) ->
                 out.append("  another player, ").append(name).append(", id ").append(id).append('\n'));
         List<WorldModel.PortalTarget> portals = world.portals();
+        KnownWorld known = KnownWorld.rememberedBy(mind.semantic().liveBeliefs());
         for (WorldModel.PortalTarget portal : portals) {
+            // Said as the agent knows it. Every door used to be "you do not know where it
+            // goes", including ones it had walked through a hundred times.
+            String leadsTo = known.destinationOf(KnownWorld.portalRef(world.mapId(), portal.name()))
+                    .map(to -> KnownWorld.NOWHERE.equals(to) ? "it has never taken you anywhere"
+                            : "it leads to " + to)
+                    .orElse("you do not know where it goes");
             out.append("  a way out named ").append(portal.name())
                     .append(" at ").append(point(portal.position()))
-                    .append(" - you do not know where it goes\n");
+                    .append(" - ").append(leadsTo).append('\n');
+        }
+
+        out.append("\nPlaces you know the way to (GO with a letter to head for one):\n");
+        if (places.isEmpty()) {
+            out.append("  none with anything left to find - explore through a door you have not used\n");
+        }
+        for (int i = 0; i < places.size(); i++) {
+            out.append("  ").append((char) ('A' + i)).append(") ")
+                    .append(places.get(i).describe()).append('\n');
         }
 
         // The two ways an agent gets stuck that it cannot see from one moment: learning nothing
@@ -510,7 +572,12 @@ public class LlmPolicy implements Policy {
      * the model missing rather than the model agreeing.
      */
     record Reply(Optional<String> goal, Optional<Intent> intent, Optional<String> pursue,
-                 List<Triple> learned, String problem) {
+                 List<Triple> learned, String problem, Optional<String> go) {
+
+        Reply(Optional<String> goal, Optional<Intent> intent, Optional<String> pursue,
+              List<Triple> learned, String problem) {
+            this(goal, intent, pursue, learned, problem, Optional.empty());
+        }
 
         record Triple(String subject, String predicate, String object) {
         }
@@ -532,6 +599,7 @@ public class LlmPolicy implements Policy {
             }
             Optional<String> goal = Optional.empty();
             Optional<String> pursue = Optional.empty();
+            Optional<String> go = Optional.empty();
             Resolved resolved = Resolved.not("no action given");
             List<Triple> learned = new ArrayList<>();
 
@@ -541,13 +609,15 @@ public class LlmPolicy implements Policy {
                     goal = Optional.of(trimmed.substring(5).trim());
                 } else if (trimmed.startsWith("INTENT:")) {
                     resolved = parseIntent(trimmed.substring(7).trim(), world);
+                } else if (trimmed.startsWith("GO:")) {
+                    go = Optional.of(trimmed.substring(3).trim()).filter(g -> !g.isEmpty());
                 } else if (trimmed.startsWith("PURSUE:")) {
                     pursue = asKind(trimmed.substring(7).trim());
                 } else if (trimmed.startsWith("LEARNED:")) {
                     parseTriple(trimmed.substring(8).trim()).ifPresent(learned::add);
                 }
             }
-            return new Reply(goal, resolved.intent(), pursue, learned, resolved.problem());
+            return new Reply(goal, resolved.intent(), pursue, learned, resolved.problem(), go);
         }
 
         /**
@@ -572,7 +642,9 @@ public class LlmPolicy implements Policy {
                 parseTriple(t.path("subject").asText("") + "|" + t.path("predicate").asText("")
                         + "|" + t.path("object").asText("")).ifPresent(learned::add);
             }
-            return new Reply(goal, resolved.intent(), pursue, learned, resolved.problem());
+            Optional<String> go = Optional.of(root.path("go").asText("").trim())
+                    .filter(g -> !g.isEmpty());
+            return new Reply(goal, resolved.intent(), pursue, learned, resolved.problem(), go);
         }
 
         private static final ObjectMapper JSON = new ObjectMapper();

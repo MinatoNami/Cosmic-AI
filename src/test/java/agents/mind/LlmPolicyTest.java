@@ -514,6 +514,42 @@ class LlmPolicyTest {
         assertFalse(oracle.prompts.get(0).contains("hp "), "no hp line at all while it is unknown");
     }
 
+    /**
+     * The model is shown the places the agent knows the way to, and a letter sends it there.
+     * Built on the doors map 10000 really has, since those are the only doors it could take.
+     */
+    @Test
+    void aLetterSendsTheAgentWhereTheModelChose() {
+        List<WorldModel.PortalTarget> doors = world.portals();
+        org.junit.jupiter.api.Assumptions.assumeTrue(doors.size() >= 1, "map data not available");
+        String door = doors.get(0).name();
+        mind.take(new Observation.MapEntered(1, 20000, 0));
+        mind.take(new Observation.MapEntered(2, 10000, 0));
+        mind.infer(agents.world.KnownWorld.portalRef(10000, door), "leads_to", "map:20000", 3);
+        mind.infer("npc:2100", "present_in", "map:20000", 3);
+        ReflexPolicy reflexes = new ReflexPolicy(new Random(1), Disposition.FIGHTER);
+        StubOracle oracle = new StubOracle("GOAL: meet whoever is there\nGO: A\nPURSUE: talking");
+        LlmPolicy policy = new LlmPolicy(oracle, reflexes, 1);
+
+        deliberate(policy, 4);
+
+        String prompt = oracle.prompts.get(0);
+        assertTrue(prompt.contains("A) map:20000, 1 door away: somebody you have never spoken to"), prompt);
+        assertTrue(prompt.contains(door + " at") && prompt.contains("it leads to map:20000"),
+                "a door it has walked through says where it goes: " + prompt);
+        assertEquals(java.util.Optional.of("map:20000"), reflexes.destination());
+    }
+
+    @Test
+    void aLetterThatNamesNothingIsIgnored() {
+        ReflexPolicy reflexes = new ReflexPolicy(new Random(1), Disposition.FIGHTER);
+        LlmPolicy policy = new LlmPolicy(new StubOracle("GOAL: x\nGO: D\nPURSUE: exploring"), reflexes, 1);
+
+        deliberate(policy, 1);
+
+        assertEquals(java.util.Optional.empty(), reflexes.destination());
+    }
+
     /** Answers whatever it was built with, immediately. */
     private record FixedOracle(String answer) implements Oracle {
         @Override
