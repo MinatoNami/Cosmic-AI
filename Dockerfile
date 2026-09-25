@@ -23,8 +23,11 @@ COPY pom.xml ./pom.xml
 
 # Source code changes may not change dependencies, so it can go last.
 # Skip compiling tests since we don't want all the dependecies to be downloaded for plugins.
+# The local repository lives in a BuildKit cache that outlasts the build, standing in for the
+# go-offline step above: without it every rebuild downloaded every dependency again, and one
+# stalled connection to Maven Central hung the whole build.
 COPY src ./src
-RUN mvn -f ./pom.xml clean package -Dmaven.test.skip -T 1C
+RUN --mount=type=cache,target=/root/.m2 mvn -f ./pom.xml clean package -Dmaven.test.skip -T 1C
 
 #
 # Server creation stage
