@@ -711,4 +711,23 @@ class ReflexPolicyTest {
 
         assertEquals(0, reflexes.decisionsSinceProgress());
     }
+
+    /**
+     * Somebody who has stranded this agent is not somebody to go back to. Declining the offer
+     * alone left it walking up to them, hearing it again, and saying no, on repeat.
+     */
+    @Test
+    void doesNotGoBackToSomebodyWhoStrandedIt() {
+        mind.take(new Observation.MapEntered(1, 10000, 0));
+        world.update(new Observation.NpcAppeared(2, 700, 10203, new Point(30, 0)));
+        mind.infer("npc:10203", "strands_you", "true", 2);
+        ReflexPolicy wanderer = new ReflexPolicy(new Random(1), Disposition.WANDERER);
+
+        for (int decision = 3; decision < 40; decision++) {
+            Intent intent = wanderer.decide(mind, world, decision).intent();
+            assertFalse(intent instanceof Intent.TalkTo talk && talk.npcId() == 10203,
+                    "walked back up to the one that stranded it at decision " + decision);
+            assertFalse(intent instanceof Intent.StartQuest quest && quest.npcId() == 10203);
+        }
+    }
 }

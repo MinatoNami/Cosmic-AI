@@ -400,9 +400,14 @@ public class LlmPolicy implements Policy {
         out.append("You are being asked because ").append(because).append(".\n\n");
 
         out.append("You are ").append(mind.name())
-                .append(", level ").append(world.level())
-                .append(", hp ").append(world.hp()).append("/").append(world.maxHp())
-                .append(", standing at ").append(point(world.selfPosition()))
+                .append(", level ").append(world.level());
+        // The server says what hp is only when it changes, so after logging in it is unknown
+        // for a while. Printed as -1/-1 the model read it as dying and spent its answers
+        // looking for a healer that nothing it can do will find.
+        if (world.hp() >= 0 && world.maxHp() > 0) {
+            out.append(", hp ").append(world.hp()).append("/").append(world.maxHp());
+        }
+        out.append(", standing at ").append(point(world.selfPosition()))
                 .append(" in map:").append(world.mapId()).append(".\n\n");
 
         out.append("What you can see:\n");

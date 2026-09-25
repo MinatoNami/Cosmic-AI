@@ -231,12 +231,19 @@ public class Agent implements Runnable {
         if (!(observation instanceof Observation.DialogueShown dialogue)) {
             return;
         }
+        // Somebody who has stranded this agent before gets a no, whoever would otherwise have
+        // answered. This check used to sit on the reflex path only, so once the model was
+        // reading dialogue it was asked afresh every time, said yes every time, and two agents
+        // were rescued from the same rooms fifty-two times in half an hour.
+        if (strandedMeBefore(dialogue.npcId())) {
+            connection.session().send(ClientPackets.npcTalkMore(
+                    (byte) dialogue.style(), NPC_NO, NO_SELECTION));
+            return;
+        }
         // No model, or already thinking about the last thing it said: answer by reflex rather
         // than leave a conversation open with nobody attending it.
         if (dialogueReader == null || pendingDialogue != null) {
-            byte answer = strandedMeBefore(dialogue.npcId())
-                    ? NPC_NO
-                    : withoutReading(dialogue.style(), nowhereLeftToGo());
+            byte answer = withoutReading(dialogue.style(), nowhereLeftToGo());
             if (answer == NPC_YES_OR_NEXT && isAQuestion(dialogue.style())) {
                 wentAlongWith = dialogue.npcId();
             }
@@ -288,6 +295,13 @@ public class Agent implements Runnable {
             mind.hear("npc:" + pending.npcId(), "wants_first", reply.needs(),
                     perceiver.currentTick());
             log.info("{} was told npc:{} wants {}", mind.name(), pending.npcId(), reply.needs());
+        }
+
+        // Whoever read it, a yes to a question is a yes, and if it ends somewhere with no way
+        // out this is who gets the blame. Only the reflex path used to record it, so an offer
+        // the model accepted stranded the agent with nobody to hold responsible.
+        if (reply.action() == NPC_YES_OR_NEXT && isAQuestion(pending.style()) && pending.npcId() > 0) {
+            wentAlongWith = pending.npcId();
         }
 
         log.debug("{} answers the NPC: {}", mind.name(), reply.why());

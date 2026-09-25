@@ -504,6 +504,16 @@ class LlmPolicyTest {
         }
     }
 
+    /** Unknown hp printed as -1/-1 read as dying, and the model spent its answers on healing. */
+    @Test
+    void saysNothingAboutHpItDoesNotKnow() {
+        StubOracle oracle = new StubOracle("GOAL: x\nPURSUE: exploring");
+        deliberate(new LlmPolicy(oracle, reflex, 1), 1);
+
+        assertFalse(oracle.prompts.get(0).contains("hp -1"), oracle.prompts.get(0));
+        assertFalse(oracle.prompts.get(0).contains("hp "), "no hp line at all while it is unknown");
+    }
+
     /** Answers whatever it was built with, immediately. */
     private record FixedOracle(String answer) implements Oracle {
         @Override

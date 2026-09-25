@@ -693,7 +693,9 @@ public class ReflexPolicy implements Policy {
         Set<String> met = spokenTo(mind);
         Comparator<WorldModel.Entity> strangersFirst = Comparator.comparingInt(
                 npc -> met.contains("npc:" + npc.typeId()) ? 1 : 0);
+        Set<String> stranders = strandedBy(mind);
         return world.visibleNpcs().stream()
+                .filter(npc -> !stranders.contains("npc:" + npc.typeId()))
                 .filter(this::stillWorthAsking)
                 .min(strangersFirst.thenComparingDouble(
                         npc -> npc.position().distance(self)));
@@ -750,6 +752,23 @@ public class ReflexPolicy implements Policy {
             }
         }
         return again;
+    }
+
+    /**
+     * Everyone who has taken this agent somewhere it could not leave.
+     *
+     * Declining their offer is not enough on its own: an NPC it has spoken to and "learned
+     * nothing from" is somebody worth going back to, so it walked up, heard the same offer,
+     * said no, and did it again.
+     */
+    private static Set<String> strandedBy(Mind mind) {
+        Set<String> who = new HashSet<>();
+        for (Belief belief : mind.semantic().liveBeliefs()) {
+            if (belief.predicate().equals("strands_you")) {
+                who.add(belief.subject());
+            }
+        }
+        return who;
     }
 
     /** Everyone this agent has heard speak for itself, rather than been told about. */
