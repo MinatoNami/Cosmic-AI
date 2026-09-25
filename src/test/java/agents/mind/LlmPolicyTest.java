@@ -368,6 +368,65 @@ class LlmPolicyTest {
                 "the model asked it to explore and nothing carried that past the decision");
     }
 
+    /**
+     * The reflexes spend most of their effort finding somebody to talk to, and the model was
+     * never told anybody was there - it could lean towards talking but not know whether that
+     * made sense.
+     */
+    @Test
+    void tellsTheModelWhoIsStandingAboutAndWhetherItHasMetThem() {
+        world.update(new Observation.NpcAppeared(2, 700, 2100, new Point(50, 0)));
+        StubOracle oracle = new StubOracle("GOAL: x\nPURSUE: talking");
+        deliberate(new LlmPolicy(oracle, reflex, 1), 2);
+
+        String prompt = oracle.prompts.get(0);
+        assertTrue(prompt.contains("npc:2100 objectId 700"), prompt);
+        assertTrue(prompt.contains("never spoken to it"), prompt);
+    }
+
+    @Test
+    void walksUpToAnNpcTheModelNamed() {
+        world.update(new Observation.NpcAppeared(2, 700, 2100, new Point(50, 0)));
+        LlmPolicy policy = policyReturning("GOAL: meet them\nINTENT: TalkTo 700");
+
+        Intent.TalkTo talk = assertInstanceOf(Intent.TalkTo.class, deliberate(policy, 2).intent());
+
+        assertEquals(2100, talk.npcId());
+        assertEquals(new Point(50, 0), talk.position());
+    }
+
+    /** What a 4B model actually writes, which is rarely what it was asked to. */
+    @Test
+    void readsAnActionThroughTheDecorationASmallModelPutsOnIt() {
+        assertEquals(new Point(120, -40), assertInstanceOf(Intent.MoveTo.class,
+                deliberate(policyReturning("INTENT: `moveTo (120, -40)`"), 1).intent()).destination());
+        assertEquals(new Point(7, 8), assertInstanceOf(Intent.MoveTo.class,
+                deliberate(policyReturning("INTENT: MoveTo(7,8)"), 2).intent()).destination());
+
+        world.update(new Observation.MonsterAppeared(3, 9001, 100100, new Point(30, 0)));
+        assertEquals(9001, assertInstanceOf(Intent.Attack.class,
+                deliberate(policyReturning("INTENT: attack objectId 9001"), 3).intent()).objectId());
+    }
+
+    /**
+     * Most answers arrive after the thing they were about has gone, but the lean in them
+     * still steers the reflexes - and the trace has to say so, or a run the model was
+     * steering reads as one it had no part in.
+     */
+    @Test
+    void saysTheModelIsSteeringEvenWhenItsActionIsDropped() {
+        LlmPolicy policy = policyReturning("GOAL: find people\nPURSUE: talking\nINTENT: Attack 4242");
+
+        assertEquals("target gone; model leaning talk", deliberate(policy, 1).fellBackBecause());
+    }
+
+    @Test
+    void aLeanWithNoActionIsAnAnswerNotAFailure() {
+        LlmPolicy policy = policyReturning("GOAL: look around\nPURSUE: exploring\nINTENT: none");
+
+        assertEquals("no action given; model leaning explore", deliberate(policy, 1).fellBackBecause());
+    }
+
     /** Answers whatever it was built with, immediately. */
     private record FixedOracle(String answer) implements Oracle {
         @Override

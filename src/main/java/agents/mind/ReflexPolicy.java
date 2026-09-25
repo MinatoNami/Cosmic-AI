@@ -733,7 +733,7 @@ public class ReflexPolicy implements Policy {
     }
 
     /** Everyone this agent has heard speak for itself, rather than been told about. */
-    private static Set<String> spokenTo(Mind mind) {
+    static Set<String> spokenTo(Mind mind) {
         Set<String> met = new HashSet<>();
         for (Belief belief : mind.semantic().liveBeliefs()) {
             if (belief.predicate().equals("talks_in")

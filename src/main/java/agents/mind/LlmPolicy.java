@@ -6,8 +6,12 @@ import agents.world.WorldModel;
 
 import java.awt.Point;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -51,6 +55,9 @@ public class LlmPolicy implements Policy {
      */
     private static final int BELIEFS_IN_PROMPT = 8;
 
+    /** The same reasoning, for the people standing about. */
+    private static final int NPCS_IN_PROMPT = 4;
+
     private static final String SYSTEM = """
             You are playing a character in an online game world you have never seen before.
             You know nothing about it beyond what you have observed, and the observations are
@@ -59,27 +66,34 @@ public class LlmPolicy implements Policy {
             watching what happens is the whole of your task.
 
             You will be given what you currently believe and what you can see right now.
-            Choose one action.
+            You think slowly: by the time your answer arrives, what you saw may have moved,
+            died or been picked up. So the most useful thing you can give is a direction, not
+            a single move.
 
             Reply in exactly this form, one item per line, and nothing else:
 
             GOAL: <a few words on what you are trying to achieve>
-            INTENT: <one of the actions below>
             PURSUE: <one of: fighting, looting, talking, exploring, errands>
+            INTENT: <one of the actions below>
             LEARNED: <subject> | <predicate> | <object>
 
-            PURSUE is what you want to keep doing for the next half a minute or so, not just
-            now. Reflexes will carry it out between your answers; you are saying which way to
-            lean, not giving an order.
+            PURSUE matters most. It is what you want to keep doing for the next half a minute
+            or so. Reflexes carry it out between your answers; you are saying which way to
+            lean, not giving an order. Talking to somebody you have never spoken to is often
+            how you find out what a place is for.
+
+            INTENT is one action to take right now. Leave it out if nothing in front of you
+            needs doing this moment.
 
             LEARNED lines are optional and may repeat. Use them only for something you have
             worked out that is not already in your beliefs, phrased with the same kind of ids
             you were given. Do not restate what you were told.
 
-            Actions, one per INTENT line:
+            Actions, one per INTENT line, with no brackets or punctuation around the numbers:
               MoveTo <x> <y>
               Attack <objectId>
               PickUp <objectId>
+              TalkTo <objectId>
               Say <message>
               EnterPortal <portalName>
               Wait
@@ -156,22 +170,30 @@ public class LlmPolicy implements Policy {
             }
         });
 
-        Optional<Intent> intent = parsed.intent();
-        if (intent.isEmpty()) {
-            return fellBack(mind, world, tick, parsed.problem());
-        }
-
+        // What it worked out is worth keeping whether or not its action still makes sense:
+        // the conclusion was drawn from what it saw, not from where the monster is now.
         parsed.learned().forEach(triple ->
                 mind.infer(triple.subject(), triple.predicate(), triple.object(), tick));
+
+        Optional<Intent> intent = parsed.intent();
+        if (intent.isEmpty()) {
+            // The reflexes act, but a lean the model gave is still its doing, and a trace
+            // that only said "target gone" would read as the model having no say at all.
+            String because = parsed.pursue()
+                    // The reflexes call exploring "door"; the trace is read by people.
+                    .map(kind -> parsed.problem() + "; model leaning "
+                            + (kind.equals("door") ? "explore" : kind))
+                    .orElse(parsed.problem());
+            return fellBack(mind, world, tick, because);
+        }
 
         return new Decision(intent.get(),
                 parsed.goal().orElse("(no goal given)"),
                 recalled.stream().map(Belief::ref).toList(),
-                List.of("MoveTo", "Attack", "PickUp", "Say", "EnterPortal", "Wait"))
+                List.of("MoveTo", "Attack", "PickUp", "TalkTo", "Say", "EnterPortal", "Wait"))
                 .creditedTo(name(), null);
     }
 
-    /** Reflexes decide this one, and the trace says so and why. */
     /**
      * Whether the model is worth asking for a whole decision just now.
      *
@@ -284,6 +306,19 @@ public class LlmPolicy implements Policy {
         world.nearestDrop().ifPresent(d -> out.append("  item:").append(d.typeId())
                 .append(" objectId ").append(d.objectId())
                 .append(" at ").append(point(d.position())).append('\n'));
+        // Nearest first and only a few: a town can have a dozen, and each line is tokens a
+        // small model spends reasoning about somebody it will not walk to anyway.
+        Set<String> heard = ReflexPolicy.spokenTo(mind);
+        Point self = world.selfPosition();
+        world.visibleNpcs().stream()
+                .sorted(Comparator.comparingDouble(n -> n.position().distance(self)))
+                .limit(NPCS_IN_PROMPT)
+                .forEach(n -> out.append("  npc:").append(n.typeId())
+                        .append(" objectId ").append(n.objectId())
+                        .append(" at ").append(point(n.position()))
+                        .append(heard.contains("npc:" + n.typeId())
+                                ? " - you have spoken to it\n"
+                                : " - you have never spoken to it\n"));
         world.visiblePlayers().forEach((id, name) ->
                 out.append("  another player, ").append(name).append(", id ").append(id).append('\n'));
         List<WorldModel.PortalTarget> portals = world.portals();
@@ -344,7 +379,7 @@ public class LlmPolicy implements Policy {
         static Reply parse(String text, WorldModel world) {
             Optional<String> goal = Optional.empty();
             Optional<String> pursue = Optional.empty();
-            Resolved resolved = Resolved.not("no INTENT line");
+            Resolved resolved = Resolved.not("no action given");
             List<Triple> learned = new ArrayList<>();
 
             for (String line : text.split("\n")) {
@@ -389,41 +424,79 @@ public class LlmPolicy implements Policy {
             return Optional.empty();
         }
 
-        private static Resolved parseIntent(String text, WorldModel world) {
-            String[] parts = text.split("\\s+", 2);
-            String verb = parts[0];
-            String rest = parts.length > 1 ? parts[1].trim() : "";
+        /** Any whole number, sign included, wherever it sits among brackets and commas. */
+        private static final Pattern NUMBER = Pattern.compile("-?\\d+");
 
-            try {
-                return switch (verb) {
-                    case "MoveTo" -> {
-                        String[] xy = rest.split("\\s+");
-                        yield xy.length < 2 ? Resolved.not("MoveTo without a place")
-                                : Resolved.to(new Intent.MoveTo(
-                                        new Point(Integer.parseInt(xy[0]), Integer.parseInt(xy[1]))));
-                    }
-                    // The model names what it wants to act on; where that thing is comes
-                    // from the world model. An id the agent cannot currently see is dropped
-                    // rather than acted on at a guessed position - and counted, because an
-                    // answer that takes fifteen seconds to arrive about a monster that lives
-                    // five is the failure most worth being able to measure.
-                    case "Attack" -> world.byObjectId(Integer.parseInt(rest))
-                            .map(e -> Resolved.to(new Intent.Attack(e.objectId(), e.position())))
-                            .orElseGet(() -> Resolved.not("target gone"));
-                    case "PickUp" -> world.byObjectId(Integer.parseInt(rest))
-                            .map(e -> Resolved.to(new Intent.PickUp(e.objectId(), e.position())))
-                            .orElseGet(() -> Resolved.not("target gone"));
-                    case "Say" -> rest.isBlank() ? Resolved.not("nothing to say")
-                            : Resolved.to(new Intent.Say(rest));
-                    case "EnterPortal" -> world.portalNamed(rest)
-                            .map(portal -> Resolved.to(new Intent.EnterPortal(portal.name(), portal.position())))
-                            .orElseGet(() -> Resolved.not("no way out called that"));
-                    case "Wait" -> Resolved.to(new Intent.Wait());
-                    default -> Resolved.not("not an action");
-                };
-            } catch (NumberFormatException e) {
-                return Resolved.not("not a number");
+        /** The verb is the leading letters, so {@code MoveTo(120,-40)} splits as well as with a space. */
+        private static final Pattern ACTION = Pattern.compile("([A-Za-z]*)(.*)", Pattern.DOTALL);
+
+        /**
+         * Reads an action line the way a small model writes one, not the way it was asked to.
+         *
+         * A 4B model asked for {@code MoveTo 120 -40} writes {@code `moveTo (120, -40)`} or
+         * {@code Attack objectId 9001} often enough that strict parsing threw away a real
+         * share of the few answers that arrived at all. The verb is matched without case or
+         * decoration and numbers are picked out of whatever surrounds them; what it refers
+         * to is still checked against the world, so leniency never invents a target.
+         */
+        private static Resolved parseIntent(String text, WorldModel world) {
+            Matcher line = ACTION.matcher(text.replaceAll("[`*\"]", "").trim());
+            line.matches();                 // cannot fail: both groups accept nothing
+            String verb = line.group(1).toLowerCase();
+            String rest = line.group(2).trim();
+            List<Integer> numbers = numbersIn(rest);
+
+            return switch (verb) {
+                case "moveto" -> numbers.size() < 2 ? Resolved.not("MoveTo without a place")
+                        : Resolved.to(new Intent.MoveTo(new Point(numbers.get(0), numbers.get(1))));
+                // The model names what it wants to act on; where that thing is comes
+                // from the world model. An id the agent cannot currently see is dropped
+                // rather than acted on at a guessed position - and counted, because an
+                // answer that takes fifteen seconds to arrive about a monster that lives
+                // five is the failure most worth being able to measure.
+                case "attack" -> firstNumber(numbers)
+                        .flatMap(world::byObjectId)
+                        .map(e -> Resolved.to(new Intent.Attack(e.objectId(), e.position())))
+                        .orElseGet(() -> numbers.isEmpty() ? Resolved.not("not a number")
+                                : Resolved.not("target gone"));
+                case "pickup" -> firstNumber(numbers)
+                        .flatMap(world::byObjectId)
+                        .map(e -> Resolved.to(new Intent.PickUp(e.objectId(), e.position())))
+                        .orElseGet(() -> numbers.isEmpty() ? Resolved.not("not a number")
+                                : Resolved.not("target gone"));
+                case "talkto" -> firstNumber(numbers)
+                        .flatMap(id -> world.visibleNpcs().stream()
+                                .filter(n -> n.objectId() == id).findFirst())
+                        .map(n -> Resolved.to(new Intent.TalkTo(n.objectId(), n.typeId(), n.position())))
+                        .orElseGet(() -> numbers.isEmpty() ? Resolved.not("not a number")
+                                : Resolved.not("nobody there to talk to"));
+                case "say" -> rest.isBlank() ? Resolved.not("nothing to say")
+                        : Resolved.to(new Intent.Say(rest));
+                case "enterportal" -> world.portalNamed(rest.replaceAll("[<>()\\[\\]]", "").trim())
+                        .map(portal -> Resolved.to(new Intent.EnterPortal(portal.name(), portal.position())))
+                        .orElseGet(() -> Resolved.not("no way out called that"));
+                case "wait" -> Resolved.to(new Intent.Wait());
+                // Told it may leave the line out, a model will as often write it empty.
+                case "", "none", "nothing" -> Resolved.not("no action given");
+                default -> Resolved.not("not an action");
+            };
+        }
+
+        private static List<Integer> numbersIn(String text) {
+            List<Integer> numbers = new ArrayList<>();
+            Matcher matcher = NUMBER.matcher(text);
+            while (matcher.find()) {
+                try {
+                    numbers.add(Integer.parseInt(matcher.group()));
+                } catch (NumberFormatException e) {
+                    // Digits too long for an int. Nothing real has an id like that.
+                }
             }
+            return numbers;
+        }
+
+        private static Optional<Integer> firstNumber(List<Integer> numbers) {
+            return numbers.isEmpty() ? Optional.empty() : Optional.of(numbers.get(0));
         }
 
         private static Optional<Triple> parseTriple(String text) {
