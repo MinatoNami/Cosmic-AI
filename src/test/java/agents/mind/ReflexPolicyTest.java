@@ -803,4 +803,50 @@ class ReflexPolicyTest {
 
         assertEquals("west00", policy.pickDoor(doors, mind, 10000, "player:1").name());
     }
+
+    /**
+     * Some NPCs have no script and never open a dialogue. They stayed strangers for ever - a
+     * reason to travel to their map and to say hello on arrival - and one agent greeted three
+     * of them eighty-three times between them without a word back.
+     */
+    @Test
+    void learnsWhoNeverAnswersAndStopsGreetingThem() {
+        mind.take(new Observation.MapEntered(1, 10000, 0));
+        world.update(new Observation.NpcAppeared(2, 700, 12100, new Point(30, 0)));
+        ReflexPolicy talker = new ReflexPolicy(new Random(1), Disposition.TALKER);
+
+        int greetings = 0;
+        int lastGreeting = -1;
+        for (int decision = 3; decision < 1400; decision++) {
+            Intent intent = talker.decide(mind, world, decision).intent();
+            if (intent instanceof Intent.TalkTo talk && talk.npcId() == 12100) {
+                greetings++;
+                lastGreeting = decision;
+            }
+        }
+
+        assertTrue(mind.semantic().liveBeliefs().stream()
+                        .anyMatch(b -> b.subject().equals("npc:12100")
+                                && b.predicate().equals("does_not_answer")
+                                && b.provenance() == agents.memory.Belief.Provenance.FIRST_HAND),
+                "greeted " + greetings + " times and never heard back, and did not notice");
+        assertTrue(greetings <= 2, "kept greeting somebody who never answers: " + greetings);
+        assertTrue(lastGreeting < 1400 - 600, "still greeting them at decision " + lastGreeting);
+    }
+
+    /** Somebody who has spoken once is not written off for one missed hello. */
+    @Test
+    void somebodyWhoHasAnsweredIsNeverCalledSilent() {
+        mind.take(new Observation.MapEntered(1, 10000, 0));
+        mind.take(new Observation.DialogueShown(2, 2100, "Welcome!", 0));
+        world.update(new Observation.NpcAppeared(2, 700, 2100, new Point(30, 0)));
+        ReflexPolicy talker = new ReflexPolicy(new Random(1), Disposition.TALKER);
+
+        for (int decision = 3; decision < 1400; decision++) {
+            talker.decide(mind, world, decision);
+        }
+
+        assertFalse(mind.semantic().liveBeliefs().stream()
+                .anyMatch(b -> b.predicate().equals("does_not_answer")));
+    }
 }

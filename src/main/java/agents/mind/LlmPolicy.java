@@ -468,6 +468,7 @@ public class LlmPolicy implements Policy {
         // Nearest first and only a few: a town can have a dozen, and each line is tokens a
         // small model spends reasoning about somebody it will not walk to anyway.
         Set<String> heard = ReflexPolicy.spokenTo(mind);
+        Set<String> silent = ReflexPolicy.doesNotAnswer(mind);
         Point self = world.selfPosition();
         world.visibleNpcs().stream()
                 .sorted(Comparator.comparingDouble(n -> n.position().distance(self)))
@@ -477,6 +478,8 @@ public class LlmPolicy implements Policy {
                         .append(" at ").append(point(n.position()))
                         .append(heard.contains("npc:" + n.typeId())
                                 ? " - you have spoken to it\n"
+                                : silent.contains("npc:" + n.typeId())
+                                ? " - it has never answered you\n"
                                 : " - you have never spoken to it\n"));
         world.visiblePlayers().forEach((id, name) ->
                 out.append("  another player, ").append(name).append(", id ").append(id).append('\n'));

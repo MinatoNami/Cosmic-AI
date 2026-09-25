@@ -74,6 +74,29 @@ public class ReflexPolicy implements Policy {
      */
     private static final int WORTH_ANOTHER_ASK = 600;
 
+    /**
+     * Greetings sent and not yet answered, by NPC type, against the decision each went out on,
+     * and how many times each NPC has said nothing at all.
+     *
+     * Some NPCs never answer - the server has no script for them and logs "not coded" - so no
+     * conversation is ever recorded and they stay strangers for ever: a reason to travel to
+     * their map, and a reason to say hello again on arrival. One agent greeted the three
+     * people in one map eighty-three times between them without a word back. The silence is
+     * something the agent can observe for itself, so it does.
+     */
+    private final Map<Integer, Integer> greetingSentAt = new HashMap<>();
+    private final Map<Integer, Integer> silences = new HashMap<>();
+
+    /** Decisions to wait for a dialogue window before calling a greeting unanswered. */
+    private static final int ANSWER_WITHIN = 15;
+
+    /**
+     * Unanswered greetings before concluding somebody does not answer. More than one, in case
+     * the first went unheard; not many more, because greetings to one NPC are six hundred
+     * decisions apart and every one in between is a trip made for nothing.
+     */
+    private static final int SILENT_AFTER = 2;
+
     /** Quests already started, so a refusal is not retried forever. */
     private final Set<Integer> questsTried = new HashSet<>();
 
@@ -391,6 +414,7 @@ public class ReflexPolicy implements Policy {
         }
 
         takeStockOfWhatIsOwed(mind, world);
+        listenForAnswers(mind, tick);
 
         Set<Integer> unfinished = startedQuests(mind);
 
@@ -730,6 +754,7 @@ public class ReflexPolicy implements Policy {
         Comparator<WorldModel.Entity> strangersFirst = Comparator.comparingInt(
                 npc -> met.contains("npc:" + npc.typeId()) ? 1 : 0);
         Set<String> stranders = strandedBy(mind);
+        silentOnes = doesNotAnswer(mind);
         return world.visibleNpcs().stream()
                 .filter(npc -> !stranders.contains("npc:" + npc.typeId()))
                 .filter(this::stillWorthAsking)
@@ -756,7 +781,10 @@ public class ReflexPolicy implements Policy {
         boolean hasSomethingToOffer = QuestBoard.offeredBy(npc.typeId()).stream()
                 .anyMatch(quest -> !questsTried.contains(quest));
         if (hasSomethingToOffer) {
-            return true;
+            return true;        // taking a quest does not depend on them having anything to say
+        }
+        if (silentOnes.contains("npc:" + npc.typeId())) {
+            return false;
         }
         Integer greeted = greetedAt.get(npc.typeId());
         return greeted == null || decisionsMade - greeted >= WORTH_ANOTHER_ASK;
@@ -805,6 +833,47 @@ public class ReflexPolicy implements Policy {
             }
         }
         return who;
+    }
+
+    /** Who does not answer, as of the last time anybody was chosen to talk to. */
+    private Set<String> silentOnes = Set.of();
+
+    /** Everyone this agent has found does not answer when spoken to. */
+    static Set<String> doesNotAnswer(Mind mind) {
+        Set<String> who = new HashSet<>();
+        for (Belief belief : mind.semantic().liveBeliefs()) {
+            if (belief.predicate().equals("does_not_answer")) {
+                who.add(belief.subject());
+            }
+        }
+        return who;
+    }
+
+    /**
+     * Settles each greeting that has had long enough to be answered.
+     *
+     * Answered means a dialogue window came back, which is what {@code talks_in} records. An
+     * NPC that has ever answered is never called silent: once it has spoken, a missed hello
+     * is more likely a busy moment than a person with nothing to say.
+     */
+    private void listenForAnswers(Mind mind, long tick) {
+        if (greetingSentAt.isEmpty()) {
+            return;
+        }
+        Set<String> heard = spokenTo(mind);
+        for (var sent = greetingSentAt.entrySet().iterator(); sent.hasNext(); ) {
+            var greeting = sent.next();
+            String who = "npc:" + greeting.getKey();
+            if (heard.contains(who)) {
+                silences.remove(greeting.getKey());
+                sent.remove();
+            } else if (decisionsMade - greeting.getValue() > ANSWER_WITHIN) {
+                sent.remove();
+                if (silences.merge(greeting.getKey(), 1, Integer::sum) >= SILENT_AFTER) {
+                    mind.saw(who, "does_not_answer", "true", tick);
+                }
+            }
+        }
     }
 
     /** Everyone this agent has heard speak for itself, rather than been told about. */
@@ -879,6 +948,7 @@ public class ReflexPolicy implements Policy {
                     "say hello and see what happens", score,
                     () -> {
                         greetedAt.put(npc.typeId(), decisionsMade);
+                        greetingSentAt.putIfAbsent(npc.typeId(), decisionsMade);
                         spokeToSomeone();
                         arrived();
                     }));
@@ -1222,8 +1292,10 @@ public class ReflexPolicy implements Policy {
                 justBeen.put(map, left);
             }
         });
+        Set<String> avoid = new HashSet<>(strandedBy(mind));
+        avoid.addAll(doesNotAnswer(mind));
         Places.Facts facts = new Places.Facts(here, visitsTo(mind), errandMap,
-                worthHearingAgain(known), strandedBy(mind), justBeen);
+                worthHearingAgain(known), avoid, justBeen);
         return Places.worthGoing(known, facts, weights());
     }
 
