@@ -26,6 +26,15 @@ import java.time.Duration;
  * shapes are handled below. And it is slow - a 35B model on a laptop takes around fifteen
  * seconds per answer - which is why {@link LlmPolicy} asks in the background instead of
  * waiting.
+ *
+ * <p>Reasoning is switched off, through LM Studio's own API rather than the OpenAI-shaped one.
+ * Both questions asked here want a line or two in a fixed format, and a reasoning model spent
+ * two to six thousand tokens thinking before every one of them: thirty to ninety seconds an
+ * answer, and one in three ran out of budget and answered nothing. With reasoning off the same
+ * prompt is answered in under a second with a sensible action. The OpenAI-shaped endpoint
+ * accepts {@code reasoning}, {@code reasoning_effort}, {@code /no_think} and
+ * {@code enable_thinking} and honours none of them for this model, which is why this goes to
+ * {@code /api/v1/chat}. An LM Studio too old to have that endpoint gets the old path.
  */
 public class LmStudioOracle implements Oracle {
     private static final Logger log = LoggerFactory.getLogger(LmStudioOracle.class);
@@ -51,20 +60,38 @@ public class LmStudioOracle implements Oracle {
 
     private static final Duration TIMEOUT = Duration.ofSeconds(180);
 
+    /** With nothing spent thinking, an answer is a few dozen tokens. Headroom, not a budget. */
+    private static final int ANSWER_TOKENS = 1000;
+
     private final HttpClient http = HttpClient.newBuilder()
             .connectTimeout(Duration.ofSeconds(5))
             .build();
     private final ObjectMapper json = new ObjectMapper();
     private final URI endpoint;
+    private final URI nativeEndpoint;
     private final String model;
+    private final String reasoning;
+
+    /** Cleared the first time the native endpoint turns out not to exist, and never retried. */
+    private volatile boolean nativeAvailable = true;
 
     public LmStudioOracle() {
         this(setting("LMSTUDIO_URL", DEFAULT_URL), setting("LMSTUDIO_MODEL", null));
     }
 
     public LmStudioOracle(String url, String model) {
+        this(url, model, setting("LMSTUDIO_REASONING", "off"));
+    }
+
+    /**
+     * @param reasoning "off" or "on", as LM Studio names them. On is there for trying a model
+     *                  that is no use without its thinking, not for everyday running.
+     */
+    public LmStudioOracle(String url, String model, String reasoning) {
         this.endpoint = URI.create(url);
+        this.nativeEndpoint = endpoint.resolve("/api/v1/chat");
         this.model = model;
+        this.reasoning = reasoning;
     }
 
     private static String setting(String key, String fallback) {
@@ -88,6 +115,80 @@ public class LmStudioOracle implements Oracle {
 
     @Override
     public String ask(String system, String user) {
+        if (nativeAvailable) {
+            try {
+                return askNatively(system, user);
+            } catch (NoNativeEndpoint e) {
+                nativeAvailable = false;
+                log.warn("No {} on this LM Studio ({}), so reasoning cannot be switched off; "
+                        + "using {} instead", nativeEndpoint, e.getMessage(), endpoint);
+            }
+        }
+        return askOpenAiShaped(system, user);
+    }
+
+    /** Thrown only when the endpoint is missing, so the fallback is not taken for a bad answer. */
+    private static class NoNativeEndpoint extends Exception {
+        NoNativeEndpoint(String message) {
+            super(message);
+        }
+    }
+
+    private String askNatively(String system, String user) throws NoNativeEndpoint {
+        try {
+            ObjectNode body = json.createObjectNode();
+            body.put("model", model != null ? model : "local-model");
+            body.put("system_prompt", system);
+            body.put("input", user);
+            body.put("reasoning", reasoning);
+            body.put("temperature", TEMPERATURE);
+            body.put("max_output_tokens", reasoning.equals("off") ? ANSWER_TOKENS : MAX_TOKENS);
+
+            HttpRequest request = HttpRequest.newBuilder(nativeEndpoint)
+                    .timeout(TIMEOUT)
+                    .header("Content-Type", "application/json")
+                    .POST(HttpRequest.BodyPublishers.ofString(json.writeValueAsString(body)))
+                    .build();
+
+            HttpResponse<String> response = http.send(request, HttpResponse.BodyHandlers.ofString());
+            if (response.statusCode() == 404) {
+                throw new NoNativeEndpoint("404");
+            }
+            if (response.statusCode() != 200) {
+                log.warn("LM Studio answered {}: {}", response.statusCode(),
+                        abbreviate(response.body()));
+                return null;
+            }
+            return nativeAnswerFrom(json.readTree(response.body()));
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return null;
+        } catch (NoNativeEndpoint e) {
+            throw e;
+        } catch (Exception e) {
+            log.warn("Could not reach LM Studio at {}, falling back", nativeEndpoint, e);
+            return null;
+        }
+    }
+
+    /** The message items of the output, joined; reasoning items, if any, are not the answer. */
+    private String nativeAnswerFrom(JsonNode root) {
+        StringBuilder answer = new StringBuilder();
+        for (JsonNode item : root.path("output")) {
+            if (item.path("type").asText().equals("message")) {
+                answer.append(item.path("content").asText(""));
+            }
+        }
+        String content = stripThinking(answer.toString());
+        if (content.isEmpty()) {
+            log.warn("LM Studio returned no answer ({} reasoning tokens)",
+                    root.path("stats").path("reasoning_output_tokens").asText("?"));
+            return null;
+        }
+        return content;
+    }
+
+    private String askOpenAiShaped(String system, String user) {
         try {
             ObjectNode body = json.createObjectNode();
             body.put("model", model != null ? model : "local-model");
@@ -126,13 +227,7 @@ public class LmStudioOracle implements Oracle {
      */
     private String answerFrom(JsonNode root) {
         JsonNode message = root.path("choices").path(0).path("message");
-        String content = message.path("content").asText("");
-
-        int end = content.lastIndexOf("</think>");
-        if (end >= 0) {
-            content = content.substring(end + "</think>".length());
-        }
-        content = content.trim();
+        String content = stripThinking(message.path("content").asText(""));
 
         if (content.isEmpty()) {
             // A reasoning model that ran out of budget before answering. Worth saying plainly,
@@ -143,6 +238,11 @@ public class LmStudioOracle implements Oracle {
             return null;
         }
         return content;
+    }
+
+    private static String stripThinking(String content) {
+        int end = content.lastIndexOf("</think>");
+        return (end >= 0 ? content.substring(end + "</think>".length()) : content).trim();
     }
 
     private static String abbreviate(String text) {
