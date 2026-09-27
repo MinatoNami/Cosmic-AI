@@ -87,6 +87,11 @@ public class Inferrer {
                 typeByObjectId.remove(died.objectId());
                 lastSeenAt.remove(died.objectId());
             }
+            case Observation.MonsterVanished vanished -> {
+                // Gone from sight, not dead: nothing it drops later is its doing.
+                typeByObjectId.remove(vanished.objectId());
+                lastSeenAt.remove(vanished.objectId());
+            }
             case Observation.DropAppeared drop -> {
                 return creditFor(drop);
             }

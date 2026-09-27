@@ -22,7 +22,7 @@ class BeliefFormerTest {
     @Test
     void restatesWhatAnObservationSaysOutright() {
         List<BeliefFormer.Triple> triples =
-                from(new Observation.SelfDescribed(1, 2, "Agent0", 1, 0, 10000));
+                from(new Observation.SelfDescribed(1, 2, "Agent0", 1, 0, 10000, 0));
 
         assertTrue(triples.contains(BeliefFormer.Triple.firstHand("self", "named", "Agent0")));
         assertTrue(triples.contains(BeliefFormer.Triple.firstHand("self", "in_map", "map:10000")));
@@ -81,7 +81,7 @@ class BeliefFormerTest {
      */
     @Test
     void doesNotRecordItselfAsASource() {
-        from(new Observation.SelfDescribed(1, 2, "Agent0", 1, 0, 10000));
+        from(new Observation.SelfDescribed(1, 2, "Agent0", 1, 0, 10000, 0));
 
         assertTrue(from(new Observation.ChatHeard(2, 2, "!know monster:1 present_in map:2")).isEmpty(),
                 "an agent hearing its own voice has learned nothing");

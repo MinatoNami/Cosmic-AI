@@ -34,8 +34,13 @@ public class MapGeometry {
     private static final Map<Integer, List<Ground>> GROUND = new HashMap<>();
     private static final Map<Integer, List<Climb>> CLIMBS = new HashMap<>();
 
-    /** A portal as it appears on screen: somewhere to stand, and a name to refer to it by. */
-    public record PortalSighting(String name, Point position, int type) {
+    /**
+     * A portal as it appears on screen: somewhere to stand, and a name to refer to it by.
+     *
+     * {@code id} is its number in the map's portal list, which is how the server names the
+     * one a character arrives at - see {@link #arrivalPoint}.
+     */
+    public record PortalSighting(int id, String name, Point position, int type) {
 
         /** Spawn points are where you arrive, not somewhere you can go. */
         boolean isUsable() {
@@ -52,6 +57,20 @@ public class MapGeometry {
     /** The portals worth trying, in no particular order. */
     public static List<PortalSighting> usablePortalsIn(int mapId) {
         return portalsIn(mapId).stream().filter(PortalSighting::isUsable).toList();
+    }
+
+    /**
+     * Where a character arriving at this portal is standing.
+     *
+     * Entering a map, the server names the portal you appear at by its number and puts you
+     * exactly on it. The client draws you there, so this is where you are - not wherever you
+     * happened to be standing in the map you left.
+     */
+    public static Optional<Point> arrivalPoint(int mapId, int portalId) {
+        return portalsIn(mapId).stream()
+                .filter(portal -> portal.id() == portalId)
+                .map(PortalSighting::position)
+                .findFirst();
     }
 
     private static List<PortalSighting> load(int mapId) {
@@ -72,9 +91,18 @@ public class MapGeometry {
             int type = DataTool.getInt(portal.getChildByPath("pt"), 0);
             int x = DataTool.getInt(portal.getChildByPath("x"), 0);
             int y = DataTool.getInt(portal.getChildByPath("y"), 0);
-            sightings.add(new PortalSighting(name, new Point(x, y), type));
+            sightings.add(new PortalSighting(portalId(portal), name, new Point(x, y), type));
         }
         return List.copyOf(sightings);
+    }
+
+    /** The server numbers portals by their node name in the file, and so must we. */
+    private static int portalId(Data portal) {
+        try {
+            return Integer.parseInt(portal.getName());
+        } catch (NumberFormatException e) {
+            return -1;
+        }
     }
 
     /**

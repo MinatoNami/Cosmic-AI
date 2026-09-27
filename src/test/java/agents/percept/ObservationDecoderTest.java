@@ -2,13 +2,18 @@ package agents.percept;
 
 import io.netty.buffer.Unpooled;
 import net.packet.ByteBufInPacket;
+import net.opcodes.SendOpcode;
 import net.packet.InPacket;
+import net.packet.OutPacket;
 import net.packet.Packet;
 import org.junit.jupiter.api.Test;
 import tools.PacketCreator;
 
+import java.awt.Point;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -35,6 +40,92 @@ class ObservationDecoderTest {
 
         Observation.MonsterDied died = assertInstanceOf(Observation.MonsterDied.class, observation);
         assertEquals(9001, died.objectId());
+    }
+
+    /**
+     * Taking a monster off one client's screen is two kill packets, disappear then fade. The
+     * server does it to every monster in a map each time an agent arrives there, so reading
+     * the second as a death had agents watching whole maps die on the way in.
+     */
+    @Test
+    void aMonsterLeavingTheScreenIsNotADeath() {
+        Observation first = decode(PacketCreator.killMonster(9001, 0));
+        Observation second = decode(PacketCreator.killMonster(9001, 1));
+
+        assertEquals(9001, assertInstanceOf(Observation.MonsterVanished.class, first).objectId());
+        assertNull(second, "the second half repeats the first and is not an observation");
+    }
+
+    @Test
+    void aDeathBetweenTheTwoHalvesIsStillADeath() {
+        decode(PacketCreator.killMonster(9001, 0));
+
+        Observation other = decode(PacketCreator.killMonster(9002, 1));
+        decode(PacketCreator.killMonster(9001, 1));
+        Observation later = decode(PacketCreator.killMonster(9001, 1));
+
+        assertEquals(9002, assertInstanceOf(Observation.MonsterDied.class, other).objectId());
+        assertInstanceOf(Observation.MonsterDied.class, later);
+    }
+
+    /**
+     * Monster movement has skill fields and a start position ahead of the list that player
+     * movement does not, and used to be read with the player layout.
+     */
+    @Test
+    void decodesMonsterMovementWithItsOwnLayout() {
+        byte[] list = movementTo(250, 140);
+        InPacket movement = new ByteBufInPacket(Unpooled.wrappedBuffer(list));
+
+        Observation observation = decode(PacketCreator.moveMonster(9001, true, 1, 2, 3, 4,
+                new Point(-40, 140), movement, list.length));
+
+        Observation.ThingMoved moved = assertInstanceOf(Observation.ThingMoved.class, observation);
+        assertEquals(9001, moved.objectId());
+        assertEquals(new Point(250, 140), moved.position());
+    }
+
+    /** A list of nothing but relative moves still says where the monster started. */
+    @Test
+    void aMonsterMoveWithNoStatedDestinationFallsBackToItsStart() {
+        byte[] list = {0};
+        InPacket movement = new ByteBufInPacket(Unpooled.wrappedBuffer(list));
+
+        Observation observation = decode(PacketCreator.moveMonster(9001, false, 0, 0, 0, 0,
+                new Point(-40, 140), movement, list.length));
+
+        assertEquals(new Point(-40, 140),
+                assertInstanceOf(Observation.ThingMoved.class, observation).position());
+    }
+
+    /**
+     * Being handed control of a monster is not seeing it: the server has always shown it
+     * with the plain spawn first. Built by hand because a real one needs a live Monster.
+     */
+    @Test
+    void takingControlOfAMonsterIsNotASighting() {
+        OutPacket control = OutPacket.create(SendOpcode.SPAWN_MONSTER_CONTROL);
+        control.writeByte(1);
+        control.writeInt(9001);
+        control.writeByte(1);
+        control.writeInt(100100);
+        control.skip(16);
+        control.writePos(new Point(10, 0));
+
+        assertInstanceOf(Observation.Unrecognised.class, decode(control));
+    }
+
+    /** One absolute move to a point, in the encoding the client sends. */
+    private static byte[] movementTo(int x, int y) {
+        return new byte[]{
+                1,                                      // one command
+                0,                                      // absolute move
+                (byte) x, (byte) (x >> 8), (byte) y, (byte) (y >> 8),
+                0, 0, 0, 0,                             // wobble
+                0, 0,                                   // foothold
+                2,                                      // stance
+                100, 0,                                 // duration
+        };
     }
 
     @Test

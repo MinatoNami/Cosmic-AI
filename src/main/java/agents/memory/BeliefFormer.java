@@ -78,8 +78,8 @@ public class BeliefFormer {
             // Deliberately produce nothing:
             //  - ThingMoved changes many times a second, so a position is working state for a
             //    world model rather than something to hold a long-term belief about.
-            //  - MonsterDied and PlayerLeft say an episode happened, not that anything is
-            //    lastingly true; the episode itself is the record.
+            //  - MonsterDied, MonsterVanished and PlayerLeft say an episode happened, not that
+            //    anything is lastingly true; the episode itself is the record.
             //  - NoticeShown and Unrecognised carry nothing an agent can state as a fact yet.
             default -> {
             }

@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test;
 
 import java.awt.Point;
 import java.util.Map;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -64,6 +65,48 @@ class WorldModelTest {
         world.update(new Observation.MapEntered(3, 10000, 1));
 
         assertTrue(world.nearestMonster().isPresent());
+    }
+
+    /** Map 104000000 has portal 3 at (720, 150); nothing else is known. */
+    private final WorldModel onMapleIsland = new WorldModel((mapId, portalId) ->
+            mapId == 104000000 && portalId == 3 ? Optional.of(new Point(720, 150)) : Optional.empty());
+
+    /**
+     * Nothing echoes an agent's own movement back to it, so arriving somewhere is the one
+     * time it is told where it stands. It used to keep the coordinates of the map it left.
+     */
+    @Test
+    void arrivingPutsTheAgentOnThePortalItCameOutOf() {
+        onMapleIsland.movedTo(new Point(-900, 400));
+
+        onMapleIsland.update(new Observation.MapEntered(1, 104000000, 3));
+
+        assertEquals(new Point(720, 150), onMapleIsland.selfPosition());
+    }
+
+    @Test
+    void enteringTheWorldPutsTheAgentWhereItLoggedIn() {
+        onMapleIsland.update(new Observation.SelfDescribed(1, 2, "Agent0", 1, 0, 104000000, 3));
+
+        assertEquals(new Point(720, 150), onMapleIsland.selfPosition());
+    }
+
+    @Test
+    void anUnknownPortalLeavesThePositionAlone() {
+        onMapleIsland.movedTo(new Point(-900, 400));
+
+        onMapleIsland.update(new Observation.MapEntered(1, 104000000, 99));
+
+        assertEquals(new Point(-900, 400), onMapleIsland.selfPosition());
+    }
+
+    @Test
+    void aMonsterThatVanishesIsNoLongerThere() {
+        world.update(new Observation.MonsterAppeared(1, 9001, 100100, new Point(10, 0)));
+
+        world.update(new Observation.MonsterVanished(2, 9001));
+
+        assertFalse(world.nearestMonster().isPresent());
     }
 
     @Test

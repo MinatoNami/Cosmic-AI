@@ -18,13 +18,16 @@ public sealed interface Observation {
     /** Tick at which this was perceived, set by the perceiver. */
     long tick();
 
-    /** The agent arrived in a map. */
+    /** The agent arrived in a map, standing on the portal numbered {@code spawnPoint}. */
     record MapEntered(long tick, int mapId, int spawnPoint) implements Observation {
     }
 
-    /** The agent's own character, as the server describes it on entering the world. */
+    /**
+     * The agent's own character, as the server describes it on entering the world.
+     * {@code spawnPoint} is the portal it is standing at, as in {@link MapEntered}.
+     */
     record SelfDescribed(long tick, int characterId, String name, int level, int job,
-                         int mapId) implements Observation {
+                         int mapId, int spawnPoint) implements Observation {
     }
 
     /** One or more of the agent's own stats changed. Keys are the server's stat names. */
@@ -44,6 +47,14 @@ public sealed interface Observation {
     }
 
     record MonsterDied(long tick, int objectId) implements Observation {
+    }
+
+    /**
+     * A monster went out of sight without dying: out of range, captured, or wiped and
+     * re-sent by the server when the agent finished arriving in a map. It may well still be
+     * there, so nothing about it should be concluded from its going.
+     */
+    record MonsterVanished(long tick, int objectId) implements Observation {
     }
 
     /** Something with an object id moved. Covers other players and monsters alike. */

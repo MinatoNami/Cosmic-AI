@@ -10,8 +10,10 @@ import org.slf4j.LoggerFactory;
 
 import java.awt.Point;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Turns packets into {@link Observation}s.
@@ -31,10 +33,30 @@ public class ObservationDecoder {
     private static final int SET_FIELD_CHARACTER_INFO = 1;
     private static final int SERVER_MESSAGE_TYPE = 4;
 
+    /**
+     * Monsters reported as vanishing whose second removal packet is still to come. A set
+     * because the server's threads can put another monster's packets between the two halves.
+     * See {@link #decodeKill}.
+     */
+    private final Set<Integer> vanishing = new HashSet<>();
+
+    /**
+     * Stands in for a packet that only repeats what an earlier one said. Compared by
+     * identity and never handed out, so what type it borrows does not matter.
+     */
+    private static final Observation ALREADY_SAID = new Observation.NoticeShown(-1, "");
+
+    /**
+     * @return what the packet says, or null when it only repeats the one before it - which
+     *         is not something that happened, and so is not an observation at all
+     */
     public Observation decode(long tick, int opcode, InPacket p) {
         int available = p.available();
         try {
             Observation observation = decodeKnown(tick, opcode, p);
+            if (observation == ALREADY_SAID) {
+                return null;
+            }
             return observation != null ? observation : unrecognised(tick, opcode, available);
         } catch (RuntimeException e) {
             log.debug("Failed to decode {} ({} bytes)", Opcodes.describe(opcode), available, e);
@@ -69,10 +91,13 @@ public class ObservationDecoder {
             return decodeSpawnMonster(tick, p, true);
         }
         if (opcode == SendOpcode.KILL_MONSTER.getValue()) {
-            return new Observation.MonsterDied(tick, p.readInt());
+            return decodeKill(tick, p);
         }
-        if (opcode == SendOpcode.MOVE_PLAYER.getValue() || opcode == SendOpcode.MOVE_MONSTER.getValue()) {
+        if (opcode == SendOpcode.MOVE_PLAYER.getValue()) {
             return decodeMove(tick, p);
+        }
+        if (opcode == SendOpcode.MOVE_MONSTER.getValue()) {
+            return decodeMonsterMove(tick, p);
         }
         if (opcode == SendOpcode.DROP_ITEM_FROM_MAPOBJECT.getValue()) {
             return decodeDrop(tick, p);
@@ -126,7 +151,7 @@ public class ObservationDecoder {
         p.readByte();
         ServerPackets.CharacterSummary self = ServerPackets.decodeCharacterStats(p);
         return new Observation.SelfDescribed(tick, self.id(), self.name(), self.level(),
-                self.job(), self.mapId());
+                self.job(), self.mapId(), self.spawnPoint());
     }
 
     /**
@@ -192,15 +217,22 @@ public class ObservationDecoder {
         return new Observation.NpcAppeared(tick, objectId, npcId, new Point(x, y));
     }
 
-    /** @see tools.PacketCreator#spawnMonsterInternal */
+    /**
+     * Only the plain form is a sighting.
+     *
+     * The control form hands the agent's client a monster to steer - or takes one away -
+     * and the server only ever sends it for a monster it has already shown with the plain
+     * form. Reading it as a sighting had agents seeing each monster appear twice, and after
+     * every arrival in a map a third and fourth time. It also carries a buff block of
+     * variable length where the plain form has sixteen fixed bytes, so reading a position
+     * out of it at the plain form's offset was wrong for any monster with a status on it.
+     *
+     * @see tools.PacketCreator#spawnMonsterInternal
+     * @see net.server.channel.handlers.PlayerMapTransitionHandler
+     */
     private Observation decodeSpawnMonster(long tick, InPacket p, boolean controlForm) {
         if (controlForm) {
-            int control = p.readUnsignedByte();
-            if (control == 0) {
-                // Control being taken away, not a spawn. The object id follows, but the
-                // monster is not newly visible, so there is nothing to report.
-                return null;
-            }
+            return null;
         }
         int objectId = p.readInt();
         p.readByte();                                   // controller flag
@@ -211,18 +243,56 @@ public class ObservationDecoder {
         return new Observation.MonsterAppeared(tick, objectId, monsterId, new Point(x, y));
     }
 
-    /**
-     * Both movement broadcasts start with the object id, then a movement list in the same
-     * encoding the client sends.
-     *
-     * @see tools.PacketCreator#movePlayer
-     */
+    /** @see tools.PacketCreator#movePlayer */
     private Observation decodeMove(long tick, InPacket p) {
         int objectId = p.readInt();
         p.readInt();
         Point destination = MovementList.finalPosition(p);
         return destination == null ? null : new Observation.ThingMoved(tick, objectId, destination);
     }
+
+    /**
+     * A monster's movement has seven bytes of skill fields and its starting position between
+     * the object id and the list, where a player's has four. This used to be read with the
+     * player layout, which lands in the middle of the skill fields and reads them as moves.
+     *
+     * The list may hold only relative moves; the start is still a position the server stated
+     * outright, and a better answer than none.
+     *
+     * @see tools.PacketCreator#moveMonster
+     */
+    private Observation decodeMonsterMove(long tick, InPacket p) {
+        int objectId = p.readInt();
+        p.skip(7);                                      // flag, skill possible, skill, id, level, option
+        Point start = new Point(p.readShort(), p.readShort());
+        Point destination = MovementList.finalPosition(p);
+        return new Observation.ThingMoved(tick, objectId, destination != null ? destination : start);
+    }
+
+    /**
+     * A monster leaving the screen, told apart by the animation to play: 0 is simply
+     * disappearing, anything else is a death.
+     *
+     * Disappearing is sent as a pair, 0 then 1, for the same monster: that is how the server
+     * takes a monster off one client's screen - out of range, or wiped on every arrival in a
+     * map before being shown again. Read naively the second half is a death, and every agent
+     * watched every monster in a map die each time it walked in.
+     *
+     * @see tools.PacketCreator#killMonster
+     * @see server.life.Monster#sendDestroyData
+     */
+    private Observation decodeKill(long tick, InPacket p) {
+        int objectId = p.readInt();
+        int animation = p.readUnsignedByte();
+
+        if (animation == KILL_DISAPPEAR) {
+            vanishing.add(objectId);
+            return new Observation.MonsterVanished(tick, objectId);
+        }
+        return vanishing.remove(objectId) ? ALREADY_SAID : new Observation.MonsterDied(tick, objectId);
+    }
+
+    private static final int KILL_DISAPPEAR = 0;
 
     /** @see tools.PacketCreator#dropItemFromMapObject */
     private Observation decodeDrop(long tick, InPacket p) {

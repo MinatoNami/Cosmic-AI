@@ -39,7 +39,11 @@ public class Perceiver {
 
         PacketInbox.Received received;
         while ((received = inbox.poll()) != null) {
-            Observation observation = decoder.decode(++tick, received.opcode(), received.packet());
+            Observation observation = decoder.decode(tick + 1, received.opcode(), received.packet());
+            if (observation == null) {
+                continue;                               // only repeated an earlier packet
+            }
+            tick++;
             if (observation instanceof Observation.Unrecognised unrecognised) {
                 unrecognisedCounts.merge(unrecognised.opcodeName(), 1, Integer::sum);
             }

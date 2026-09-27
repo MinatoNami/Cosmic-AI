@@ -27,6 +27,14 @@ public class WorldModel {
     public record Entity(int objectId, int typeId, Point position) {
     }
 
+    /** Where the portal a character arrives at stands, by map and portal number. */
+    @FunctionalInterface
+    public interface ArrivalPoints {
+        Optional<Point> of(int mapId, int portalId);
+    }
+
+    private final ArrivalPoints arrivals;
+
     private final Map<Integer, Entity> monsters = new LinkedHashMap<>();
     private final Map<Integer, Entity> npcs = new LinkedHashMap<>();
     private final Map<Integer, Entity> drops = new LinkedHashMap<>();
@@ -40,14 +48,23 @@ public class WorldModel {
     private int level = -1;
     private int characterId = -1;
 
+    public WorldModel() {
+        this(MapGeometry::arrivalPoint);
+    }
+
+    /** For tests, which cannot load Map.wz. */
+    public WorldModel(ArrivalPoints arrivals) {
+        this.arrivals = arrivals;
+    }
+
     public void update(Observation observation) {
         switch (observation) {
             case Observation.SelfDescribed self -> {
-                enterMap(self.mapId());
+                enterMap(self.mapId(), self.spawnPoint());
                 this.characterId = self.characterId();
                 this.level = self.level();
             }
-            case Observation.MapEntered entered -> enterMap(entered.mapId());
+            case Observation.MapEntered entered -> enterMap(entered.mapId(), entered.spawnPoint());
             case Observation.StatsChanged changed -> {
                 Map<String, Integer> stats = changed.stats();
                 if (stats.containsKey("HP")) {
@@ -63,6 +80,7 @@ public class WorldModel {
             case Observation.MonsterAppeared monster ->
                     monsters.put(monster.objectId(), new Entity(monster.objectId(), monster.monsterId(), monster.position()));
             case Observation.MonsterDied died -> monsters.remove(died.objectId());
+            case Observation.MonsterVanished vanished -> monsters.remove(vanished.objectId());
             case Observation.DropTaken taken -> drops.remove(taken.objectId());
             case Observation.NpcAppeared npc ->
                     npcs.put(npc.objectId(), new Entity(npc.objectId(), npc.npcId(), npc.position()));
@@ -88,8 +106,18 @@ public class WorldModel {
     /**
      * Everything in the old map is gone, so the model is cleared. Anything worth keeping
      * should already have become a belief.
+     *
+     * The agent is put where the server put it, on the portal it arrived at. Nothing else
+     * ever tells an agent where it is - the server does not echo your own movement back - so
+     * without this it went on believing itself at its coordinates in the map it had just
+     * left, and its first step claimed to start there. The server takes a client's word for
+     * where it is, so that step quietly teleported it and hid the mistake.
+     *
+     * If the portal cannot be found the old position is kept: it is wrong, but so is every
+     * other guess, and it is at least the one the server was last told.
      */
-    private void enterMap(int newMapId) {
+    private void enterMap(int newMapId, int spawnPoint) {
+        arrivals.of(newMapId, spawnPoint).ifPresent(arrival -> self = arrival);
         if (newMapId != mapId) {
             monsters.clear();
             npcs.clear();

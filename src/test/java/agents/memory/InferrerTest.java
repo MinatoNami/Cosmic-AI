@@ -44,6 +44,18 @@ class InferrerTest {
                 "it already believes this; repeating it is corroboration, not a conclusion");
     }
 
+    /** Going out of sight is not dying, so whatever falls next is not what it dropped. */
+    @Test
+    void creditsNothingToAMonsterThatOnlyVanished() {
+        for (int i = 1; i <= 3; i++) {
+            long at = i * 20L;
+            inferrer.consider(new Observation.MonsterAppeared(at, i, 100100, new Point(100, 0)));
+            inferrer.consider(new Observation.MonsterVanished(at + 1, i));
+            assertTrue(inferrer.consider(new Observation.DropAppeared(
+                    at + 2, 7000 + i, 2000000, false, new Point(105, 0))).isEmpty());
+        }
+    }
+
     /** Something falling long after a death came from something else. */
     @Test
     void doesNotCreditADeathTooLongAgo() {

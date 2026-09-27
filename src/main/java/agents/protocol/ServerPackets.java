@@ -23,7 +23,7 @@ public final class ServerPackets {
         }
     }
 
-    public record CharacterSummary(int id, String name, int level, int job, int mapId) {
+    public record CharacterSummary(int id, String name, int level, int job, int mapId, int spawnPoint) {
     }
 
     public record ChannelHandoff(String host, int port, int characterId) {
@@ -116,10 +116,10 @@ public final class ServerPackets {
         p.readShort();                      // fame
         p.readInt();                        // gacha exp
         int mapId = p.readInt();
-        p.readByte();                       // spawn point
+        int spawnPoint = p.readUnsignedByte();
         p.readInt();
 
-        return new CharacterSummary(id, name, level, job, mapId);
+        return new CharacterSummary(id, name, level, job, mapId, spawnPoint);
     }
 
     /** @see tools.PacketCreator#addCharLook */
