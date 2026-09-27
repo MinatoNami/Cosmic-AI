@@ -956,4 +956,99 @@ class ReflexPolicyTest {
 
         assertTrue(ReflexPolicy.needsAShop(world, mind, 4));
     }
+
+    /** A line from 10000: west00 to 20000, east00 to 30000 with a door never opened beyond. */
+    private void aJunction() {
+        mind.take(new Observation.MapEntered(1, 20000, 0));
+        mind.take(new Observation.MapEntered(2, 30000, 0));
+        mind.take(new Observation.MapEntered(3, 10000, 0));
+        mind.infer(KnownWorld.portalRef(10000, "west00"), "leads_to", KnownWorld.mapRef(20000), 4);
+        mind.infer(KnownWorld.portalRef(10000, "east00"), "leads_to", KnownWorld.mapRef(30000), 4);
+        mind.saw(KnownWorld.mapRef(30000), "has_door", "north00", 4);
+    }
+
+    private static final List<WorldModel.PortalTarget> JUNCTION_DOORS = List.of(
+            new WorldModel.PortalTarget("west00", new Point(-500, 0)),
+            new WorldModel.PortalTarget("east00", new Point(500, 0)));
+
+    /** "Get this letter to #p1072000# who's around #m102020300#": being sent is a reason to go. */
+    @Test
+    void goesWhereItWasSent() {
+        aJunction();
+        mind.hear("npc:1022000", "sends_you_to", "map:20000", 5);
+        world.update(new Observation.MapEntered(6, 10000, 0));
+        ReflexPolicy policy = new ReflexPolicy(new Random(1), Disposition.WANDERER);
+        policy.decide(mind, world, 6);
+        policy.cameInAt(new Point(-500, 0));
+
+        assertEquals("west00", policy.pickDoor(JUNCTION_DOORS, mind, 10000, "player:1").name(),
+                "the unopened door east is the better trip, and it should lose to being sent west");
+    }
+
+    /** Once it has been there since being told, the instruction is spent. */
+    @Test
+    void anInstructionIsSpentOnceCarriedOut() {
+        aJunction();
+        mind.hear("npc:1022000", "sends_you_to", "map:20000", 5);
+        mind.take(new Observation.MapEntered(6, 20000, 0));
+        mind.take(new Observation.MapEntered(7, 10000, 0));
+        world.update(new Observation.MapEntered(7, 10000, 0));
+        ReflexPolicy policy = new ReflexPolicy(new Random(1), Disposition.WANDERER);
+        policy.decide(mind, world, 8);
+        policy.cameInAt(new Point(-500, 0));
+
+        assertEquals("east00", policy.pickDoor(JUNCTION_DOORS, mind, 10000, "player:1").name());
+    }
+
+    /**
+     * A first-job warrior at 30 goes back to whoever trained it - which is how the second job
+     * begins - and not again until it has something new to show them.
+     */
+    @Test
+    void goesBackToItsTrainerWhenItHasGrown() {
+        aJunction();
+        // Trained in its own room at 20000, then walked back to the junction.
+        mind.take(new Observation.MapEntered(4, 20000, 0));
+        mind.take(new Observation.DialogueShown(4, 1022000, "Go, young Warrior!", 0));
+        mind.saw("self", "trained_by", "npc:1022000", 4);
+        mind.take(new Observation.MapEntered(5, 10000, 0));
+        mind.take(new Observation.StatsChanged(9, Map.of("LEVEL", 30, "JOB", 100)));
+        world.update(new Observation.MapEntered(10, 10000, 0));
+        world.update(new Observation.StatsChanged(10, Map.of("LEVEL", 30, "JOB", 100)));
+        ReflexPolicy policy = new ReflexPolicy(new Random(1), Disposition.WANDERER);
+        policy.decide(mind, world, 10);
+        policy.cameInAt(new Point(-500, 0));
+
+        assertEquals("west00", policy.pickDoor(JUNCTION_DOORS, mind, 10000, "player:1").name(),
+                "level 30 since they last spoke: back to the one who trained it");
+    }
+
+    @Test
+    void thirtyOfWhatWasAskedForIsWhatWasAskedFor() {
+        java.util.function.IntUnaryOperator twelveMarbles = id -> id == 4031013 ? 12 : 0;
+        java.util.function.IntUnaryOperator thirtyMarbles = id -> id == 4031013 ? 30 : 0;
+
+        assertFalse(ReflexPolicy.canPay("30 item:4031013", 30, 0, twelveMarbles));
+        assertTrue(ReflexPolicy.canPay("30 item:4031013", 30, 0, thirtyMarbles));
+    }
+
+    /** Having shown them already, there is nothing to go back for until something else changes. */
+    @Test
+    void doesNotKeepGoingBackToATrainerItHasAlreadyShown() {
+        aJunction();
+        mind.take(new Observation.MapEntered(4, 20000, 0));
+        mind.take(new Observation.DialogueShown(4, 1022000, "Go, young Warrior!", 0));
+        mind.saw("self", "trained_by", "npc:1022000", 4);
+        mind.take(new Observation.StatsChanged(9, Map.of("LEVEL", 30, "JOB", 100)));
+        mind.take(new Observation.DialogueShown(10, 1022000, "The progress you have made is astonishing.", 0));
+        mind.take(new Observation.MapEntered(11, 10000, 0));
+        world.update(new Observation.MapEntered(11, 10000, 0));
+        world.update(new Observation.StatsChanged(11, Map.of("LEVEL", 30, "JOB", 100)));
+        ReflexPolicy policy = new ReflexPolicy(new Random(1), Disposition.WANDERER);
+        policy.decide(mind, world, 12);
+        policy.cameInAt(new Point(-500, 0));
+
+        assertEquals("east00", policy.pickDoor(JUNCTION_DOORS, mind, 10000, "player:1").name(),
+                "it has spoken to its trainer since reaching 30, so the unopened door wins");
+    }
 }

@@ -74,4 +74,44 @@ class DialogueReaderTest {
         assertNull(DialogueReader.parse("CONTINUE").orElseThrow().needs());
         assertNull(DialogueReader.parse("CONTINUE\nNEEDS: none").orElseThrow().needs());
     }
+
+    private static final String PATH_MENU = "Alright, when you have made your decision, click on [I'll choose my occupation] at the bottom.#b\r\n"
+            + "#L0#Please explain to me what being the Fighter is all about.\r\n#L1#Please explain to me what being the Page is all about.\r\n"
+            + "#L2#Please explain to me what being the Spearman is all about.\r\n#L3#I'll choose my occupation!";
+
+    /** A list wants an option; the model answered "carry on" to the job menu half the time. */
+    @Test
+    void aListAnsweredWithCarryOnGetsAChoice() {
+        DialogueReader.Reply carryOn = new DialogueReader.Reply((byte) 1, DialogueReader.Reply.NO_SELECTION, "continued");
+
+        assertEquals(3, DialogueReader.choosingFromAList(carryOn, PATH_MENU).selection());
+        assertEquals(0, DialogueReader.choosingFromAList(carryOn,
+                "Please choose the job. #b\r\n#L0#Fighter\r\n#L1#Page\r\n#L2#Spearman").selection());
+    }
+
+    /** Asking for an explanation brings the same list back, so it would never choose. */
+    @Test
+    void anExplanationIsPassedOverForTheChoosing() {
+        DialogueReader.Reply explain = new DialogueReader.Reply((byte) 1, 0, "chose option 0");
+
+        assertEquals(3, DialogueReader.choosingFromAList(explain, PATH_MENU).selection());
+    }
+
+    /** The only option inside a second-job test is to leave it; that is never picked for the reader. */
+    @Test
+    void neverPicksTheWayOutOfATest() {
+        String colleague = "You will have to collect me #b30 #t4031013##k. Good luck. \r\n#b#L1#I would like to leave#l";
+        DialogueReader.Reply carryOn = new DialogueReader.Reply((byte) 1, DialogueReader.Reply.NO_SELECTION, "continued");
+
+        DialogueReader.Reply answered = DialogueReader.choosingFromAList(carryOn, colleague);
+
+        assertEquals(0, answered.action(), "carrying on here would have meant choosing to leave");
+    }
+
+    @Test
+    void aDeclineIsLeftAlone() {
+        DialogueReader.Reply no = new DialogueReader.Reply((byte) 0, DialogueReader.Reply.NO_SELECTION, "declined");
+
+        assertEquals(no, DialogueReader.choosingFromAList(no, PATH_MENU));
+    }
 }

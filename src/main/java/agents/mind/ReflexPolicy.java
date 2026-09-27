@@ -436,7 +436,7 @@ public class ReflexPolicy implements Policy {
             decisionsSinceProgress++;
         }
 
-        takeStockOfWhatIsOwed(mind, world);
+        takeStockOfWhatIsOwed(mind, world, tick);
         listenForAnswers(mind, tick);
 
         Set<Integer> unfinished = startedQuests(mind);
@@ -1450,7 +1450,7 @@ public class ReflexPolicy implements Policy {
         Set<String> avoid = new HashSet<>(strandedBy(mind));
         avoid.addAll(doesNotAnswer(mind));
         Places.Facts facts = new Places.Facts(here, visitsTo(mind), errandMap,
-                worthHearingAgain(known), avoid, justBeen, shopMaps);
+                worthHearingAgain(known), avoid, justBeen, shopMaps, sentMap, sentWhy);
         return Places.worthGoing(known, facts, weights(seekingACalling(mind)));
     }
 
@@ -1619,7 +1619,7 @@ public class ReflexPolicy implements Policy {
      * walks back again; {@link #WORTH_ANOTHER_ASK} already encodes how long "recently"
      * should be for exactly this reason.
      */
-    private void takeStockOfWhatIsOwed(Mind mind, WorldModel world) {
+    private void takeStockOfWhatIsOwed(Mind mind, WorldModel world, long tick) {
         errandMap = null;
         errandNpc = -1;
         int mesos = mesosHeld(mind);
@@ -1630,7 +1630,7 @@ public class ReflexPolicy implements Policy {
                     || !belief.subject().startsWith("npc:")) {
                 continue;
             }
-            if (!canPay(belief.object(), world.level(), mesos)) {
+            if (!canPay(belief.object(), world.level(), mesos, id -> world.inventory().count(id))) {
                 continue;
             }
             if (stranders.contains(belief.subject())) {
@@ -1651,6 +1651,136 @@ public class ReflexPolicy implements Policy {
             }
             return;             // one errand at a time; a plan you keep changing is not one
         }
+        whereItWasSent(mind, world, here, tick);
+    }
+
+    /** Where somebody sent the agent, or its trainer when it has grown, and why. Null if nowhere. */
+    private String sentMap;
+    private String sentWhy;
+
+    /** The last time the agent came to hold something it did not have, for going back to its trainer. */
+    private long newThingSince = -1;
+    private Set<Integer> held = Set.of();
+
+    /** How long an instruction stays worth following. A few hours of play. */
+    private static final long INSTRUCTION_LASTS = 20_000;
+
+    /**
+     * Follows the last instruction anyone gave it, and otherwise goes back to whoever trained it
+     * once it has grown.
+     *
+     * An instruction is "npc:X sends_you_to map:M" or "... npc:P", written down from what an NPC
+     * said. It holds until the agent has stood in that map, or spoken to that person, since
+     * being told. The trainer is whoever it was talking to when its job changed: past level 30
+     * in a first job, anything new since they last spoke - a level, something carried that was
+     * not before - is a reason to go and see them. That is how a second job starts, and how it
+     * ends, with the proof of the test in hand.
+     */
+    private void whereItWasSent(Mind mind, WorldModel world, String here, long now) {
+        sentMap = null;
+        sentWhy = null;
+        noticeNewThings(world, now);
+
+        Belief instruction = null;
+        for (Belief belief : mind.semantic().liveBeliefs()) {
+            if (belief.predicate().equals("sends_you_to") && belief.subject().startsWith("npc:")
+                    && (instruction == null || belief.lastSeen() > instruction.lastSeen())) {
+                instruction = belief;
+            }
+        }
+        if (instruction != null && now - instruction.lastSeen() < INSTRUCTION_LASTS
+                && !followed(mind, instruction.object(), instruction.lastSeen())) {
+            String target = instruction.object();
+            Optional<String> map = target.startsWith("map:") ? Optional.of(target) : lastSeenIn(mind, target);
+            if (map.isPresent()) {
+                if (target.startsWith("npc:")) {
+                    errandNpc = npcIdIn(target);
+                }
+                if (!map.get().equals(here)) {
+                    sentMap = map.get();
+                    sentWhy = "where " + instruction.subject() + " sent you";
+                }
+                return;
+            }
+        }
+
+        Belief trainedBy = null;
+        for (Belief belief : mind.semantic().liveBeliefs()) {
+            if (belief.subject().equals("self") && belief.predicate().equals("trained_by")
+                    && (trainedBy == null || belief.lastSeen() > trainedBy.lastSeen())) {
+                trainedBy = belief;
+            }
+        }
+        int job = world.job();
+        if (trainedBy == null || job <= 0 || job % 100 != 0 || world.level() < 30) {
+            return;
+        }
+        long grewAt = Math.max(levelReachedAt(mind), newThingSince);
+        if (lastHeardFrom(mind, trainedBy.object()) >= grewAt) {
+            return;         // nothing new to show them since they last spoke
+        }
+        Optional<String> map = lastSeenIn(mind, trainedBy.object());
+        if (map.isEmpty()) {
+            return;
+        }
+        errandNpc = npcIdIn(trainedBy.object());
+        if (!map.get().equals(here)) {
+            sentMap = map.get();
+            sentWhy = "the one who trained you, and you have grown since";
+        }
+    }
+
+    /** Whether an instruction heard at a tick has been carried out since. */
+    private static boolean followed(Mind mind, String target, long heardAt) {
+        if (target.startsWith("map:")) {
+            for (Belief belief : mind.semantic().all()) {
+                if (belief.subject().equals("self") && belief.predicate().equals("in_map")
+                        && belief.object().equals(target) && belief.lastSeen() >= heardAt) {
+                    return true;
+                }
+            }
+            return false;
+        }
+        return lastHeardFrom(mind, target) >= heardAt;
+    }
+
+    /** When this NPC last spoke to the agent itself, or -1. */
+    private static long lastHeardFrom(Mind mind, String npc) {
+        long last = -1;
+        for (Belief belief : mind.semantic().liveBeliefs()) {
+            if (belief.subject().equals(npc) && belief.predicate().equals("talks_in")
+                    && belief.provenance() == Belief.Provenance.FIRST_HAND) {
+                last = Math.max(last, belief.lastSeen());
+            }
+        }
+        return last;
+    }
+
+    /** When the agent reached the level it is at now. */
+    private static long levelReachedAt(Mind mind) {
+        for (Belief belief : mind.semantic().liveBeliefs()) {
+            if (belief.subject().equals("self") && belief.predicate().equals("level")) {
+                return belief.firstSeen();
+            }
+        }
+        return -1;
+    }
+
+    /** Keeps the tick at which something new last turned up in its bags. */
+    private void noticeNewThings(WorldModel world, long now) {
+        if (!world.inventory().known()) {
+            return;
+        }
+        Set<Integer> carried = new HashSet<>();
+        for (int type = agents.percept.Item.EQUIP; type <= agents.percept.Item.ETC; type++) {
+            for (agents.percept.Item item : world.inventory().carried(type)) {
+                carried.add(item.itemId());
+            }
+        }
+        if (!held.isEmpty() && !held.containsAll(carried)) {
+            newThingSince = now;
+        }
+        held = carried;
     }
 
     /**
@@ -1661,6 +1791,22 @@ public class ReflexPolicy implements Policy {
      * unparseable condition means the agent goes back and asks - which is what a player does
      * when they half-remember being told to come back later, and costs one conversation.
      */
+    /**
+     * Whether what was asked for is in hand, items included: "30 item:4031013" is thirty of
+     * that item, counted in the bags.
+     */
+    static boolean canPay(String asked, int level, int mesos, java.util.function.IntUnaryOperator itemCount) {
+        Matcher wantsItems = ITEMS_ASKED.matcher(asked);
+        while (wantsItems.find()) {
+            if (itemCount.applyAsInt(Integer.parseInt(wantsItems.group(2))) < Integer.parseInt(wantsItems.group(1))) {
+                return false;
+            }
+        }
+        return canPay(asked, level, mesos);
+    }
+
+    private static final Pattern ITEMS_ASKED = Pattern.compile("(\\d+) item:(\\d+)");
+
     static boolean canPay(String asked, int level, int mesos) {
         Matcher wantsLevel = LEVEL_ASKED.matcher(asked);
         if (wantsLevel.find() && level < Integer.parseInt(wantsLevel.group(1))) {

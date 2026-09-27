@@ -38,7 +38,7 @@ public class DialogueReader {
             Answer with one decision line:
               CONTINUE   - agree, accept, or move the conversation on
               DECLINE    - refuse, or end the conversation
-              CHOOSE <n> - pick option n, counting from 0, when a list is offered
+              CHOOSE <n> - pick an option from a list, where n is the number in its #Ln# tag
 
             If this one told you something you must do or have before it will help - a level,
             a sum of money, an item, somewhere to be - add one more line:
@@ -62,7 +62,16 @@ public class DialogueReader {
             fighting or living - is different. It is how a character grows, and it is meant \
             to be final. If you have not yet taken up any calling and you meet what it asks, \
             CONTINUE through it when it suits your temperament, or when it is the first one \
-            you have been offered in a long while. If you have one already, DECLINE.""";
+            you have been offered in a long while. If you have one already, DECLINE.
+
+            Something you were sent to do - a test, an errand - is finished only when it is. \
+            If a list offers a way to leave it before you have what you were asked for, do not \
+            choose it: DECLINE to end the conversation and carry on. When you are asked to \
+            choose a path, choose the option that lets you decide, then the path that best \
+            suits your temperament, and confirm it.
+
+            Whenever the NPC's words contain a list of #L options, answer CHOOSE <n> or DECLINE. \
+            CONTINUE is not an answer to a list.""";
 
     /**
      * What to send back: the action byte, a menu selection when one was asked for, and
@@ -111,7 +120,63 @@ public class DialogueReader {
         if (answer == null || answer.isBlank()) {
             return Optional.empty();
         }
-        return parse(answer);
+        return parse(answer).map(reply -> choosingFromAList(reply, dialogue.text()));
+    }
+
+    /** "#L3#I'll choose my occupation!" - a numbered option and its words. */
+    private static final java.util.regex.Pattern OPTION =
+            java.util.regex.Pattern.compile("#L(\\d+)#([^#\\r\\n]*)");
+
+    /**
+     * A list wants an option, and "carry on" is not one.
+     *
+     * Asked to pick from "#L0#Fighter #L1#Page #L2#Spearman", the model answered CONTINUE about
+     * half the time, which sends no choice at all and leaves the NPC waiting on one. When that
+     * happens the choice is made here: the option that says it is the choosing, or else the
+     * first one offered. A DECLINE is left alone - declining is how a list is walked away from.
+     */
+    static Reply choosingFromAList(Reply reply, String said) {
+        if (reply.action() != 1) {
+            return reply;
+        }
+        java.util.Map<Integer, String> options = new java.util.LinkedHashMap<>();
+        java.util.regex.Matcher option = OPTION.matcher(said);
+        while (option.find()) {
+            options.put(Integer.parseInt(option.group(1)), option.group(2).toLowerCase());
+        }
+        if (options.isEmpty()) {
+            return reply;
+        }
+        Integer choosing = options.entrySet().stream()
+                .filter(o -> o.getValue().contains("choose") || o.getValue().contains("decide")
+                        || o.getValue().contains("ready"))
+                .map(java.util.Map.Entry::getKey).findFirst().orElse(null);
+        String picked = options.get(reply.selection());
+        // Asking to have a choice explained brings the same list straight back, so a reader
+        // that keeps asking never chooses: the trainer's menu was answered "explain the
+        // Fighter" every time. When there is an option that makes the choice, it is taken.
+        if (picked != null && choosing != null && picked.contains("explain")) {
+            return new Reply((byte) 1, choosing, "chose option " + choosing + " (the choosing, not another explanation)",
+                    reply.needs());
+        }
+        if (reply.selection() != Reply.NO_SELECTION) {
+            return reply;
+        }
+        if (choosing != null) {
+            return new Reply((byte) 1, choosing, "chose option " + choosing + " (the choosing)", reply.needs());
+        }
+        // Never pick a way out on the reader's behalf. The colleague inside a second-job test
+        // offers exactly one option - "I would like to leave" - and taking the first offered
+        // would have walked the agent out of its own test.
+        Integer first = options.entrySet().stream()
+                .filter(o -> !(o.getValue().contains("leave") || o.getValue().contains("quit")
+                        || o.getValue().contains("exit") || o.getValue().contains("give up")))
+                .map(java.util.Map.Entry::getKey).findFirst().orElse(null);
+        if (first == null) {
+            return new Reply((byte) 0, Reply.NO_SELECTION, "declined a list whose only way on was out",
+                    reply.needs());
+        }
+        return new Reply((byte) 1, first, "chose option " + first + " (the first offered)", reply.needs());
     }
 
     /**

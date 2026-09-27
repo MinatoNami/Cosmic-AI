@@ -58,7 +58,13 @@ public final class Places {
      */
     public record Facts(String here, Map<String, Integer> visits, String errandMap,
                         Set<String> hearAgain, Set<String> avoid, Map<String, Double> justBeenFor,
-                        Set<String> shopMaps) {
+                        Set<String> shopMaps, String sentTo, String sentWhy) {
+
+        public Facts(String here, Map<String, Integer> visits, String errandMap,
+                     Set<String> hearAgain, Set<String> avoid, Map<String, Double> justBeenFor,
+                     Set<String> shopMaps) {
+            this(here, visits, errandMap, hearAgain, avoid, justBeenFor, shopMaps, null, null);
+        }
     }
 
     /** A place worth considering, why, and the first door towards it. */
@@ -123,7 +129,8 @@ public final class Places {
                 value += w.neverBeen();
                 reasons.add("you have never been there");
             }
-            if (reasons.isEmpty()) {
+            boolean sent = map.equals(facts.sentTo());
+            if (reasons.isEmpty() && !sent) {
                 continue;
             }
 
@@ -135,6 +142,13 @@ public final class Places {
             if (justBeen > 0) {
                 value *= Math.max(0, 1 - w.justBeenFor() * justBeen);
                 reasons.add("you went there recently for this");
+            }
+            // Being sent somewhere is not scaled down for having been there lately: it is
+            // dropped the moment the agent arrives, so it cannot send it round in a loop, and a
+            // second job is a string of trips to places it has just come from.
+            if (sent) {
+                value += w.errand();
+                reasons.add(0, facts.sentWhy() == null ? "somewhere you were sent" : facts.sentWhy());
             }
             value += w.novelty() / Math.sqrt(1 + visits);
             value -= w.perHop() * hop.hops();

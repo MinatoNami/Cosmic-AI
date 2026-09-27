@@ -108,6 +108,60 @@ public class Agent implements Runnable {
 
     /** The last NPC whose offer this agent accepted, so a dead end has somebody to blame. */
     private int wentAlongWith = -1;
+
+    /** Who the agent was last in conversation with, and what job it had then. */
+    private int lastSpokeWith = -1;
+    private int lastJob = -1;
+
+    /**
+     * Writes down who, where and what an NPC's words named.
+     *
+     * Hearsay about that NPC, because it is being told: "npc:1022000 sends_you_to map:102020300",
+     * "npc:1072004 wants_first 30 item:4031013". The policy acts on these the way it acts on
+     * any other belief, and a person reading the trace can see where each errand came from.
+     */
+    private void rememberWhatWasSaid(Observation.DialogueShown dialogue) {
+        agents.mind.Instructions.Heard heard = agents.mind.Instructions.read(dialogue.text());
+        if (heard.isEmpty() || dialogue.npcId() <= 0) {
+            return;
+        }
+        String speaker = "npc:" + dialogue.npcId();
+        long tick = perceiver.currentTick();
+        for (agents.mind.Instructions.ItemAsked item : heard.items()) {
+            mind.hear(speaker, "wants_first", item.quantity() + " item:" + item.itemId(), tick);
+        }
+        for (int map : heard.maps()) {
+            mind.hear(speaker, "sends_you_to", "map:" + map, tick);
+        }
+        for (int npc : heard.npcs()) {
+            if (npc != dialogue.npcId()) {
+                mind.hear(speaker, "sends_you_to", "npc:" + npc, tick);
+            }
+        }
+        // "Get this to #p1072000# who's around #m102020300#": one person and one place said
+        // together is where that person stands.
+        if (heard.npcs().size() == 1 && heard.maps().size() == 1 && heard.npcs().get(0) != dialogue.npcId()) {
+            mind.hear("npc:" + heard.npcs().get(0), "present_in", "map:" + heard.maps().get(0), tick);
+        }
+    }
+
+    /**
+     * Notices the job changing, and remembers who it was talking to when it did.
+     *
+     * That is the one who trained it, and the one to go back to when it has grown: the first
+     * step of a second job is returning to them, and nothing else would think to.
+     */
+    private void noticeANewCalling() {
+        int job = world.job();
+        if (job < 0) {
+            return;
+        }
+        if (lastJob >= 0 && job != lastJob && lastSpokeWith > 0) {
+            mind.saw("self", "trained_by", "npc:" + lastSpokeWith, perceiver.currentTick());
+            log.info("{} became job {}, trained by npc:{}", mind.name(), job, lastSpokeWith);
+        }
+        lastJob = job;
+    }
     private boolean blamedThemAlready;
     private int nextToShare;
 
@@ -222,9 +276,13 @@ public class Agent implements Runnable {
         // box until somebody notices. Counting the decisions spent with no way out at all
         // is how it says so; the population does the rescue, because logging back in is not
         // something an agent can do to itself.
-        nowhereToGo = world.mapId() > 0 && MapGeometry.usablePortalsIn(world.mapId()).isEmpty()
-                ? nowhereToGo + 1
-                : 0;
+        // No way out, and nothing here either. A second-job test is a room with no doors on
+        // purpose - monsters to hunt and somebody to report to - and counting it as a trap had
+        // the agent logged back out of its own test and the instructor blamed for it.
+        boolean noWayOut = world.mapId() > 0 && MapGeometry.usablePortalsIn(world.mapId()).isEmpty();
+        boolean nothingHere = world.visibleNpcs().isEmpty() && world.monsterCount() == 0;
+        nowhereToGo = noWayOut && nothingHere ? nowhereToGo + 1 : 0;
+        noticeANewCalling();
         if (nowhereToGo == 0) {
             blamedThemAlready = false;
         } else if (isTrapped() && wentAlongWith > 0 && !blamedThemAlready) {
@@ -335,6 +393,8 @@ public class Agent implements Runnable {
         if (!(observation instanceof Observation.DialogueShown dialogue)) {
             return;
         }
+        lastSpokeWith = dialogue.npcId();
+        rememberWhatWasSaid(dialogue);
         // Somebody who has stranded this agent before gets a no, whoever would otherwise have
         // answered. This check used to sit on the reflex path only, so once the model was
         // reading dialogue it was asked afresh every time, said yes every time, and two agents
@@ -508,8 +568,25 @@ public class Agent implements Runnable {
             placed.append(" You have already taken up a calling; you cannot take up another.");
         }
         placed.append(" By temperament you are someone who ").append(temperament()).append('.');
+        // What it is still carrying for somebody, in the same markup the NPC used, so the
+        // reader can match "collect 30 #t4031013#" against how many it has - and not take the
+        // option to leave a test it is halfway through.
+        for (Belief belief : mind.semantic().liveBeliefs()) {
+            if (!belief.predicate().equals("wants_first")) {
+                continue;
+            }
+            java.util.regex.Matcher item = ITEM_ASKED.matcher(belief.object());
+            if (item.find()) {
+                int itemId = Integer.parseInt(item.group(2));
+                placed.append(" You were asked for ").append(item.group(1)).append(" #t").append(itemId)
+                        .append("# and you have ").append(world.inventory().count(itemId)).append('.');
+            }
+        }
         return placed.toString();
     }
+
+    private static final java.util.regex.Pattern ITEM_ASKED =
+            java.util.regex.Pattern.compile("(\\d+) item:(\\d+)");
 
     /** The disposition in words a reader of an NPC's offer can weigh it against. */
     private String temperament() {
