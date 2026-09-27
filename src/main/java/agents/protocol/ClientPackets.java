@@ -6,6 +6,7 @@ import net.packet.OutPacket;
 import net.packet.Packet;
 
 import java.awt.Point;
+import java.util.List;
 
 /**
  * Builders for the packets a client sends. The server's own {@code PacketCreator} covers the
@@ -152,19 +153,42 @@ public final class ClientPackets {
      *               ever relayed to other clients, so getting it wrong fails silently.
      */
     public static Packet move(Point from, Point to, short foothold, byte stance, short durationMillis) {
+        return move(from, List.of(new Fragment(to, foothold, stance, durationMillis)));
+    }
+
+    /**
+     * One leg of a movement: where it ends, what it is standing on there, in what pose, and
+     * how long it took. Other clients draw the character moving to each end point in turn.
+     */
+    public record Fragment(Point to, short foothold, byte stance, short durationMillis) {
+    }
+
+    /**
+     * A movement of one or more legs, each an absolute move.
+     *
+     * The velocity written is pixels per second, worked out from each leg's own length and
+     * duration. It was the leg's length in pixels, so a 75-pixel step over 600ms claimed 75
+     * px/s instead of 125, and clients smoothing between packets with it drew a stutter.
+     */
+    public static Packet move(Point from, List<Fragment> legs) {
         OutPacket p = packet(RecvOpcode.MOVE_PLAYER);
         p.writeByte(0);             // portal count
         p.writeInt(0);              // unused
         p.writeInt(0);              // unused
-        p.writeByte(1);             // one movement command follows
-        p.writeByte(0);             // command 0: absolute move
-        p.writeShort(to.x);
-        p.writeShort(to.y);
-        p.writeShort(to.x - from.x);    // wobble, read as pixels per second
-        p.writeShort(to.y - from.y);
-        p.writeShort(foothold);
-        p.writeByte(stance);
-        p.writeShort(durationMillis);
+        p.writeByte(legs.size());
+        Point at = from;
+        for (Fragment leg : legs) {
+            int millis = Math.max(1, leg.durationMillis());
+            p.writeByte(0);         // command 0: absolute move
+            p.writeShort(leg.to().x);
+            p.writeShort(leg.to().y);
+            p.writeShort((short) Math.round((leg.to().x - at.x) * 1000.0 / millis));
+            p.writeShort((short) Math.round((leg.to().y - at.y) * 1000.0 / millis));
+            p.writeShort(leg.foothold());
+            p.writeByte(leg.stance());
+            p.writeShort(leg.durationMillis());
+            at = leg.to();
+        }
         p.writeByte(0);             // key-down state count
         return p;
     }

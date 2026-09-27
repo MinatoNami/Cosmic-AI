@@ -339,7 +339,13 @@ public class ObservationDecoder {
      * @see tools.PacketCreator#updateQuest
      */
     private Observation decodeStatusInfo(long tick, InPacket p) {
-        if (p.readUnsignedByte() != STATUS_INFO_QUEST) {
+        int kind = p.readUnsignedByte();
+        if (kind == STATUS_INFO_ITEM) {
+            // The same message a player sees as "you cannot hold any more". Without it an
+            // agent with a full bag tried to pick the same drop up hundreds of times.
+            return p.readUnsignedByte() == INVENTORY_FULL ? new Observation.InventoryFull(tick) : null;
+        }
+        if (kind != STATUS_INFO_QUEST) {
             return null;
         }
         int questId = p.readShort() & 0xFFFF;
@@ -348,6 +354,10 @@ public class ObservationDecoder {
     }
 
     private static final int STATUS_INFO_QUEST = 1;
+
+    /** @see tools.PacketCreator#getShowInventoryFull */
+    private static final int STATUS_INFO_ITEM = 0;
+    private static final int INVENTORY_FULL = 0xFF;
 
     /**
      * The whisper opcode carries several unrelated things - delivery receipts, /find results

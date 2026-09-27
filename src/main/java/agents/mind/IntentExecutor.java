@@ -2,10 +2,13 @@ package agents.mind;
 
 import agents.net.MapleSession;
 import agents.protocol.ClientPackets;
+import net.packet.Packet;
 import agents.world.MapGeometry;
+import agents.world.Navigator;
 import agents.world.WorldModel;
 
 import java.awt.Point;
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -38,9 +41,6 @@ public class IntentExecutor {
     /** Ladder-mid, per docs/moveactions.txt, so watchers see a climb rather than a glide. */
     private static final byte STANCE_CLIMBING = 16;
 
-    /** A height difference worth looking for a rope over, rather than shrugging at. */
-    private static final int CLIMB_MATTERS = 40;
-
     private static final int CLIMB_PIXELS = 40;
     private static final int CLIMB_PIXELS_PER_SECOND = 90;
     /**
@@ -70,10 +70,19 @@ public class IntentExecutor {
     private static final int QUEST_END_SCRIPTED = 5;
     private static final int QUEST_END_PLAIN = 2;
 
-    private final MapleSession session;
+    /** Where packets go: the session in a run, a list in a test. */
+    private final Sender session;
+
+    interface Sender {
+        void send(Packet packet);
+    }
 
     public IntentExecutor(MapleSession session) {
-        this.session = session;
+        this(session::send);
+    }
+
+    IntentExecutor(Sender sender) {
+        this.session = sender;
     }
 
     public void execute(Intent intent, WorldModel world) {
@@ -120,108 +129,174 @@ public class IntentExecutor {
         }
     }
 
+    /** Jumping, per docs/moveactions.txt: what a watcher sees in the air, rising or falling. */
+    private static final byte STANCE_JUMP_RIGHT = 6;
+    private static final byte STANCE_JUMP_LEFT = 7;
+    private static final byte STANCE_STAND_RIGHT = 4;
+    private static final byte STANCE_STAND_LEFT = 5;
+
+    /** Pixels per second squared, and a beginner's take-off speed, for timing leaps. */
+    private static final double GRAVITY = 2000;
+    private static final double JUMP_SPEED = 555;
+
     /**
-     * Walks one step towards somewhere, rather than arriving instantly.
+     * The rope being ridden, if any, and where on it the ride ends.
      *
-     * Anything further than a step away takes several decisions to reach, which is the point:
-     * the agent is walking there, and anyone watching sees it walk. The world model is told
-     * where the step actually ended rather than where the agent was aiming, so it never
-     * believes itself somewhere it has not got to yet.
+     * Held across decisions because a climb takes several, and mid-rope there is no floor to
+     * plan from - planning from the floor below would send the agent back down it.
+     */
+    private MapGeometry.Climb riding;
+    private int ridingMap;
+    private int ridingTo;
+
+    /**
+     * Makes one decision's worth of progress towards somewhere, the way a character could.
+     *
+     * The route comes from {@link Navigator}: along the floor it is standing on, off an edge,
+     * up a jump, up or down a rope. Nothing here ever moves the agent somewhere a character
+     * could not stand. It used to: walking kept the height it started at when a step had no
+     * floor under it, so agents walked off platforms and across the map through the air, and
+     * the last step to a target took the target's height, so they popped up onto ledges.
      */
     private void moveTo(Point destination, WorldModel world) {
         Point from = world.selfPosition();
 
         // Already there. Attacking walks to the target first, and a target within reach is
         // one you are standing on, so this fired every tick of every fight: a move packet
-        // going nowhere, one millisecond long. It draws nothing, but it is a packet a second
-        // per agent and it buries the real movement in anything watching the map.
+        // going nowhere, one millisecond long.
         if (from.distance(destination) < ARRIVED_PIXELS) {
             return;
         }
+        int map = world.mapId();
 
-        // Height before distance, because no amount of walking closes it - and for most of
-        // this project's life an agent simply gave up on anything above its own foothold.
-        // That single gap wore a dozen different faces: NPCs never spoken to, loot left on
-        // ledges, journeys abandoned for making no progress, agents frozen against a wall.
-        // Shanks, who sells the only passage off Maple Island, stands six hundred pixels
-        // above the floor an agent lands on.
-        if (Math.abs(destination.y - from.y) > CLIMB_MATTERS) {
-            Optional<MapGeometry.Climb> rope =
-                    MapGeometry.climbTowards(world.mapId(), from.x, from.y, destination.y);
-            if (rope.isPresent() && ride(rope.get(), destination, world, from)) {
+        if (riding != null && ridingMap == map) {
+            if (climb(world, from)) {
                 return;
             }
         }
-        walk(destination, world, from);
+        riding = null;
+
+        if (MapGeometry.groundIn(map).isEmpty()) {
+            return;         // no floor data at all: better to stand still than to guess
+        }
+        if (Navigator.floorHeight(map, from).isEmpty()) {
+            // Not standing on anything - left in the air by an older version of this, or
+            // put down just off the floor by a map change. Come down onto the floor first.
+            Navigator.settleFrom(map, from).ifPresent(floor -> leap(from, floor, world, false));
+            return;
+        }
+
+        Optional<Navigator.Step> route = Navigator.nextStep(map, from, destination);
+        if (route.isEmpty()) {
+            // No way there that this knows of. Get as near as this floor allows and let the
+            // policy notice it is not arriving - which it does, and gives up - rather than
+            // walking off the edge towards it.
+            walkAlongFloor(destination.x, world, from);
+            return;
+        }
+        Navigator.Step step = route.get();
+        if (step.kind() == Navigator.Kind.WALK || Math.abs(from.x - step.departX()) > ARRIVED_PIXELS) {
+            walkAlongFloor(step.departX(), world, from);
+            return;
+        }
+        switch (step.kind()) {
+            case JUMP -> leap(from, step.landing(), world, true);
+            case DROP -> leap(from, step.landing(), world, false);
+            case CLIMB -> {
+                riding = step.rope();
+                ridingMap = map;
+                ridingTo = step.rope().endAwayFrom(step.rope().endNearest(from.y));
+                climb(world, from);
+            }
+            default -> walkAlongFloor(step.departX(), world, from);
+        }
     }
 
     /**
-     * Gets on a rope and rides it, or walks to its foot first.
+     * One step along the floor the agent is standing on, never past either end of it.
      *
-     * Stops at whichever comes first: the end of the rope, or being level with the target.
-     * Riding to the top and walking back is what a planner does; a character gets off when
-     * it is where it meant to be.
-     *
-     * @return false when there is nothing left to gain here, so the caller should walk
+     * Height comes from the floor at the new x, so a slope is walked up and down rather than
+     * cut through. A step aimed past the end of the platform stops at the end.
      */
-    private boolean ride(MapGeometry.Climb rope, Point destination, WorldModel world, Point from) {
+    private void walkAlongFloor(int targetX, WorldModel world, Point from) {
+        int map = world.mapId();
+        int west = Navigator.floorEnd(map, from, -1).orElse(from.x);
+        int east = Navigator.floorEnd(map, from, 1).orElse(from.x);
+        int wanted = Math.max(west, Math.min(east, targetX));
+        int dx = wanted - from.x;
+        if (Math.abs(dx) < ARRIVED_PIXELS) {
+            return;         // as far as this floor goes; saying so once beats a stream of no-ops
+        }
+        int x = Math.abs(dx) <= STEP_PIXELS ? wanted : from.x + (int) Math.copySign(STEP_PIXELS, dx);
+        int y = Navigator.floorHeight(map, new Point(x, from.y)).orElse(from.y);
+        Point step = new Point(x, y);
+
+        byte stance = dx > 0 ? STANCE_WALKING_RIGHT : STANCE_WALKING_LEFT;
+        short duration = (short) Math.max(1, Math.round(from.distance(step) / WALK_PIXELS_PER_SECOND * 1000));
+        session.send(ClientPackets.move(from, step, foothold(map, step), stance, duration));
+        world.movedTo(step);
+    }
+
+    /**
+     * A jump or a fall, drawn as one: up to the top of the arc, then down to where it lands.
+     *
+     * Timed from the same gravity the client uses, so it takes as long in the air as a real
+     * character would, and each leg names the foothold under it - none mid-air, the landing
+     * floor at the end.
+     */
+    private void leap(Point from, Point landing, WorldModel world, boolean jumping) {
+        int map = world.mapId();
+        boolean right = landing.x >= from.x;
+        byte inTheAir = right ? STANCE_JUMP_RIGHT : STANCE_JUMP_LEFT;
+        byte landed = right ? STANCE_STAND_RIGHT : STANCE_STAND_LEFT;
+
+        double rise = jumping ? JUMP_SPEED * JUMP_SPEED / (2 * GRAVITY) : 0;
+        int apexY = (int) Math.round(Math.min(from.y, landing.y) - (jumping ? Math.max(8, rise - Math.abs(from.y - landing.y)) : 0));
+        apexY = Math.min(apexY, from.y);
+        double up = jumping ? JUMP_SPEED / GRAVITY : 0.05;
+        double down = Math.sqrt(2 * Math.max(1, landing.y - apexY) / GRAVITY);
+        int total = (int) Math.round((up + down) * 1000);
+        Point apex = new Point(from.x + (int) Math.round((landing.x - from.x) * (up / (up + down))), apexY);
+
+        session.send(ClientPackets.move(from, List.of(
+                new ClientPackets.Fragment(apex, (short) 0, inTheAir, (short) Math.max(1, Math.round(up * 1000))),
+                new ClientPackets.Fragment(landing, foothold(map, landing), landed,
+                        (short) Math.max(1, total - Math.round(up * 1000))))));
+        world.movedTo(landing);
+    }
+
+    /**
+     * One rung of the rope being ridden, or stepping off it at the end.
+     *
+     * @return false when there is no rope to ride any more, so the caller should plan afresh
+     */
+    private boolean climb(WorldModel world, Point from) {
+        MapGeometry.Climb rope = riding;
+        int map = world.mapId();
         if (Math.abs(from.x - rope.x()) > ARRIVED_PIXELS) {
-            walk(new Point(rope.x(), from.y), world, from);      // to the foot of it
+            walkAlongFloor(rope.x(), world, from);      // to the foot of it first
             return true;
         }
-
-        int endOfTheRope = rope.endAwayFrom(from.y);
-        int stopAt = stopAt(endOfTheRope, destination.y, from.y);
-        int toClimb = stopAt - from.y;
+        int toClimb = ridingTo - from.y;
         if (Math.abs(toClimb) < ARRIVED_PIXELS) {
-            return false;
+            // The end of the rope. Step off onto the floor there, and plan from it.
+            int floor = Navigator.floorNear(map, rope.x(), ridingTo).orElse(ridingTo);
+            Point off = new Point(rope.x(), floor);
+            session.send(ClientPackets.move(from, off, foothold(map, off), STANCE_STAND_RIGHT, (short) 150));
+            world.movedTo(off);
+            riding = null;
+            return true;
         }
-
         int step = (int) Math.copySign(Math.min(CLIMB_PIXELS, Math.abs(toClimb)), toClimb);
         Point next = new Point(rope.x(), from.y + step);
-        short duration = (short) Math.max(1,
-                Math.round(Math.abs(step) / (double) CLIMB_PIXELS_PER_SECOND * 1000));
+        short duration = (short) Math.max(1, Math.round(Math.abs(step) / (double) CLIMB_PIXELS_PER_SECOND * 1000));
         session.send(ClientPackets.move(from, next, (short) 0, STANCE_CLIMBING, duration));
         world.movedTo(next);
         return true;
     }
 
-    /** Where to get off: the rope's end, or the height wanted, whichever comes first. */
-    static int stopAt(int endOfTheRope, int wanted, int from) {
-        boolean goingUp = wanted < from;
-        return goingUp ? Math.max(endOfTheRope, wanted) : Math.min(endOfTheRope, wanted);
+    private static short foothold(int map, Point at) {
+        return (short) MapGeometry.footholdUnder(map, at.x, at.y);
     }
 
-    private void walk(Point destination, WorldModel world, Point from) {
-        // Walking is horizontal. The floor decides the height, the target decides only which
-        // way to set off - which is both what a character does and the way out of a trap the
-        // previous version fell into: interpolating towards something above or below moved
-        // mostly in y, the snap to the floor pulled that straight back, and the step landed
-        // where it started. An observer watching one of these saw a move packet to an
-        // identical point, one millisecond long, several times a second, forever.
-        int dx = destination.x - from.x;
-        if (Math.abs(dx) < ARRIVED_PIXELS) {
-            // Directly above or below, and no rope was on offer. Saying so once is better
-            // than saying nothing several times a second.
-            return;
-        }
-
-        Point step;
-        if (Math.abs(dx) <= STEP_PIXELS) {
-            // The last step lands exactly where it was aimed, height included, or an agent
-            // could never arrive anywhere that is not at floor level and the arrival checks -
-            // which measure both axes - would never come true.
-            step = destination;
-        } else {
-            int towards = from.x + (int) Math.copySign(STEP_PIXELS, dx);
-            step = new Point(towards, MapGeometry.groundUnder(world.mapId(), towards, from.y));
-        }
-
-        byte stance = step.x >= from.x ? STANCE_WALKING_RIGHT : STANCE_WALKING_LEFT;
-        short duration = (short) Math.max(1,
-                Math.round(from.distance(step) / WALK_PIXELS_PER_SECOND * 1000));
-
-        session.send(ClientPackets.move(from, step, (short) 0, stance, duration));
-        world.movedTo(step);
-    }
 }

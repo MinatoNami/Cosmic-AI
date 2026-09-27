@@ -61,6 +61,10 @@ public sealed interface Observation {
     record ThingMoved(long tick, int objectId, Point position) implements Observation {
     }
 
+    /** The server refused a pick-up because there is no room left to carry it. */
+    record InventoryFull(long tick) implements Observation {
+    }
+
     record DropAppeared(long tick, int objectId, int itemId, boolean meso,
                         Point position) implements Observation {
     }

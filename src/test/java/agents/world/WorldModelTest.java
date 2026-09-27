@@ -116,4 +116,26 @@ class WorldModelTest {
         assertEquals(40, world.hp());
         assertEquals(50, world.maxHp());
     }
+
+    /**
+     * A fighter with a full bag tried to pick the same drop up 262 times. Once told the bag
+     * is full it takes only money, which needs no room, and tries an item again later.
+     */
+    @Test
+    void aFullBagLeavesItemsWhereTheyLieButStillTakesMoney() {
+        WorldModel world = new WorldModel();
+        world.update(new Observation.MapEntered(1, 10000, 0));
+        world.movedTo(new java.awt.Point(0, 0));
+        world.update(new Observation.DropAppeared(2, 501, 4000000, false, new java.awt.Point(10, 0)));
+        world.update(new Observation.DropAppeared(2, 502, 160, true, new java.awt.Point(90, 0)));
+
+        assertEquals(501, world.nearestDropWorthTaking(3).orElseThrow().objectId());
+
+        world.update(new Observation.InventoryFull(4));
+        assertEquals(502, world.nearestDropWorthTaking(5).orElseThrow().objectId(),
+                "the bag is full, so the item is no use; the mesos still are");
+
+        assertEquals(501, world.nearestDropWorthTaking(4 + 1000).orElseThrow().objectId(),
+                "long enough later it is worth trying again");
+    }
 }

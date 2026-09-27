@@ -187,4 +187,17 @@ class ObservationDecoderTest {
 
         assertInstanceOf(Observation.Unrecognised.class, observation);
     }
+
+    /** The server's own "you cannot hold any more", which a full bag answers every pick-up with. */
+    @Test
+    void readsTheServerSayingTheBagIsFull() {
+        assertEquals(new Observation.InventoryFull(1L), decode(PacketCreator.getShowInventoryFull()));
+    }
+
+    /** Its neighbour on the same opcode is not the same thing. */
+    @Test
+    void anItemBeingUnavailableIsNotAFullBag() {
+        org.junit.jupiter.api.Assertions.assertFalse(
+                decode(PacketCreator.showItemUnavailable()) instanceof Observation.InventoryFull);
+    }
 }

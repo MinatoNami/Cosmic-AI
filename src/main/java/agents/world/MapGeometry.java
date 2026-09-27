@@ -114,7 +114,16 @@ public class MapGeometry {
      * cuts a straight line through the level and appears to stroll through the scenery,
      * because nothing was stopping it.
      */
-    public record Ground(int x1, int y1, int x2, int y2) {
+    public record Ground(int id, int x1, int y1, int x2, int y2) {
+
+        public Ground(int x1, int y1, int x2, int y2) {
+            this(0, x1, y1, x2, y2);
+        }
+
+        /** A wall: the client treats a vertical foothold as something to stop against, not stand on. */
+        public boolean isWall() {
+            return x1 == x2;
+        }
 
         boolean spans(int x) {
             return x >= Math.min(x1, x2) && x <= Math.max(x1, x2);
@@ -158,6 +167,37 @@ public class MapGeometry {
     }
 
     /**
+     * The id of the foothold a character at this position would be standing on, or 0.
+     *
+     * Movement packets carry it, and other clients place a character on the foothold named.
+     * Every step used to claim foothold 0, which is how the game says "in the air", so
+     * everyone watching saw agents hover and slide rather than walk.
+     */
+    public static synchronized int footholdUnder(int mapId, int x, int y) {
+        int best = Integer.MAX_VALUE;
+        int found = 0;
+        for (Ground ground : groundIn(mapId)) {
+            if (ground.isWall() || !ground.spans(x)) {
+                continue;
+            }
+            int drop = ground.heightAt(x) - y;
+            if (drop >= -Math.abs(STEP_UP) && drop < best) {
+                best = drop;
+                found = ground.id();
+            }
+        }
+        return found;
+    }
+
+    private static int footholdId(Data foothold) {
+        try {
+            return Integer.parseInt(foothold.getName());
+        } catch (NumberFormatException e) {
+            return 0;
+        }
+    }
+
+    /**
      * How far above its feet a character may still be considered on a floor. Stairs and
      * slopes mean the exact pixel is never quite right.
      */
@@ -189,6 +229,7 @@ public class MapGeometry {
                         continue;
                     }
                     ground.add(new Ground(
+                            footholdId(foothold),
                             DataTool.getInt(x1, 0),
                             DataTool.getInt(foothold.getChildByPath("y1"), 0),
                             DataTool.getInt(foothold.getChildByPath("x2"), 0),

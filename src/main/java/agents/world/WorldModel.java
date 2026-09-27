@@ -43,6 +43,8 @@ public class WorldModel {
 
     private int mapId = -1;
     private Point self = new Point(0, 0);
+    private long inventoryFullAt = -1;
+    private final java.util.Set<Integer> mesoDrops = new java.util.HashSet<>();
     private int hp = -1;
     private int maxHp = -1;
     private int level = -1;
@@ -81,11 +83,19 @@ public class WorldModel {
                     monsters.put(monster.objectId(), new Entity(monster.objectId(), monster.monsterId(), monster.position()));
             case Observation.MonsterDied died -> monsters.remove(died.objectId());
             case Observation.MonsterVanished vanished -> monsters.remove(vanished.objectId());
-            case Observation.DropTaken taken -> drops.remove(taken.objectId());
+            case Observation.DropTaken taken -> {
+                drops.remove(taken.objectId());
+                mesoDrops.remove(taken.objectId());
+            }
             case Observation.NpcAppeared npc ->
                     npcs.put(npc.objectId(), new Entity(npc.objectId(), npc.npcId(), npc.position()));
-            case Observation.DropAppeared drop ->
-                    drops.put(drop.objectId(), new Entity(drop.objectId(), drop.itemId(), drop.position()));
+            case Observation.DropAppeared drop -> {
+                drops.put(drop.objectId(), new Entity(drop.objectId(), drop.itemId(), drop.position()));
+                if (drop.meso()) {
+                    mesoDrops.add(drop.objectId());
+                }
+            }
+            case Observation.InventoryFull full -> inventoryFullAt = full.tick();
             case Observation.PlayerAppeared player -> players.put(player.characterId(), player.name());
             case Observation.PlayerLeft left -> {
                 players.remove(left.characterId());
@@ -122,6 +132,7 @@ public class WorldModel {
             monsters.clear();
             npcs.clear();
             drops.clear();
+            mesoDrops.clear();
             players.clear();
             positions.clear();
         }
@@ -135,6 +146,26 @@ public class WorldModel {
     public Optional<Entity> nearestDrop() {
         return nearest(drops.values());
     }
+
+    /**
+     * The nearest drop worth trying to pick up: anything, unless the bag was full recently,
+     * in which case only money, which takes no room. Tried again after a while, in case room
+     * has been made since.
+     */
+    public Optional<Entity> nearestDropWorthTaking(long tick) {
+        boolean full = inventoryFullAt >= 0 && tick - inventoryFullAt < FULL_FOR_TICKS;
+        return full
+                ? nearest(drops.values().stream().filter(d -> mesoDrops.contains(d.objectId())).toList())
+                : nearest(drops.values());
+    }
+
+    /** Whether the server said the bag was full within the last while. */
+    public boolean inventoryFull(long tick) {
+        return inventoryFullAt >= 0 && tick - inventoryFullAt < FULL_FOR_TICKS;
+    }
+
+    /** Ten minutes at a 600ms tick before trying an item again. */
+    private static final long FULL_FOR_TICKS = 1000;
 
     private Optional<Entity> nearest(Iterable<Entity> candidates) {
         List<Entity> all = new ArrayList<>();

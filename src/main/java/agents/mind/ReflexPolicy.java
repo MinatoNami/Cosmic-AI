@@ -48,6 +48,22 @@ public class ReflexPolicy implements Policy {
     private static final int LIFETIMES_BEFORE_MOVING_ON = 2;
     private static final int PORTAL_RANGE = 40;
     private static final int WANDER_STEP = 80;
+
+    /**
+     * Where a wander is heading, kept until it gets there.
+     *
+     * A fresh random point either side of the agent on every decision made an idle agent
+     * shuffle: 951 of one agent's thousand direction reversals were one wander followed by
+     * another. A person wandering picks somewhere and walks to it.
+     */
+    private Point wanderingTo;
+    private int wanderingSince;
+    private int wanderDirection = 1;
+
+    /** How far off along the floor a wander aims, and how long it is given to get there. */
+    private static final int WANDER_MIN = 200;
+    private static final int WANDER_MAX = 600;
+    private static final int WANDER_PATIENCE = 30;
     private static final int NPC_RANGE = 60;
 
     private final Random random;
@@ -384,6 +400,7 @@ public class ReflexPolicy implements Policy {
             }
             lastMapId = world.mapId();
             decisionsHere = 0;
+            wanderingTo = null;         // somewhere in the last map means nothing here
             String arrivedIn = KnownWorld.mapRef(world.mapId());
             if (arrivedIn.equals(destination)) {
                 reachedAsDestination.put(arrivedIn, decisionsMade);
@@ -427,13 +444,12 @@ public class ReflexPolicy implements Policy {
         Point self = world.selfPosition();
 
         List<Choice> choices = new ArrayList<>();
-        lootNearby(choices, world, self);
+        lootNearby(choices, world, self, tick);
         somethingToFight(choices, world, self);
         unfinishedBusiness(choices, world, self, unfinished);
         someoneToTalkTo(choices, world, mind, self);
         awayOutOfHere(choices, world, mind, self, stale);
-        choices.add(new Choice("wander", new Intent.MoveTo(
-                new Point(self.x + random.nextInt(2 * WANDER_STEP) - WANDER_STEP, self.y)),
+        choices.add(new Choice("wander", new Intent.MoveTo(wanderTarget(world, self)),
                 "wander", WANDERING_IS_BETTER_THAN_NOTHING, null));
 
         ageUrges();
@@ -663,8 +679,9 @@ public class ReflexPolicy implements Policy {
         return distance >= range ? 0 : 1 - distance / range;
     }
 
-    private void lootNearby(List<Choice> choices, WorldModel world, Point self) {
-        world.nearestDrop().ifPresent(drop -> {
+    private void lootNearby(List<Choice> choices, WorldModel world, Point self, long tick) {
+        // A full bag rules out everything but money until it has had time to change.
+        world.nearestDropWorthTaking(tick).ifPresent(drop -> {
             double near = nearness(drop.position().distance(self), disposition.scavengeRange());
             if (near <= 0) {
                 return;
@@ -1231,6 +1248,33 @@ public class ReflexPolicy implements Policy {
                 : preferred == notBackIntoARoom ? "not a room again" : "last resort")
                 + " " + preferred.size() + "/" + portals.size();
         return onwardOf(preferred);
+    }
+
+    /**
+     * Somewhere along this floor to walk to, kept until reached or given up on.
+     *
+     * Carries on in the direction it was going, and turns round at the end of the floor
+     * rather than at random - which is what makes it look like walking about rather than
+     * pacing on the spot.
+     */
+    private Point wanderTarget(WorldModel world, Point self) {
+        boolean arrived = wanderingTo != null && Math.abs(wanderingTo.x - self.x) < 8;
+        boolean tooLong = decisionsMade - wanderingSince > WANDER_PATIENCE;
+        if (wanderingTo != null && !arrived && !tooLong) {
+            return wanderingTo;
+        }
+        int map = world.mapId();
+        int west = agents.world.Navigator.floorEnd(map, self, -1).orElse(self.x - WANDER_STEP);
+        int east = agents.world.Navigator.floorEnd(map, self, 1).orElse(self.x + WANDER_STEP);
+        int room = wanderDirection > 0 ? east - self.x : self.x - west;
+        if (room < WANDER_MIN / 2 || arrived && random.nextInt(4) == 0) {
+            wanderDirection = -wanderDirection;     // the end of the floor, or a change of mind
+        }
+        int distance = WANDER_MIN + random.nextInt(WANDER_MAX - WANDER_MIN);
+        int x = Math.max(west, Math.min(east, self.x + wanderDirection * distance));
+        wanderingTo = new Point(x, self.y);
+        wanderingSince = decisionsMade;
+        return wanderingTo;
     }
 
     /**

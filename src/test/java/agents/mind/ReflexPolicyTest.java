@@ -849,4 +849,39 @@ class ReflexPolicyTest {
         assertFalse(mind.semantic().liveBeliefs().stream()
                 .anyMatch(b -> b.predicate().equals("does_not_answer")));
     }
+
+    /**
+     * Nothing to do, so it wanders - and wandering is walking somewhere, not pacing. A new
+     * random point either side on every decision made an idle agent reverse direction on
+     * nearly every step.
+     */
+    @Test
+    void wandersSomewhereRatherThanPacingOnTheSpot() {
+        WorldModel southperry = new WorldModel();
+        southperry.update(new Observation.MapEntered(1, 2000000, 0));
+        southperry.movedTo(new Point(300, 527));
+        mind.take(new Observation.MapEntered(1, 2000000, 0));
+        ReflexPolicy fighter = new ReflexPolicy(new Random(1), Disposition.FIGHTER);
+        IntentExecutor legs = new IntentExecutor(packet -> { });
+
+        int reversals = 0;
+        int lastDirection = 0;
+        for (int decision = 2; decision < 80; decision++) {
+            Point before = southperry.selfPosition();
+            Policy.Decision chosen = fighter.decide(mind, southperry, decision);
+            if (chosen.goal().equals("wander")) {
+                legs.execute(chosen.intent(), southperry);
+            }
+            int dx = southperry.selfPosition().x - before.x;
+            if (dx != 0) {
+                int direction = Integer.signum(dx);
+                if (lastDirection != 0 && direction != lastDirection) {
+                    reversals++;
+                }
+                lastDirection = direction;
+            }
+        }
+
+        assertTrue(reversals <= 6, "turned round " + reversals + " times in 78 decisions of wandering");
+    }
 }
