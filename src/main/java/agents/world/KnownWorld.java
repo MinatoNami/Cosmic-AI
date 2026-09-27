@@ -53,7 +53,29 @@ public final class KnownWorld {
     /** Those who stated a condition, so the agent already has what they had to give. */
     private final Set<String> namedAPrice = new HashSet<>();
 
+    /** Of the places a door is said to lead, the one believed, per portal. */
+    private final Map<String, Belief> bestDestination = new HashMap<>();
+
     private KnownWorld() {
+    }
+
+    /**
+     * Which of two answers to "where does this door go" to believe.
+     *
+     * Seen or worked out by this agent beats being told, and among equals the more recent
+     * wins. It took whichever was read last, and a new generation inherited "Split Road's
+     * east00 leads to the job-trial room" - an NPC's warp once blamed on the door - over what
+     * it saw every time it walked through: Southperry. Every route to that room ran back out
+     * of the door it had just come in by, and three agents crossed between the two maps every
+     * second and a half.
+     */
+    private static boolean trustMore(Belief candidate, Belief current) {
+        boolean candidateOwn = candidate.provenance() != Belief.Provenance.HEARSAY;
+        boolean currentOwn = current.provenance() != Belief.Provenance.HEARSAY;
+        if (candidateOwn != currentOwn) {
+            return candidateOwn;
+        }
+        return candidate.lastSeen() >= current.lastSeen();
     }
 
     /**
@@ -95,7 +117,9 @@ public final class KnownWorld {
                     if (!NOWHERE.equals(belief.object())) {
                         String map = mapOf(portal);
                         String door = doorOf(portal);
-                        if (map != null && door != null) {
+                        Belief best = world.bestDestination.get(portal);
+                        if (map != null && door != null && (best == null || trustMore(belief, best))) {
+                            world.bestDestination.put(portal, belief);
                             world.exits.computeIfAbsent(map, m -> new TreeMap<>())
                                     .put(door, belief.object());
                         }

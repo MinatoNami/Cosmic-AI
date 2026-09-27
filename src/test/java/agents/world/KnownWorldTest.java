@@ -403,4 +403,20 @@ class KnownWorldTest {
 
         assertTrue(world().routeToUnfinishedTalk(KnownWorld.mapRef(10000), Set.of()).isEmpty());
     }
+
+    /** What the agent saw of a door outranks what it was told, however the two were read. */
+    @Test
+    void believesWhereItSawADoorGoOverWhereItWasTold() {
+        agents.memory.SemanticMemory memory = new agents.memory.SemanticMemory();
+        memory.assertTriple("portal:1020000/east00", "leads_to", "map:1020100", 0, 1, agents.memory.Belief.Provenance.HEARSAY);
+        memory.assertTriple("portal:1020000/east00", "leads_to", "map:2000000", 1, 5, agents.memory.Belief.Provenance.INFERRED);
+        memory.assertTriple("portal:1020000/west00", "leads_to", "map:1010000", 2, 6, agents.memory.Belief.Provenance.INFERRED);
+        memory.assertTriple("portal:1020000/west00", "leads_to", "map:999", 3, 9, agents.memory.Belief.Provenance.HEARSAY);
+
+        KnownWorld known = KnownWorld.rememberedBy(memory.liveBeliefs());
+
+        assertEquals(java.util.Optional.of("map:2000000"), known.destinationOf("portal:1020000/east00"));
+        assertEquals(java.util.Optional.of("map:1010000"), known.destinationOf("portal:1020000/west00"),
+                "hearsay read later does not overrule what it saw");
+    }
 }
