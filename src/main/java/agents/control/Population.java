@@ -144,14 +144,15 @@ public class Population {
         List<String> awake = new ArrayList<>();
         for (int i = 0; i < count; i++) {
             String name = "Agent" + i;
+            Mind mind = null;
             try {
                 Random random = new Random(name.hashCode());
                 Disposition disposition = Disposition.forAgent(i);
-                LoginFlow flow = new LoginFlow(host, port, WORLD, CHANNEL, random);
-                InWorld connection = flow.enterWorld(
-                        new Credentials(name.toLowerCase(), PASSWORD), name);
 
-                Mind mind = new Mind(name, Trace.toFile(traces.resolve(name + ".jsonl"), name));
+                // The mind first, the login after. The other way round, a mind that took half
+                // a minute to read left a logged-in character answering nothing for that long,
+                // and the server dropped it as idle before it had taken a step.
+                mind = new Mind(name, Trace.toFile(traces.resolve(name + ".jsonl"), name));
                 Path own = minds.resolve(name + ".mind");
                 long resumedAt = mind.restoreFrom(own);
                 if (resumedAt > 0) {
@@ -165,6 +166,10 @@ public class Population {
                             mind.semantic().size());
                 }
 
+                LoginFlow flow = new LoginFlow(host, port, WORLD, CHANNEL, random);
+                InWorld connection = flow.enterWorld(
+                        new Credentials(name.toLowerCase(), PASSWORD), name);
+
                 // Spread the asking evenly around the cycle rather than having everyone ask
                 // on their first decision: one laptop model, three prompts at once, is how
                 // three deliberations ran out of token budget together.
@@ -173,6 +178,9 @@ public class Population {
                 awake.add(name);
             } catch (Exception e) {
                 log.error("{} failed to enter the world", name, e);
+                if (mind != null) {
+                    mind.close();
+                }
             }
         }
         startedAt = System.currentTimeMillis();

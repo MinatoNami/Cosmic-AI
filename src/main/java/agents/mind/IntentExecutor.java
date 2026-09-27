@@ -89,44 +89,70 @@ public class IntentExecutor {
         switch (intent) {
             case Intent.MoveTo move -> moveTo(move.destination(), world);
             case Intent.Attack attack -> {
-                // Step onto the target first: the server takes our word for where we are, but
-                // a human watching should see the agent walk up and swing, not swing at
-                // something across the map.
+                // Walk up and swing, rather than swing at something across the map. Walking
+                // is a step a decision now, so a target further than that is walked towards
+                // and hit on a later decision. Sending the swing anyway had an agent hitting a
+                // monster 2,500px off, which the server flags as a distance hack.
                 moveTo(attack.position(), world);
-                session.send(ClientPackets.meleeAttack(attack.objectId(), attack.position(),
-                        CLAIMED_DAMAGE, attack.position().x >= world.selfPosition().x));
+                if (within(attack.position(), ATTACK_REACH, world)) {
+                    session.send(ClientPackets.meleeAttack(attack.objectId(), attack.position(),
+                            CLAIMED_DAMAGE, attack.position().x >= world.selfPosition().x));
+                }
             }
             case Intent.PickUp pickUp -> {
                 moveTo(pickUp.position(), world);
-                session.send(ClientPackets.pickUpItem(pickUp.objectId(), pickUp.position()));
+                if (within(pickUp.position(), HAND_REACH, world)) {
+                    session.send(ClientPackets.pickUpItem(pickUp.objectId(), pickUp.position()));
+                }
             }
             case Intent.Say say -> session.send(ClientPackets.chat(say.message(), false));
             case Intent.EnterPortal portal -> {
                 moveTo(portal.position(), world);
-                session.send(ClientPackets.enterPortal(portal.portalName()));
+                if (within(portal.position(), HAND_REACH, world)) {
+                    session.send(ClientPackets.enterPortal(portal.portalName()));
+                }
             }
             case Intent.TalkTo talk -> {
                 moveTo(talk.position(), world);
-                session.send(ClientPackets.talkToNpc(talk.objectId()));
+                if (within(talk.position(), SPEAKING_DISTANCE, world)) {
+                    session.send(ClientPackets.talkToNpc(talk.objectId()));
+                }
             }
             case Intent.StartQuest quest -> {
                 // The server refuses this unless we are standing near the NPC.
                 moveTo(quest.position(), world);
-                session.send(ClientPackets.questAction(QUEST_START_SCRIPTED,
-                        quest.questId(), quest.npcId()));
-                session.send(ClientPackets.questAction(QUEST_START_PLAIN,
-                        quest.questId(), quest.npcId()));
+                if (within(quest.position(), SPEAKING_DISTANCE, world)) {
+                    session.send(ClientPackets.questAction(QUEST_START_SCRIPTED,
+                            quest.questId(), quest.npcId()));
+                    session.send(ClientPackets.questAction(QUEST_START_PLAIN,
+                            quest.questId(), quest.npcId()));
+                }
             }
             case Intent.CompleteQuest quest -> {
                 moveTo(quest.position(), world);
-                session.send(ClientPackets.questAction(QUEST_END_SCRIPTED,
-                        quest.questId(), quest.npcId()));
-                session.send(ClientPackets.questAction(QUEST_END_PLAIN,
-                        quest.questId(), quest.npcId()));
+                if (within(quest.position(), SPEAKING_DISTANCE, world)) {
+                    session.send(ClientPackets.questAction(QUEST_END_SCRIPTED,
+                            quest.questId(), quest.npcId()));
+                    session.send(ClientPackets.questAction(QUEST_END_PLAIN,
+                            quest.questId(), quest.npcId()));
+                }
             }
             case Intent.Wait ignored -> {
             }
         }
+    }
+
+    /**
+     * How close counts as reaching something, now that getting there takes more than one
+     * decision. Generous against the policy's own ranges, which choose these actions only when
+     * close; tight against the server's, which lets a melee swing land from about 447px.
+     */
+    static final int ATTACK_REACH = 120;
+    static final int HAND_REACH = 60;
+    static final int SPEAKING_DISTANCE = 150;
+
+    private static boolean within(Point target, int reach, WorldModel world) {
+        return world.selfPosition().distance(target) <= reach;
     }
 
     /** Jumping, per docs/moveactions.txt: what a watcher sees in the air, rising or falling. */

@@ -131,4 +131,21 @@ class IntentExecutorTest {
 
         assertTrue(end.distance(new Point(-487, 287)) <= 8, "never reached west00: " + end);
     }
+
+    /**
+     * Walking takes several decisions now, so a swing sent after one step at something across
+     * the floor was a swing from 2,500px away, which the server logs as a distance hack.
+     */
+    @Test
+    void walksUpToAMonsterBeforeSwingingAtIt() {
+        WorldModel world = standingAt(SOUTHPERRY, new Point(300, 527));
+
+        executor.execute(new Intent.Attack(9001, new Point(800, 527)), world);
+        assertEquals(1, sent.size(), "one step towards it, and no swing from out of reach");
+
+        sent.clear();
+        world.movedTo(new Point(760, 527));
+        executor.execute(new Intent.Attack(9001, new Point(800, 527)), world);
+        assertEquals(2, sent.size(), "close enough now: step in and swing");
+    }
 }
