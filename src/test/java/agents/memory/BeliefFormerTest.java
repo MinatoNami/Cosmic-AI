@@ -97,6 +97,17 @@ class BeliefFormerTest {
     }
 
     @Test
+    void aShopOpeningSaysWhoRunsItAndWhatIsOnItsShelves() {
+        assertEquals(List.of(
+                        BeliefFormer.Triple.firstHand("npc:1012000", "runs_shop", "true"),
+                        BeliefFormer.Triple.firstHand("npc:1012000", "sells", "item:2000000"),
+                        BeliefFormer.Triple.firstHand("npc:1012000", "sells", "item:2000001")),
+                from(new Observation.ShopOpened(1, 1012000, List.of(
+                        new Observation.ShopOpened.ShopItem(0, 2000000, 50),
+                        new Observation.ShopOpened.ShopItem(1, 2000001, 160)))));
+    }
+
+    @Test
     void namesEachChangedStat() {
         List<BeliefFormer.Triple> triples =
                 from(new Observation.StatsChanged(1, Map.of("HP", 50)));

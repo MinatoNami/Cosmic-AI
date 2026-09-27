@@ -106,4 +106,20 @@ class SemanticMemoryTest {
 
         org.junit.jupiter.api.Assertions.assertNull(failed.get(), "a reader failed while the agent wrote");
     }
+
+    /**
+     * A potion that seemed to do nothing once - drunk while something hit harder than it
+     * healed - must not stay believed useless beside the time it worked, or it gets sold.
+     */
+    @Test
+    void theLatestTryOverrulesWhatAnItemWasThoughtToDo() {
+        memory.assertTriple("item:2000000", "restores_hp", "true", 1, 10, Provenance.INFERRED);
+        SemanticMemory.Assertion later =
+                memory.assertTriple("item:2000000", "restores_hp", "false", 2, 20, Provenance.INFERRED);
+
+        assertTrue(later.contradicted() != null);
+        assertEquals(1, memory.liveBeliefs().stream()
+                .filter(b -> b.subject().equals("item:2000000") && b.predicate().equals("restores_hp"))
+                .count());
+    }
 }

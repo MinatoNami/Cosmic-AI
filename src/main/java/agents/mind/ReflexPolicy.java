@@ -778,6 +778,11 @@ public class ReflexPolicy implements Policy {
      * anyone whose conversation has opened a shop before; one in sight is walked to and
      * talked to, and the counter does the rest. One elsewhere becomes a reason to travel,
      * weighed with every other in {@link Places}.
+     *
+     * Any shop buys, so a full bag takes the agent to whichever is nearest. Only some sell
+     * what heals, and going for that took an agent to the pet-food seller on Pet-Walking
+     * Road forty times an hour for potions it had never stocked; so running out of what
+     * heals goes only to somebody seen with it on their shelves.
      */
     private void somewhereToSell(List<Choice> choices, WorldModel world, Mind mind, Point self,
                                  long tick) {
@@ -785,7 +790,8 @@ public class ReflexPolicy implements Policy {
         if (!needsAShop(world, mind, tick)) {
             return;
         }
-        Set<String> keepers = shopkeepers(mind);
+        boolean toSell = world.inventoryFull(tick);
+        Set<String> keepers = toSell ? shopkeepers(mind) : stocking(mind, knownHealers(mind));
         keepers.removeAll(noUseNow(mind, world));
         Optional<WorldModel.Entity> keeper = world.visibleNpcs().stream()
                 .filter(npc -> keepers.contains("npc:" + npc.typeId()))
@@ -803,14 +809,15 @@ public class ReflexPolicy implements Policy {
         WorldModel.Entity npc = keeper.get();
         double score = SHOP_URGENCY + NEGLECT_MATTERS * neglect("shop")
                 + commitmentTo("shop", npc.position());
+        String why = toSell ? "sell what I cannot carry" : "buy something that heals";
         if (npc.position().distance(self) >= NPC_RANGE) {
             Point where = npc.position();
             choices.add(new Choice("shop", new Intent.MoveTo(where),
-                    "go and sell what I cannot carry", score, () -> settingOff("shop", where)));
+                    "go and " + why, score, () -> settingOff("shop", where)));
             return;
         }
         choices.add(new Choice("shop", new Intent.TalkTo(npc.objectId(), npc.typeId(), npc.position()),
-                "sell what I cannot carry", score, () -> {
+                why, score, () -> {
                     shopTriedAt.put(npc.typeId(), decisionsMade);
                     arrived();
                 }));
@@ -830,18 +837,44 @@ public class ReflexPolicy implements Policy {
         if (world.inventory().meso() < MONEY_FOR_POTIONS) {
             return false;
         }
-        Set<Integer> healers = new HashSet<>();
+        Set<String> healers = knownHealers(mind);
+        return !healers.isEmpty()
+                && healers.stream().allMatch(item -> world.inventory().count(itemIdIn(item)) == 0)
+                && !stocking(mind, healers).isEmpty();
+    }
+
+    /** Items the agent has seen restore its health, as refs. */
+    private static Set<String> knownHealers(Mind mind) {
+        Set<String> healers = new HashSet<>();
         for (Belief belief : mind.semantic().liveBeliefs()) {
             if (belief.predicate().equals("restores_hp") && belief.object().equals("true")
-                    && belief.subject().startsWith("item:")) {
-                try {
-                    healers.add(Integer.parseInt(belief.subject().substring("item:".length())));
-                } catch (NumberFormatException notAnId) {
-                    // not an item this agent could carry
-                }
+                    && itemIdIn(belief.subject()) > 0) {
+                healers.add(belief.subject());
             }
         }
-        return !healers.isEmpty() && healers.stream().allMatch(id -> world.inventory().count(id) == 0);
+        return healers;
+    }
+
+    /** Shopkeepers seen with any of these on their shelves. */
+    private static Set<String> stocking(Mind mind, Set<String> items) {
+        Set<String> keepers = new HashSet<>();
+        for (Belief belief : mind.semantic().liveBeliefs()) {
+            if (belief.predicate().equals("sells") && items.contains(belief.object())) {
+                keepers.add(belief.subject());
+            }
+        }
+        return keepers;
+    }
+
+    private static int itemIdIn(String itemRef) {
+        if (!itemRef.startsWith("item:")) {
+            return -1;
+        }
+        try {
+            return Integer.parseInt(itemRef.substring("item:".length()));
+        } catch (NumberFormatException notAnId) {
+            return -1;
+        }
     }
 
     /** Enough for a handful of the cheapest potions. */

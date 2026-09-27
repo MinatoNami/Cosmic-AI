@@ -950,11 +950,42 @@ class ReflexPolicyTest {
     /** Knowing what heals and carrying none of it, with money, is business too. */
     @Test
     void goesShoppingWhenOutOfWhatHeals() {
-        mind.take(new Observation.NoticeShown(2, "hello"));
+        mind.take(new Observation.ShopOpened(2, 1012000, List.of(
+                new Observation.ShopOpened.ShopItem(0, 2000000, 50))));
         mind.infer("item:2000000", "restores_hp", "true", 2);
         world.update(new Observation.InventoryShown(2, 300, Map.of(1, 24, 2, 24, 3, 24, 4, 24, 5, 24), List.of()));
+        world.update(new Observation.NpcAppeared(3, 7001, 1012000, new Point(20, 0)));
 
         assertTrue(ReflexPolicy.needsAShop(world, mind, 4));
+        assertEquals(1012000, assertInstanceOf(Intent.TalkTo.class, policy.decide(mind, world, 4).intent()).npcId());
+    }
+
+    /**
+     * The loop this was written for: an agent out of potions walked to the pet-food seller
+     * forty times an hour, because it ran a shop, for potions it had never stocked.
+     */
+    @Test
+    void doesNotGoForPotionsToAShopThatHasNeverStockedThem() {
+        mind.take(new Observation.ShopOpened(2, 1012004, List.of(
+                new Observation.ShopOpened.ShopItem(0, 2120000, 30))));
+        mind.infer("item:2000000", "restores_hp", "true", 2);
+        world.update(new Observation.InventoryShown(2, 300, Map.of(1, 24, 2, 24, 3, 24, 4, 24, 5, 24), List.of()));
+        world.update(new Observation.NpcAppeared(3, 7001, 1012004, new Point(20, 0)));
+
+        assertFalse(ReflexPolicy.needsAShop(world, mind, 4));
+        assertFalse(policy.decide(mind, world, 4).goal().contains("heals"));
+    }
+
+    /** With a full bag any shop will do: they all buy. */
+    @Test
+    void sellsToAnyShopWhenTheBagIsFull() {
+        mind.take(new Observation.ShopOpened(2, 1012004, List.of(
+                new Observation.ShopOpened.ShopItem(0, 2120000, 30))));
+        world.update(new Observation.InventoryShown(2, 100, Map.of(1, 24, 2, 24, 3, 24, 4, 1, 5, 24),
+                List.of(new agents.percept.Item(4, 1, 4000019, 1, null))));
+        world.update(new Observation.NpcAppeared(3, 7001, 1012004, new Point(20, 0)));
+
+        assertEquals(1012004, assertInstanceOf(Intent.TalkTo.class, policy.decide(mind, world, 4).intent()).npcId());
     }
 
     /** A line from 10000: west00 to 20000, east00 to 30000 with a door never opened beyond. */

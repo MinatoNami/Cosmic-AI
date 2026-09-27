@@ -29,7 +29,11 @@ public class SemanticMemory {
      */
     private static final Set<String> FUNCTIONAL_PREDICATES = Set.of(
             "named", "level", "in_map", "hp", "maxhp", "mp", "maxmp", "exp", "meso", "job",
-            "state");
+            "state",
+            // What drinking something did, which the latest try overrules: one that seemed
+            // to do nothing while a monster was hitting harder than it healed must not stay
+            // believed useless alongside the time it plainly worked.
+            "restores_hp", "restores_mp");
 
     /**
      * Copy-on-write, because a mind is read from more threads than the one that writes it:
