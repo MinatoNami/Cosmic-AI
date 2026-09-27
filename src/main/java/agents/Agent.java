@@ -7,6 +7,7 @@ import agents.mind.Disposition;
 import agents.mind.IntentExecutor;
 import agents.mind.Policy;
 import agents.mind.Survival;
+import agents.mind.Wardrobe;
 import agents.protocol.ClientPackets;
 import agents.net.LoginFlow.InWorld;
 import agents.memory.Belief;
@@ -95,6 +96,7 @@ public class Agent implements Runnable {
     private final Touch touch;
     private final Keyboard keyboard = new Keyboard();
     private final Survival survival = new Survival();
+    private final Wardrobe wardrobe = new Wardrobe();
     private int steps;
 
     /** Steps spent dead so far, so the agent waits a moment before asking to come back. */
@@ -165,6 +167,11 @@ public class Agent implements Runnable {
 
         feelForContact();
         survival.step(mind, world, perceiver.currentTick()).ifPresent(this::drink);
+        wardrobe.step(world).ifPresent(change -> {
+            log.info("{} puts on item:{}", mind.name(), change.itemId());
+            connection.session().send(ClientPackets.moveItem(
+                    agents.percept.Item.EQUIP, change.fromSlot(), change.toSlot(), 1));
+        });
 
         // Push the trace out to disk every step. Without this a buffered writer holds the
         // last few kilobytes indefinitely, so anything following the file live - a tail, or

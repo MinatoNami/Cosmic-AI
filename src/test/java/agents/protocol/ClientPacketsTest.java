@@ -49,4 +49,16 @@ class ClientPacketsTest {
         assertEquals(0, p.readByte(), "no wheel of fortune");
         assertEquals(0, p.readByte(), "not chasing");
     }
+
+    /** @see net.server.channel.handlers.ItemMoveHandler */
+    @Test
+    void puttingSomethingOnIsAMoveToANegativeSlot() {
+        InPacket p = read(ClientPackets.moveItem(1, 4, -11, 1), RecvOpcode.ITEM_MOVE);
+
+        p.readInt();
+        assertEquals(1, p.readByte());
+        assertEquals(4, p.readShort());
+        assertEquals(-11, p.readShort());
+        assertEquals(1, p.readShort());
+    }
 }

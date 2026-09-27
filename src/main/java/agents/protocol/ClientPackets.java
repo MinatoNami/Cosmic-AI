@@ -329,6 +329,22 @@ public final class ClientPackets {
     }
 
     /**
+     * Moves something within a bag, or onto the body: a negative destination is putting it
+     * on, which is all equipping is - dragging it from the bag onto the character.
+     *
+     * @see net.server.channel.handlers.ItemMoveHandler
+     */
+    public static Packet moveItem(int type, int fromSlot, int toSlot, int quantity) {
+        OutPacket p = packet(RecvOpcode.ITEM_MOVE);
+        p.writeInt(0);                  // timestamp
+        p.writeByte(type);
+        p.writeShort(fromSlot);
+        p.writeShort(toSlot);
+        p.writeShort(quantity);
+        return p;
+    }
+
+    /**
      * Rebinds keys, as dragging something onto the keyboard window does. The server saves it
      * with the character, so a binding made once is there the next time it logs in.
      *
