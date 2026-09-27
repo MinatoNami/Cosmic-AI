@@ -1272,7 +1272,8 @@ public class ReflexPolicy implements Policy {
         }
         int distance = WANDER_MIN + random.nextInt(WANDER_MAX - WANDER_MIN);
         int x = Math.max(west, Math.min(east, self.x + wanderDirection * distance));
-        wanderingTo = new Point(x, self.y);
+        // At the floor's own height there, or a wander up a hill aimed underground.
+        wanderingTo = new Point(x, agents.world.Navigator.heightAlongFloor(map, self, x).orElse(self.y));
         wanderingSince = decisionsMade;
         return wanderingTo;
     }

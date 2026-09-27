@@ -158,8 +158,10 @@ public class MapGeometry {
             }
             int height = ground.heightAt(x);
             int drop = height - y;
-            if (drop >= -Math.abs(STEP_UP) && drop < best) {
-                best = drop;
+            // Nearest the feet: a floor just overhead has the smaller drop and is not the one
+            // being stood on.
+            if (drop >= -Math.abs(STEP_UP) && Math.abs(drop) < best) {
+                best = Math.abs(drop);
                 found = height;
             }
         }
@@ -181,8 +183,8 @@ public class MapGeometry {
                 continue;
             }
             int drop = ground.heightAt(x) - y;
-            if (drop >= -Math.abs(STEP_UP) && drop < best) {
-                best = drop;
+            if (drop >= -Math.abs(STEP_UP) && Math.abs(drop) < best) {
+                best = Math.abs(drop);
                 found = ground.id();
             }
         }

@@ -228,7 +228,10 @@ public class IntentExecutor {
             return;         // as far as this floor goes; saying so once beats a stream of no-ops
         }
         int x = Math.abs(dx) <= STEP_PIXELS ? wanted : from.x + (int) Math.copySign(STEP_PIXELS, dx);
-        int y = Navigator.floorHeight(map, new Point(x, from.y)).orElse(from.y);
+        // The height of this same floor at the new x. Asking "what floor is under x at my
+        // current height" instead lost the floor on any slope steeper than the tolerance -
+        // one climbs 32px in a 75px step - and dropped the agent onto the floor beneath.
+        int y = Navigator.heightAlongFloor(map, from, x).orElse(from.y);
         Point step = new Point(x, y);
 
         byte stance = dx > 0 ? STANCE_WALKING_RIGHT : STANCE_WALKING_LEFT;

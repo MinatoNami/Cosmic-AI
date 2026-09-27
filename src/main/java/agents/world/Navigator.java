@@ -29,10 +29,15 @@ public final class Navigator {
 
     /**
      * How high a jump reaches. A beginner jumps at about 555 px/s against 2000 px/s² of
-     * gravity, which peaks near 77 pixels; a little less, so a jump that only just makes it
-     * on paper is not relied on.
+     * gravity, which peaks near 77 pixels. It was 70, which left the only way up in Right
+     * Around Lith Harbor - a 71-pixel jump from one slope to another - out of every route, and
+     * an agent heading for Lith Harbor gave up and took the door the other way, back and
+     * forth, for as long as anyone watched.
      */
-    static final int JUMP_RISE = 70;
+    static final int JUMP_RISE = 76;
+
+    /** How finely an overlap between two floors is searched for the easiest place to jump. */
+    private static final int JUMP_SEARCH_STEP = 16;
 
     /** How far across a running jump carries, end of one floor to the start of the next. */
     static final int JUMP_REACH = 110;
@@ -123,6 +128,23 @@ public final class Navigator {
         Graph graph = graphOf(mapId);
         int p = graph.floorNear(x, y);
         return p < 0 ? Optional.empty() : Optional.of(graph.platforms.get(p).heightAt(x));
+    }
+
+    /**
+     * The height of the floor a point is standing on, somewhere else along that same floor.
+     *
+     * A target along a slope has to be at the slope's height there, not the height the agent
+     * is standing at now: uphill, a point at the agent's own height is under the floor, and
+     * the route to it went looking for some lower floor instead.
+     */
+    public static Optional<Integer> heightAlongFloor(int mapId, Point at, int x) {
+        Graph graph = graphOf(mapId);
+        int p = graph.platformUnder(at.x, at.y);
+        if (p < 0) {
+            return Optional.empty();
+        }
+        Platform platform = graph.platforms.get(p);
+        return Optional.of(platform.heightAt(platform.clamp(x)));
     }
 
     /** The far end of the floor a point is standing on, in one direction. */
@@ -245,9 +267,11 @@ public final class Navigator {
                 if (!p.spans(x)) {
                     continue;
                 }
+                // Closest to the feet, not lowest drop: a floor thirty pixels overhead has the
+                // lower drop, and picking it put agents standing on a shelf onto the floor above.
                 int drop = p.heightAt(x) - y;
-                if (drop >= -STANDING && drop < bestDrop) {
-                    bestDrop = drop;
+                if (drop >= -STANDING && Math.abs(drop) < bestDrop) {
+                    bestDrop = Math.abs(drop);
                     best = i;
                 }
             }
@@ -303,15 +327,20 @@ public final class Navigator {
                     if (lo > hi) {
                         continue;
                     }
-                    for (int x : new int[]{lo + 4, (lo + hi) / 2, hi - 4}) {
-                        if (x < lo || x > hi) {
-                            continue;
-                        }
+                    // The easiest place to jump from: where the floor overhead is least far up.
+                    // Floors are often slopes, so the rise changes along the overlap, and
+                    // sampling only its ends and middle missed the one place a jump would do.
+                    int bestX = Integer.MIN_VALUE;
+                    int bestRise = Integer.MAX_VALUE;
+                    for (int x = lo + 4; x <= hi - 4; x = x + JUMP_SEARCH_STEP > hi - 4 && x != hi - 4 ? hi - 4 : x + JUMP_SEARCH_STEP) {
                         int rise = p.heightAt(x) - q.heightAt(x);
-                        if (rise > STANDING && rise <= JUMP_RISE) {
-                            edges.get(from).add(new Edge(to, Kind.JUMP, x, x, null));
-                            break;
+                        if (rise > STANDING && rise < bestRise) {
+                            bestRise = rise;
+                            bestX = x;
                         }
+                    }
+                    if (bestRise <= JUMP_RISE) {
+                        edges.get(from).add(new Edge(to, Kind.JUMP, bestX, bestX, null));
                     }
                 }
             }

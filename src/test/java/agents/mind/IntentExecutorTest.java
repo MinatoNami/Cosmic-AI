@@ -47,7 +47,7 @@ class IntentExecutorTest {
             assertTrue(onAFloor(map, now) || onARope(map, now),
                     "ended a move in mid-air at " + now + " (from " + before + ")");
             if (!onARope(map, now) && !onARope(map, before)) {
-                assertTrue(before.y - now.y <= 70,
+                assertTrue(before.y - now.y <= 76,
                         "rose " + (before.y - now.y) + "px in one move, " + before + " -> " + now);
             }
             before = now;
@@ -116,5 +116,19 @@ class IntentExecutorTest {
 
         assertEquals(1, sent.size());
         assertTrue(world.selfPosition().x - 300 <= 75, "one decision carried it " + (world.selfPosition().x - 300) + "px");
+    }
+
+    /**
+     * Right Around Lith Harbor. The door to Lith Harbor is up a slope that only a 71-pixel jump
+     * reaches; with jumps capped at 70 there was no route, so an agent heading there gave up
+     * and took the door the other way, back and forth between two maps.
+     */
+    @Test
+    void findsTheWayUpToTheDoorToLithHarbor() {
+        WorldModel world = standingAt(104000100, new Point(2400, 395));
+
+        Point end = walkTowards(world, new Point(-487, 287), 200);
+
+        assertTrue(end.distance(new Point(-487, 287)) <= 8, "never reached west00: " + end);
     }
 }
