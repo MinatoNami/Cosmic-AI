@@ -64,6 +64,10 @@ public class BeliefFormer {
                     triples.add(Triple.firstHand("monster:" + monster.monsterId(), "present_in", mapRef(currentMap)));
             case Observation.DropAppeared drop ->
                     triples.add(Triple.firstHand(itemRef(drop), "dropped_in", mapRef(currentMap)));
+            // Felt, not concluded: something of this kind walked into the agent and it hurt.
+            // Whether that makes it worth avoiding is the agent's to decide.
+            case Observation.TouchedBy touched ->
+                    triples.add(Triple.firstHand("monster:" + touched.monsterId(), "hurts_you", "true"));
             case Observation.DialogueShown dialogue ->
                     triples.add(Triple.firstHand("npc:" + dialogue.npcId(), "talks_in", mapRef(currentMap)));
             case Observation.QuestStateChanged quest ->

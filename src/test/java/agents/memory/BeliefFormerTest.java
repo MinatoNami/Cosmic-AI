@@ -22,7 +22,7 @@ class BeliefFormerTest {
     @Test
     void restatesWhatAnObservationSaysOutright() {
         List<BeliefFormer.Triple> triples =
-                from(new Observation.SelfDescribed(1, 2, "Agent0", 1, 0, 10000, 0));
+                from(new Observation.SelfDescribed(1, 2, "Agent0", 1, 0, 10000, 0, Map.of()));
 
         assertTrue(triples.contains(BeliefFormer.Triple.firstHand("self", "named", "Agent0")));
         assertTrue(triples.contains(BeliefFormer.Triple.firstHand("self", "in_map", "map:10000")));
@@ -81,12 +81,19 @@ class BeliefFormerTest {
      */
     @Test
     void doesNotRecordItselfAsASource() {
-        from(new Observation.SelfDescribed(1, 2, "Agent0", 1, 0, 10000, 0));
+        from(new Observation.SelfDescribed(1, 2, "Agent0", 1, 0, 10000, 0, Map.of()));
 
         assertTrue(from(new Observation.ChatHeard(2, 2, "!know monster:1 present_in map:2")).isEmpty(),
                 "an agent hearing its own voice has learned nothing");
         assertFalse(from(new Observation.ChatHeard(3, 9, "!know monster:1 present_in map:2")).isEmpty(),
                 "someone else saying it is still worth recording");
+    }
+
+    /** Being hurt is felt, not worked out, so it is first-hand - and says nothing more. */
+    @Test
+    void beingWalkedIntoSaysThatKindOfThingHurts() {
+        assertEquals(List.of(BeliefFormer.Triple.firstHand("monster:100100", "hurts_you", "true")),
+                from(new Observation.TouchedBy(1, 9001, 100100, 8)));
     }
 
     @Test

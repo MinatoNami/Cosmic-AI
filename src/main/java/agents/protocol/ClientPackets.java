@@ -290,6 +290,48 @@ public final class ClientPackets {
     }
 
     /**
+     * Reports being walked into by a monster.
+     *
+     * The client, not the server, notices a monster touching its character, works out how
+     * hard it hit, and says so - the server takes the number and subtracts it. A client that
+     * never sends this is never hurt, which is how agents fought for weeks without a scratch.
+     *
+     * @param facingLeft which way the character was knocked, for onlookers
+     * @see net.server.channel.handlers.TakeDamageHandler
+     */
+    public static Packet touchedByMonster(int damage, int monsterId, int objectId, boolean facingLeft) {
+        OutPacket p = packet(RecvOpcode.TAKE_DAMAGE);
+        p.writeInt(0);                  // timestamp
+        p.writeByte(TOUCH);
+        p.writeByte(0);                 // element: none
+        p.writeInt(damage);
+        p.writeInt(monsterId);
+        p.writeInt(objectId);
+        p.writeByte(facingLeft ? 1 : 0);
+        return p;
+    }
+
+    /** Damage source -1: the monster's body, not one of its attacks. */
+    private static final int TOUCH = -1;
+
+    /**
+     * Asks to be brought back after dying - the button on the "you have died" window. The
+     * server sends a dead character to the nearest town with a little health.
+     *
+     * @see net.server.channel.handlers.ChangeMapHandler
+     */
+    public static Packet revive() {
+        OutPacket p = packet(RecvOpcode.CHANGE_MAP);
+        p.writeByte(1);                 // from dying
+        p.writeInt(0);                  // anything but -1: not a portal
+        p.writeString("");
+        p.writeByte(0);
+        p.writeByte(0);                 // no wheel of fortune
+        p.writeByte(0);                 // not chasing
+        return p;
+    }
+
+    /**
      * A private message to one player, by name. Works across maps, which is what makes it
      * the right channel for a person asking an agent a question.
      *

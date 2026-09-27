@@ -159,7 +159,7 @@ public class ObservationDecoder {
         p.readByte();
         ServerPackets.CharacterSummary self = ServerPackets.decodeCharacterStats(p);
         return new Observation.SelfDescribed(tick, self.id(), self.name(), self.level(),
-                self.job(), self.mapId(), self.spawnPoint());
+                self.job(), self.mapId(), self.spawnPoint(), self.stats());
     }
 
     /**

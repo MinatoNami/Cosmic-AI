@@ -4,7 +4,9 @@ import net.packet.InPacket;
 
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Decoders for the login-phase packets, which are protocol plumbing rather than anything an
@@ -23,7 +25,11 @@ public final class ServerPackets {
         }
     }
 
-    public record CharacterSummary(int id, String name, int level, int job, int mapId, int spawnPoint) {
+    /**
+     * @param stats the character's own numbers, keyed by the same names a stat update uses
+     */
+    public record CharacterSummary(int id, String name, int level, int job, int mapId, int spawnPoint,
+                                   Map<String, Integer> stats) {
     }
 
     public record ChannelHandoff(String host, int port, int characterId) {
@@ -108,18 +114,20 @@ public final class ServerPackets {
         p.skip(24);                         // three pet unique ids
         int level = p.readUnsignedByte();
         int job = p.readShort();
-        p.skip(8);                          // str, dex, int, luk
-        p.skip(8);                          // hp, maxhp, mp, maxmp
-        p.readShort();                      // remaining ap
-        p.readShort();                      // remaining sp
-        p.readInt();                        // exp
-        p.readShort();                      // fame
+        Map<String, Integer> stats = new LinkedHashMap<>();
+        for (String stat : List.of("STR", "DEX", "INT", "LUK", "HP", "MAXHP", "MP", "MAXMP")) {
+            stats.put(stat, (int) p.readShort());
+        }
+        stats.put("AVAILABLEAP", (int) p.readShort());
+        stats.put("AVAILABLESP", (int) p.readShort());
+        stats.put("EXP", p.readInt());
+        stats.put("FAME", (int) p.readShort());
         p.readInt();                        // gacha exp
         int mapId = p.readInt();
         int spawnPoint = p.readUnsignedByte();
         p.readInt();
 
-        return new CharacterSummary(id, name, level, job, mapId, spawnPoint);
+        return new CharacterSummary(id, name, level, job, mapId, spawnPoint, Map.copyOf(stats));
     }
 
     /** @see tools.PacketCreator#addCharLook */

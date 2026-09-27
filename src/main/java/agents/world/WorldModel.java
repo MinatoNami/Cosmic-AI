@@ -52,6 +52,8 @@ public class WorldModel {
     private int maxHp = -1;
     private int level = -1;
     private int characterId = -1;
+    private int job = -1;
+    private final Map<String, Integer> ownStats = new HashMap<>();
 
     public WorldModel() {
         this(MapGeometry::arrivalPoint);
@@ -68,20 +70,11 @@ public class WorldModel {
                 enterMap(self.mapId(), self.spawnPoint());
                 this.characterId = self.characterId();
                 this.level = self.level();
+                this.job = self.job();
+                absorb(self.stats());
             }
             case Observation.MapEntered entered -> enterMap(entered.mapId(), entered.spawnPoint());
-            case Observation.StatsChanged changed -> {
-                Map<String, Integer> stats = changed.stats();
-                if (stats.containsKey("HP")) {
-                    hp = stats.get("HP");
-                }
-                if (stats.containsKey("MAXHP")) {
-                    maxHp = stats.get("MAXHP");
-                }
-                if (stats.containsKey("LEVEL")) {
-                    level = stats.get("LEVEL");
-                }
-            }
+            case Observation.StatsChanged changed -> absorb(changed.stats());
             case Observation.MonsterAppeared monster ->
                     monsters.put(monster.objectId(), new Entity(monster.objectId(), monster.monsterId(), monster.position()));
             case Observation.MonsterDied died -> forgetMonster(died.objectId());
@@ -148,6 +141,40 @@ public class WorldModel {
         mapId = newMapId;
     }
 
+    /** Takes the agent's own numbers from whichever message carried them. */
+    private void absorb(Map<String, Integer> stats) {
+        ownStats.putAll(stats);
+        if (stats.containsKey("HP")) {
+            hp = stats.get("HP");
+        }
+        if (stats.containsKey("MAXHP")) {
+            maxHp = stats.get("MAXHP");
+        }
+        if (stats.containsKey("LEVEL")) {
+            level = stats.get("LEVEL");
+        }
+        if (stats.containsKey("JOB")) {
+            job = stats.get("JOB");
+        }
+    }
+
+    /**
+     * One of the agent's own numbers - STR, MP, MAXMP and so on, under the server's names -
+     * or -1 if it has not been told.
+     */
+    public int stat(String name) {
+        return ownStats.getOrDefault(name, -1);
+    }
+
+    public int job() {
+        return job;
+    }
+
+    /** Health at nothing: the "you have died" window is up and nothing else can be done. */
+    public boolean isDead() {
+        return hp == 0;
+    }
+
     private void forgetMonster(int objectId) {
         monsters.remove(objectId);
         monsterHealth.remove(objectId);
@@ -159,6 +186,10 @@ public class WorldModel {
      */
     public Optional<Integer> monsterHealth(int objectId) {
         return Optional.ofNullable(monsterHealth.get(objectId));
+    }
+
+    public List<Entity> visibleMonsters() {
+        return List.copyOf(monsters.values());
     }
 
     public Optional<Entity> nearestMonster() {

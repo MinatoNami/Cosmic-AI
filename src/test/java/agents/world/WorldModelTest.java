@@ -86,7 +86,7 @@ class WorldModelTest {
 
     @Test
     void enteringTheWorldPutsTheAgentWhereItLoggedIn() {
-        onMapleIsland.update(new Observation.SelfDescribed(1, 2, "Agent0", 1, 0, 104000000, 3));
+        onMapleIsland.update(new Observation.SelfDescribed(1, 2, "Agent0", 1, 0, 104000000, 3, Map.of()));
 
         assertEquals(new Point(720, 150), onMapleIsland.selfPosition());
     }
@@ -118,6 +118,26 @@ class WorldModelTest {
 
         world.update(new Observation.MonsterDied(3, 9001));
         assertTrue(world.monsterHealth(9001).isEmpty());
+    }
+
+    /** Health used to be unknown until it first changed, which for an agent never hit was never. */
+    @Test
+    void knowsItsOwnNumbersFromTheMomentItArrives() {
+        onMapleIsland.update(new Observation.SelfDescribed(1, 2, "Agent0", 3, 0, 104000000, 3,
+                Map.of("HP", 50, "MAXHP", 50, "MP", 5, "MAXMP", 5, "STR", 12)));
+
+        assertEquals(50, onMapleIsland.hp());
+        assertEquals(12, onMapleIsland.stat("STR"));
+        assertEquals(5, onMapleIsland.stat("MAXMP"));
+        assertEquals(0, onMapleIsland.job());
+        assertFalse(onMapleIsland.isDead());
+    }
+
+    @Test
+    void isDeadAtNoHealth() {
+        world.update(new Observation.StatsChanged(1, Map.of("HP", 0)));
+
+        assertTrue(world.isDead());
     }
 
     @Test

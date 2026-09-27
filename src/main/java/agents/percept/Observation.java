@@ -24,10 +24,12 @@ public sealed interface Observation {
 
     /**
      * The agent's own character, as the server describes it on entering the world.
-     * {@code spawnPoint} is the portal it is standing at, as in {@link MapEntered}.
+     * {@code spawnPoint} is the portal it is standing at, as in {@link MapEntered}, and
+     * {@code stats} its own numbers under the names a {@link StatsChanged} uses - health
+     * among them, which an agent otherwise did not know until it first changed.
      */
     record SelfDescribed(long tick, int characterId, String name, int level, int job,
-                         int mapId, int spawnPoint) implements Observation {
+                         int mapId, int spawnPoint, Map<String, Integer> stats) implements Observation {
     }
 
     /** One or more of the agent's own stats changed. Keys are the server's stat names. */
@@ -83,6 +85,17 @@ public sealed interface Observation {
      * number. Sent to whoever hit it, which makes it the first sign an attack did anything.
      */
     record MonsterHurt(long tick, int objectId, int hpPercent) implements Observation {
+    }
+
+    /**
+     * A monster walked into the agent and hurt it.
+     *
+     * The one observation that does not arrive from the server: the agent's own client
+     * noticed the collision, as a player's does, and reported it. The mind gets the same
+     * thing a player sees - what hit it and for how much - and the health it lost arrives
+     * separately, from the server, like any other change.
+     */
+    record TouchedBy(long tick, int objectId, int monsterId, int damage) implements Observation {
     }
 
     /** Somebody else in the map was hurt, by how much, and by what kind of monster (0 if none). */

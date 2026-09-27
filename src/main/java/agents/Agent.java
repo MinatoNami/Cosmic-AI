@@ -1,5 +1,6 @@
 package agents;
 
+import agents.body.Touch;
 import agents.mind.DialogueReader;
 import agents.mind.Disposition;
 import agents.mind.IntentExecutor;
@@ -89,7 +90,11 @@ public class Agent implements Runnable {
     private static final long DIALOGUE_PATIENCE_MILLIS = 45_000;
 
     private final Disposition disposition;
+    private final Touch touch;
     private int steps;
+
+    /** Steps spent dead so far, so the agent waits a moment before asking to come back. */
+    private int deadFor;
     private int nowhereToGo;
 
     /** The last NPC whose offer this agent accepted, so a dead end has somebody to blame. */
@@ -106,6 +111,7 @@ public class Agent implements Runnable {
         // Seeded from the name so a given agent paces the same way run to run, and two
         // agents never pace identically.
         this.voice = new Voice(new Random(mind.name().hashCode()));
+        this.touch = new Touch(new Random(mind.name().hashCode() * 31L));
         this.dialogueReader = policy.oracle().map(DialogueReader::new).orElse(null);
     }
 
@@ -152,10 +158,18 @@ public class Agent implements Runnable {
         answerWhenRead();
         voice.next(System.currentTimeMillis()).ifPresent(this::say);
 
+        feelForContact();
+
         // Push the trace out to disk every step. Without this a buffered writer holds the
         // last few kilobytes indefinitely, so anything following the file live - a tail, or
         // the monitoring page - sees nothing until the run ends.
         mind.flush();
+
+        if (world.isDead()) {
+            awaitRevival();
+            return;
+        }
+        deadFor = 0;
 
         long tick = perceiver.currentTick();
         Policy.Decision decision = policy.decide(mind, world, tick);
@@ -191,6 +205,47 @@ public class Agent implements Runnable {
             blamedThemAlready = true;
         }
     }
+
+    /**
+     * Reports a monster walking into the agent, as its client would.
+     *
+     * The body notices, the server is told how hard it hit, and the mind is told what did it.
+     * The health it cost arrives back from the server as a stat change like any other.
+     */
+    private void feelForContact() {
+        touch.check(world, defence(), System.currentTimeMillis()).ifPresent(contact -> {
+            connection.session().send(ClientPackets.touchedByMonster(contact.damage(),
+                    contact.monsterId(), contact.objectId(), contact.facingLeft()));
+            mind.take(perceiver.felt(tick -> new Observation.TouchedBy(tick,
+                    contact.objectId(), contact.monsterId(), contact.damage())));
+        });
+    }
+
+    /** What the agent's equipment soaks up when something hits it. */
+    private int defence() {
+        return 0;
+    }
+
+    /**
+     * Waits out the "you have died" window, then presses the button on it.
+     *
+     * A dead character can do nothing else, and the server ignores it until it asks to be
+     * brought back; an agent that went on deciding things while dead would be walking a
+     * corpse around, as far as anyone watching could tell, and nothing would happen.
+     */
+    private void awaitRevival() {
+        if (deadFor++ == 0) {
+            log.info("{} died in map {}", mind.name(), world.mapId());
+        }
+        if (deadFor == REVIVE_AFTER_STEPS) {
+            connection.session().send(ClientPackets.revive());
+        } else if (deadFor > REVIVE_AFTER_STEPS * 4) {
+            deadFor = 0;        // the server did not bring it back; ask again
+        }
+    }
+
+    /** A few seconds at a 600ms tick: long enough for anyone watching to see it fall. */
+    private static final int REVIVE_AFTER_STEPS = 5;
 
     /**
      * Whether this one has taken the agent somewhere with no way out before.

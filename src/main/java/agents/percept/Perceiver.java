@@ -52,6 +52,17 @@ public class Perceiver {
         return observations;
     }
 
+    /**
+     * Something the agent's own client noticed rather than was told - being walked into is
+     * the case - stamped with a tick like anything that arrived, so it takes its place in the
+     * trace between the packets either side of it.
+     *
+     * @param at builds the observation for the tick it is given
+     */
+    public Observation felt(java.util.function.LongFunction<Observation> at) {
+        return at.apply(++tick);
+    }
+
     public long currentTick() {
         return tick;
     }
