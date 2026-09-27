@@ -9,9 +9,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.awt.Point;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -41,20 +43,29 @@ public class ObservationDecoder {
     private final Set<Integer> vanishing = new HashSet<>();
 
     /**
-     * Stands in for a packet that only repeats what an earlier one said. Compared by
-     * identity and never handed out, so what type it borrows does not matter.
+     * Stands in for a packet that says nothing happened: one that only repeats an earlier
+     * one, or an update with nothing in it. Compared by identity and never handed out, so
+     * what type it borrows does not matter.
      */
-    private static final Observation ALREADY_SAID = new Observation.NoticeShown(-1, "");
+    private static final Observation NOTHING_NEW = new Observation.NoticeShown(-1, "");
 
     /**
-     * @return what the packet says, or null when it only repeats the one before it - which
-     *         is not something that happened, and so is not an observation at all
+     * A second observation carried by the same packet, waiting to be handed out with its own
+     * tick. Entering the world is the case: one packet describes both the character and
+     * everything it is carrying.
+     */
+    private java.util.function.LongFunction<Observation> followUp;
+
+    /**
+     * @return what the packet says, or null when it says nothing happened - an empty update,
+     *         or one only repeating the one before it - which is not an observation at all
      */
     public Observation decode(long tick, int opcode, InPacket p) {
         int available = p.available();
+        followUp = null;
         try {
             Observation observation = decodeKnown(tick, opcode, p);
-            if (observation == ALREADY_SAID) {
+            if (observation == NOTHING_NEW) {
                 return null;
             }
             return observation != null ? observation : unrecognised(tick, opcode, available);
@@ -62,6 +73,17 @@ public class ObservationDecoder {
             log.debug("Failed to decode {} ({} bytes)", Opcodes.describe(opcode), available, e);
             return unrecognised(tick, opcode, available);
         }
+    }
+
+    /** Whether the last packet decoded said a second thing, to be taken with {@link #takeFollowUp}. */
+    public boolean hasFollowUp() {
+        return followUp != null;
+    }
+
+    public Observation takeFollowUp(long tick) {
+        Observation observation = followUp.apply(tick);
+        followUp = null;
+        return observation;
     }
 
     private static Observation unrecognised(long tick, int opcode, int bytes) {
@@ -104,6 +126,9 @@ public class ObservationDecoder {
         }
         if (opcode == SendOpcode.REMOVE_ITEM_FROM_MAP.getValue()) {
             return decodeDropRemoved(tick, p);
+        }
+        if (opcode == SendOpcode.INVENTORY_OPERATION.getValue()) {
+            return decodeInventoryOperation(tick, p);
         }
         if (opcode == SendOpcode.SHOW_MONSTER_HP.getValue()) {
             return new Observation.MonsterHurt(tick, p.readInt(), p.readUnsignedByte());
@@ -158,9 +183,62 @@ public class ObservationDecoder {
         p.readLong();                                   // -1
         p.readByte();
         ServerPackets.CharacterSummary self = ServerPackets.decodeCharacterStats(p);
-        return new Observation.SelfDescribed(tick, self.id(), self.name(), self.level(),
-                self.job(), self.mapId(), self.spawnPoint(), self.stats());
+        Observation described = new Observation.SelfDescribed(tick, self.id(), self.name(),
+                self.level(), self.job(), self.mapId(), self.spawnPoint(), self.stats());
+
+        // What it is carrying follows. Read separately so that a bag this cannot read still
+        // leaves the agent knowing who it is.
+        try {
+            p.readByte();                               // buddy list capacity
+            if (p.readByte() != 0) {
+                p.readString();                         // linked character's name
+            }
+            int meso = p.readInt();
+            ItemReader.Bags bags = ItemReader.readBags(p);
+            Map<Integer, Integer> limits = new LinkedHashMap<>();
+            for (int type = Item.EQUIP; type <= Item.CASH; type++) {
+                limits.put(type, bags.slotLimits()[type]);
+            }
+            followUp = at -> new Observation.InventoryShown(at, meso, Map.copyOf(limits), bags.items());
+        } catch (RuntimeException e) {
+            log.debug("Could not read the bags on entering the world", e);
+        }
+        return described;
     }
+
+    /**
+     * Changes to what the agent carries or wears: something added, a stack changing size,
+     * something moved - which is how equipping looks - or something gone. An update with no
+     * changes is the server letting the client act again, and says nothing.
+     *
+     * @see tools.PacketCreator#modifyInventory
+     */
+    private Observation decodeInventoryOperation(long tick, InPacket p) {
+        p.readByte();                                   // whether to update the client's clock
+        int count = p.readUnsignedByte();
+        List<Observation.InventoryChanged.Change> changes = new ArrayList<>();
+        for (int i = 0; i < count; i++) {
+            int mode = p.readUnsignedByte();
+            int type = p.readUnsignedByte();
+            int slot = p.readShort();
+            changes.add(switch (mode) {
+                case INVENTORY_ADD -> Observation.InventoryChanged.Change.added(
+                        ItemReader.read(p, type, slot));
+                case INVENTORY_QUANTITY -> Observation.InventoryChanged.Change.resized(
+                        type, slot, p.readShort());
+                case INVENTORY_MOVE -> Observation.InventoryChanged.Change.moved(
+                        type, slot, p.readShort());
+                case INVENTORY_REMOVE -> Observation.InventoryChanged.Change.removed(type, slot);
+                default -> throw new IllegalStateException("inventory change mode " + mode);
+            });
+        }
+        return changes.isEmpty() ? NOTHING_NEW : new Observation.InventoryChanged(tick, List.copyOf(changes));
+    }
+
+    private static final int INVENTORY_ADD = 0;
+    private static final int INVENTORY_QUANTITY = 1;
+    private static final int INVENTORY_MOVE = 2;
+    private static final int INVENTORY_REMOVE = 3;
 
     /**
      * The stats present are named by a bit mask, and each is written at a width that depends
@@ -183,7 +261,10 @@ public class ObservationDecoder {
             }
             stats.put(stat.name(), readStatValue(p, stat));
         }
-        return new Observation.StatsChanged(tick, Map.copyOf(stats));
+        // Most stat updates carry no stats at all: the server sends an empty one to let the
+        // client act again after almost anything. They were 128 of the 208 stat changes in a
+        // run, each one an episode saying nothing.
+        return stats.isEmpty() ? NOTHING_NEW : new Observation.StatsChanged(tick, Map.copyOf(stats));
     }
 
     private int readStatValue(InPacket p, Stat stat) {
@@ -297,7 +378,7 @@ public class ObservationDecoder {
             vanishing.add(objectId);
             return new Observation.MonsterVanished(tick, objectId);
         }
-        return vanishing.remove(objectId) ? ALREADY_SAID : new Observation.MonsterDied(tick, objectId);
+        return vanishing.remove(objectId) ? NOTHING_NEW : new Observation.MonsterDied(tick, objectId);
     }
 
     private static final int KILL_DISAPPEAR = 0;

@@ -4,6 +4,7 @@ import agents.percept.Observation;
 import org.junit.jupiter.api.Test;
 
 import java.awt.Point;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -138,6 +139,19 @@ class WorldModelTest {
         world.update(new Observation.StatsChanged(1, Map.of("HP", 0)));
 
         assertTrue(world.isDead());
+    }
+
+    /** A full etc bag is no reason to walk past a potion, nor past money. */
+    @Test
+    void onlyReachesForDropsThereIsRoomFor() {
+        world.update(new Observation.InventoryShown(1, 0, Map.of(1, 24, 2, 24, 3, 24, 4, 1, 5, 24),
+                List.of(new agents.percept.Item(4, 1, 4000019, 1, null))));
+        world.movedTo(new Point(0, 0));
+        world.update(new Observation.DropAppeared(2, 700, 4000000, false, new Point(10, 0)));
+        world.update(new Observation.DropAppeared(3, 701, 2000000, false, new Point(50, 0)));
+
+        assertEquals(701, world.nearestDropWorthTaking(4).orElseThrow().objectId());
+        assertTrue(world.inventoryFull(4));
     }
 
     @Test

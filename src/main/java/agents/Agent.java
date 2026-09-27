@@ -223,7 +223,7 @@ public class Agent implements Runnable {
 
     /** What the agent's equipment soaks up when something hits it. */
     private int defence() {
-        return 0;
+        return world.inventory().wornDefence();
     }
 
     /**

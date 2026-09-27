@@ -98,6 +98,43 @@ public sealed interface Observation {
     record TouchedBy(long tick, int objectId, int monsterId, int damage) implements Observation {
     }
 
+    /**
+     * Everything the agent carries and wears, and how big each bag is, as it enters the
+     * world. {@code slotLimits} is keyed by bag, as {@link Item#type()}.
+     */
+    record InventoryShown(long tick, int meso, Map<Integer, Integer> slotLimits,
+                          java.util.List<Item> items) implements Observation {
+    }
+
+    /** What the agent carries or wears changed. */
+    record InventoryChanged(long tick, java.util.List<Change> changes) implements Observation {
+
+        /**
+         * One change. Moving something to a negative slot is putting it on, and from one is
+         * taking it off - the server has no separate message for either.
+         */
+        public record Change(Kind kind, int type, int slot, int toSlot, int quantity, Item item) {
+
+            public enum Kind { ADDED, RESIZED, MOVED, REMOVED }
+
+            public static Change added(Item item) {
+                return new Change(Kind.ADDED, item.type(), item.slot(), item.slot(), item.quantity(), item);
+            }
+
+            public static Change resized(int type, int slot, int quantity) {
+                return new Change(Kind.RESIZED, type, slot, slot, quantity, null);
+            }
+
+            public static Change moved(int type, int from, int to) {
+                return new Change(Kind.MOVED, type, from, to, 0, null);
+            }
+
+            public static Change removed(int type, int slot) {
+                return new Change(Kind.REMOVED, type, slot, slot, 0, null);
+            }
+        }
+    }
+
     /** Somebody else in the map was hurt, by how much, and by what kind of monster (0 if none). */
     record PlayerHurt(long tick, int characterId, int damage, int monsterId) implements Observation {
     }

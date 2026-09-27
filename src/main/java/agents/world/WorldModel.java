@@ -1,5 +1,6 @@
 package agents.world;
 
+import agents.percept.Item;
 import agents.percept.Observation;
 
 import java.awt.Point;
@@ -39,6 +40,9 @@ public class WorldModel {
     private final Map<Integer, Entity> npcs = new LinkedHashMap<>();
     private final Map<Integer, Entity> drops = new LinkedHashMap<>();
     private final Map<Integer, String> players = new HashMap<>();
+
+    /** Not cleared on leaving a map, unlike everything else here: a bag goes where you go. */
+    private final Inventory inventory = new Inventory();
     private final Map<Integer, Point> positions = new HashMap<>();
 
     private int mapId = -1;
@@ -65,6 +69,7 @@ public class WorldModel {
     }
 
     public void update(Observation observation) {
+        inventory.update(observation);
         switch (observation) {
             case Observation.SelfDescribed self -> {
                 enterMap(self.mapId(), self.spawnPoint());
@@ -209,12 +214,36 @@ public class WorldModel {
         boolean full = inventoryFullAt >= 0 && tick - inventoryFullAt < FULL_FOR_TICKS;
         return full
                 ? nearest(drops.values().stream().filter(d -> mesoDrops.contains(d.objectId())).toList())
-                : nearest(drops.values());
+                : nearest(drops.values().stream().filter(this::roomFor).toList());
     }
 
-    /** Whether the server said the bag was full within the last while. */
+    /**
+     * Whether there is room for this drop, once the bags are known: money always fits, and
+     * anything else fits if the bag it goes in has a free slot. A full etc bag is no reason
+     * to walk past a potion.
+     */
+    private boolean roomFor(Entity drop) {
+        return mesoDrops.contains(drop.objectId())
+                || !inventory.known()
+                || !inventory.isFull(Item.typeOf(drop.typeId()));
+    }
+
+    /** Whether the server said the bag was full within the last while, or the bags are. */
     public boolean inventoryFull(long tick) {
-        return inventoryFullAt >= 0 && tick - inventoryFullAt < FULL_FOR_TICKS;
+        return (inventoryFullAt >= 0 && tick - inventoryFullAt < FULL_FOR_TICKS)
+                || inventory.anyBagFull();
+    }
+
+    /**
+     * Forgets being told the bag was full, once room has been made - by selling, say - so
+     * the agent goes back to picking things up straight away rather than in ten minutes.
+     */
+    public void madeRoom() {
+        inventoryFullAt = -1;
+    }
+
+    public Inventory inventory() {
+        return inventory;
     }
 
     /** Ten minutes at a 600ms tick before trying an item again. */
