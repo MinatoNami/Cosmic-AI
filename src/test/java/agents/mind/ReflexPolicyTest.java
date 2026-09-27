@@ -1123,4 +1123,25 @@ class ReflexPolicyTest {
 
         assertEquals(Optional.empty(), wanderer.destination());
     }
+
+    /** With nothing better to do, the last resort used to be any door that works - including into the tunnel. */
+    @Test
+    void neverTakesADoorIntoSomewhereThatKeepsKillingIt() {
+        aJunction();
+        mind.saw(KnownWorld.mapRef(30000), "has_door", "south00", 4);
+        mind.infer(KnownWorld.portalRef(30000, "north00"), "leads_to", KnownWorld.mapRef(10000), 4);
+        mind.infer(KnownWorld.portalRef(30000, "south00"), "leads_to", KnownWorld.mapRef(10000), 4);
+        mind.take(new Observation.StatsChanged(4, Map.of("LEVEL", 18)));
+        mind.saw(KnownWorld.mapRef(30000), "killed_you_at_level", "18", 4);
+        mind.take(new Observation.MapEntered(5, 10000, 0));     // a second death, another moment
+        mind.saw(KnownWorld.mapRef(30000), "killed_you_at_level", "18", 5);
+        world.update(new Observation.MapEntered(6, 10000, 0));
+        world.update(new Observation.StatsChanged(6, Map.of("LEVEL", 18, "HP", 290, "MAXHP", 295)));
+        ReflexPolicy wanderer = new ReflexPolicy(new Random(1), Disposition.WANDERER);
+        wanderer.decide(mind, world, 7);
+        wanderer.cameInAt(new Point(-500, 0));
+
+        assertEquals("west00", wanderer.pickDoor(JUNCTION_DOORS, mind, 10000, "player:1").name(),
+                "east00 leads into the map that killed it twice");
+    }
 }

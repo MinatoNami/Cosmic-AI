@@ -1291,6 +1291,12 @@ public class ReflexPolicy implements Policy {
             if (leadsTo.filter(NOWHERE::equals).isPresent()) {
                 continue;       // tried it, nothing happened, not trying it again
             }
+            // Nor into somewhere that keeps killing it, by any tier. Routing avoided it and the
+            // last resort did not: with nothing better to do, the agent took the door it had
+            // died beyond twelve times, and died there twice more.
+            if (leadsTo.filter(killingGrounds::contains).isPresent()) {
+                continue;
+            }
             worthTrying.add(portal);
             // Somewhere new is tested before company, so a door that is both counts as new.
             // The other way round, a companion standing in a map this agent had never seen
