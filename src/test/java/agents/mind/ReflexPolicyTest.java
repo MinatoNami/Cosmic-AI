@@ -1201,4 +1201,28 @@ class ReflexPolicyTest {
 
         assertEquals(1012000, assertInstanceOf(Intent.TalkTo.class, intent).npcId());
     }
+
+    /** Nothing worth going to, so any door will do - but not the one it just came through. */
+    @Test
+    void theLastResortDoesNotGoStraightBack() {
+        // Made-up maps with nothing in Map.wz, so no doors are seen but the ones given here.
+        int hub = 990000001, before = 990000002, other = 990000003;
+        mind.take(new Observation.MapEntered(1, before, 0));
+        mind.take(new Observation.MapEntered(2, other, 0));
+        mind.take(new Observation.MapEntered(3, hub, 0));
+        for (String door : new String[]{"west00", "east00"}) {
+            mind.saw(KnownWorld.mapRef(hub), "has_door", door, 4);
+        }
+        mind.infer(KnownWorld.portalRef(hub, "west00"), "leads_to", KnownWorld.mapRef(before), 4);
+        mind.infer(KnownWorld.portalRef(hub, "east00"), "leads_to", KnownWorld.mapRef(other), 4);
+        ReflexPolicy wanderer = new ReflexPolicy(new Random(1), Disposition.WANDERER);
+        world.update(new Observation.MapEntered(5, before, 0));
+        wanderer.decide(mind, world, 5);
+        world.update(new Observation.MapEntered(6, hub, 0));       // came in from `before`
+        wanderer.decide(mind, world, 6);
+        wanderer.cameInAt(new Point(500, 0));                       // beside east00, so "onward" alone says west
+
+        assertEquals("east00", wanderer.pickDoor(JUNCTION_DOORS, mind, hub, "player:1").name(),
+                "west00 goes straight back to where it just came from");
+    }
 }

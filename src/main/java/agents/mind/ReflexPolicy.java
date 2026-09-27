@@ -404,6 +404,7 @@ public class ReflexPolicy implements Policy {
                 mind.infer(worked, "leads_to", "map:" + world.mapId(), tick);
                 doorsAwaitingVerdict.clear();
             }
+            cameFrom = lastMapId >= 0 ? KnownWorld.mapRef(lastMapId) : null;
             lastMapId = world.mapId();
             decisionsHere = 0;
             wanderingTo = null;         // somewhere in the last map means nothing here
@@ -1419,6 +1420,17 @@ public class ReflexPolicy implements Policy {
                 .toList();
         List<WorldModel.PortalTarget> lastResort =
                 notBackIntoARoom.isEmpty() ? worthTrying : notBackIntoARoom;
+        // And not straight back the way it came, while there is any other way. With nothing
+        // worth going to, the last resort took the door it had just come through, and then did
+        // the same from the other side: Sleepywood and the room beside it, back and forth.
+        List<WorldModel.PortalTarget> notBack = lastResort.stream()
+                .filter(portal -> cameFrom == null || !known
+                        .destinationOf(KnownWorld.portalRef(mapId, portal.name()))
+                        .map(cameFrom::equals).orElse(false))
+                .toList();
+        if (!notBack.isEmpty()) {
+            lastResort = notBack;
+        }
         List<WorldModel.PortalTarget> preferred = !towardsSomewhereNew.isEmpty()
                 ? towardsSomewhereNew
                 : !lastResort.isEmpty() ? lastResort : towardsCompany;
@@ -1503,6 +1515,9 @@ public class ReflexPolicy implements Policy {
         }
         return portals.stream().filter(portal -> portal.name().equals(hop.firstDoor())).findFirst();
     }
+
+    /** The map it was in before this one, so the last resort does not simply go back. */
+    private String cameFrom;
 
     /** Maps not to pass through, as of this decision. */
     private Set<String> killingGrounds = Set.of();
