@@ -21,11 +21,10 @@ import java.util.List;
  * survives being read by anything that can split a string. A JSON document would need a
  * parser the project does not have and does not want to add for this.
  *
- * Episodes are written in full rather than only the ones a belief cites. Both episode and
- * belief ids are positions in a list, so a sparse restore would not fail - it would quietly
- * point a belief's evidence at somebody else's episode. That makes the file grow with the
- * agent's whole life, which is the same unbounded growth {@link EpisodicMemory} already
- * carries and the same place it will have to be solved.
+ * Episodes are written with their ids and restored under them, so a mind that has let go of
+ * old episodes ({@link EpisodicMemory#forgetAllBut}) saves and loads with gaps rather than
+ * with every later episode shifted onto an earlier one's id. Minds saved before that wrote
+ * every episode in order, and read back exactly as they did.
  *
  * Writes go to a sibling temporary file and are moved into place, so a process dying
  * mid-save leaves the previous mind intact rather than half of two.
@@ -110,7 +109,7 @@ public final class MindSnapshot {
                         tick = Long.parseLong(f[3]);
                     }
                     case "e" -> {
-                        episodic.restore(Long.parseLong(f[2]), plain(f[3]), plain(f[4]));
+                        episodic.restore(Long.parseLong(f[1]), Long.parseLong(f[2]), plain(f[3]), plain(f[4]));
                         episodes++;
                     }
                     case "b" -> {

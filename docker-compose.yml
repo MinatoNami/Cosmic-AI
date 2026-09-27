@@ -41,6 +41,10 @@ services:
       AGENTS_UI: /opt/server/viz
       # The local model lives on somebody's laptop, not in this network. Set it in .env.
       LMSTUDIO_URL: "${LMSTUDIO_URL:-}"
+      # Left to itself the JVM takes a quarter of the machine, 4GB here, and three agents'
+      # minds filled it: the daemon spent its time collecting garbage and took 28s to answer
+      # a status request. Minds are now bounded, so this is headroom, not a fix.
+      JAVA_TOOL_OPTIONS: "${AGENTS_JAVA_OPTS:--Xmx8g}"
     env_file:
       - ./.env
     ports:

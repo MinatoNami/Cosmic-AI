@@ -68,6 +68,9 @@ public class Mind implements AutoCloseable {
     public void take(Observation observation) {
         Episode episode = episodic.record(observation);
         trace.observed(episode);
+        if (episode.id() % COMPACT_EVERY == 0) {
+            forgetWhatNothingRestsOn();
+        }
 
         // Concluded rather than restated, and kept apart from restatement so a replay can
         // always tell which is which. These arrive as INFERRED, which the confidence curve
@@ -159,10 +162,10 @@ public class Mind implements AutoCloseable {
 
     private void assertWithProvenance(String subject, String predicate, String object, long tick,
                                       Belief.Provenance provenance) {
-        if (episodic.size() == 0) {
+        if (episodic.isEmpty()) {
             return;     // nothing perceived yet, so nothing to hang it on
         }
-        long latestEpisode = episodic.size() - 1;
+        long latestEpisode = episodic.latestId();
         SemanticMemory.Assertion assertion = semantic.assertTriple(subject, predicate, object,
                 latestEpisode, tick, provenance);
 
@@ -236,7 +239,35 @@ public class Mind implements AutoCloseable {
      *             restarting and putting new events before old ones
      */
     public void save(Path path, long tick) {
+        forgetWhatNothingRestsOn();
         MindSnapshot.save(path, name, tick, episodic, semantic);
+    }
+
+    /** How many recent episodes are kept whatever cites them: the last few minutes of life. */
+    public static final int RECENT_EPISODES = 20_000;
+
+    /** How often, in episodes, to let go of what nothing rests on. */
+    private static final int COMPACT_EVERY = 5_000;
+
+    /**
+     * Lets go of the episodes no belief rests on, keeping the recent past.
+     *
+     * Kept: all the evidence behind what it currently believes; the first sighting behind
+     * each thing it used to believe, so a revised belief still names where it came from; and
+     * the last {@link #RECENT_EPISODES}. Everything else is in the trace.
+     *
+     * @return how many episodes were let go
+     */
+    public int forgetWhatNothingRestsOn() {
+        java.util.Set<Long> cited = new java.util.HashSet<>();
+        for (Belief belief : semantic.all()) {
+            if (belief.isLive()) {
+                cited.addAll(belief.supportedBy());
+            } else {
+                cited.add(belief.supportedBy().get(0));
+            }
+        }
+        return episodic.forgetAllBut(cited, RECENT_EPISODES);
     }
 
     /**
@@ -254,6 +285,13 @@ public class Mind implements AutoCloseable {
             return 0;
         }
         trace.resumed(restored.tick(), restored.episodes(), restored.beliefs());
+        // Minds saved before episodes were ever let go of carry their whole life. Shed it on
+        // waking, before anything else is done with them.
+        int forgotten = forgetWhatNothingRestsOn();
+        if (forgotten > 0) {
+            org.slf4j.LoggerFactory.getLogger(Mind.class).info(
+                    "{} let go of {} old episodes on waking, keeping {}", name, forgotten, episodic.size());
+        }
         mapsBeenIn = null;      // rebuilt from what was just restored, when next needed
         for (Belief belief : semantic.all()) {
             trace.carried(belief);

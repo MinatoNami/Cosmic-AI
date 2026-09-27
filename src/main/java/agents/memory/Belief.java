@@ -48,7 +48,29 @@ public record Belief(long id,
         if (supportedBy == null || supportedBy.isEmpty()) {
             throw new IllegalArgumentException("A belief must name the evidence it rests on");
         }
-        supportedBy = List.copyOf(supportedBy);
+        supportedBy = List.copyOf(keptEvidence(supportedBy));
+    }
+
+    /**
+     * How many episodes a belief keeps as its evidence: the first few, because a first
+     * encounter is the one worth being able to walk back to, and the latest.
+     *
+     * It kept every one. An agent's own map was corroborated on every step it took, so single
+     * beliefs carried hundreds of thousands of episode ids, every corroboration wrote the whole
+     * list to the trace again, and the minds grew to 780MB until the daemon ran out of heap.
+     * Sixteen is exactly enough: confidence stops rising at 0.99 by the sixteenth sighting
+     * even for hearsay, so no belief is any less sure than it would have been.
+     */
+    public static final int EVIDENCE_KEPT = 16;
+    private static final int EVIDENCE_FIRST = 4;
+
+    private static List<Long> keptEvidence(List<Long> all) {
+        if (all.size() <= EVIDENCE_KEPT) {
+            return all;
+        }
+        List<Long> kept = new java.util.ArrayList<>(all.subList(0, EVIDENCE_FIRST));
+        kept.addAll(all.subList(all.size() - (EVIDENCE_KEPT - EVIDENCE_FIRST), all.size()));
+        return kept;
     }
 
     public String ref() {
