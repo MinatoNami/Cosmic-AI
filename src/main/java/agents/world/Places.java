@@ -38,8 +38,16 @@ public final class Places {
      */
     public record Weights(double unopenedDoor, double stranger, double worthHearingAgain,
                           double errand, double shop, double hunting, double neverBeen,
-                          double novelty, double perHop, double spentRoom, double justBeenFor) {
+                          double novelty, double perHop, double spentRoom, double justBeenFor,
+                          double danger) {
         // justBeenFor is a share, not an amount: 1 wipes out a place's reasons on arrival.
+
+        public Weights(double unopenedDoor, double stranger, double worthHearingAgain,
+                       double errand, double shop, double hunting, double neverBeen,
+                       double novelty, double perHop, double spentRoom, double justBeenFor) {
+            this(unopenedDoor, stranger, worthHearingAgain, errand, shop, hunting, neverBeen,
+                    novelty, perHop, spentRoom, justBeenFor, 2.0);
+        }
     }
 
     /**
@@ -58,12 +66,19 @@ public final class Places {
      */
     public record Facts(String here, Map<String, Integer> visits, String errandMap,
                         Set<String> hearAgain, Set<String> avoid, Map<String, Double> justBeenFor,
-                        Set<String> shopMaps, String sentTo, String sentWhy) {
+                        Set<String> shopMaps, String sentTo, String sentWhy,
+                        Map<String, Integer> deaths) {
 
         public Facts(String here, Map<String, Integer> visits, String errandMap,
                      Set<String> hearAgain, Set<String> avoid, Map<String, Double> justBeenFor,
                      Set<String> shopMaps) {
-            this(here, visits, errandMap, hearAgain, avoid, justBeenFor, shopMaps, null, null);
+            this(here, visits, errandMap, hearAgain, avoid, justBeenFor, shopMaps, null, null, Map.of());
+        }
+
+        public Facts(String here, Map<String, Integer> visits, String errandMap,
+                     Set<String> hearAgain, Set<String> avoid, Map<String, Double> justBeenFor,
+                     Set<String> shopMaps, String sentTo, String sentWhy) {
+            this(here, visits, errandMap, hearAgain, avoid, justBeenFor, shopMaps, sentTo, sentWhy, Map.of());
         }
     }
 
@@ -149,6 +164,14 @@ public final class Places {
             if (sent) {
                 value += w.errand();
                 reasons.add(0, facts.sentWhy() == null ? "somewhere you were sent" : facts.sentWhy());
+            }
+            // Somewhere that killed it at about this level is somewhere to stay out of. Two
+            // deaths outweigh most reasons to go, so it is not even offered; as the agent grows
+            // past the level it died at, the deaths stop counting.
+            int died = facts.deaths().getOrDefault(map, 0);
+            if (died > 0) {
+                value -= w.danger() * died;
+                reasons.add("you died there " + (died == 1 ? "once" : died + " times"));
             }
             value += w.novelty() / Math.sqrt(1 + visits);
             value -= w.perHop() * hop.hops();

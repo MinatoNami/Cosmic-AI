@@ -348,6 +348,12 @@ public class Agent implements Runnable {
     private void awaitRevival() {
         if (deadFor++ == 0) {
             log.info("{} died in map {}", mind.name(), world.mapId());
+            // First-hand, and at the level it happened: a map that killed a level-8 character
+            // three times is somewhere to stay out of until it has grown, not for ever.
+            if (world.mapId() > 0 && world.level() > 0) {
+                mind.saw("map:" + world.mapId(), "killed_you_at_level", String.valueOf(world.level()),
+                        perceiver.currentTick());
+            }
         }
         if (deadFor == REVIVE_AFTER_STEPS) {
             connection.session().send(ClientPackets.revive());

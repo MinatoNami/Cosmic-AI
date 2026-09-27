@@ -455,9 +455,12 @@ public class ReflexPolicy implements Policy {
         unfinishedBusiness(choices, world, self, unfinished);
         someoneToTalkTo(choices, world, mind, self);
         somewhereToSell(choices, world, mind, self, tick);
+        deathsHere = deathsNearLevel(mind, world.level())
+                .getOrDefault(KnownWorld.mapRef(world.mapId()), 0);
         awayOutOfHere(choices, world, mind, self, stale);
         choices.add(new Choice("wander", new Intent.MoveTo(wanderTarget(world, self)),
                 "wander", WANDERING_IS_BETTER_THAN_NOTHING, null));
+        backOffWhenHurt(choices, world, self);
 
         ageUrges();
 
@@ -1112,7 +1115,9 @@ public class ReflexPolicy implements Policy {
                 // The model looked at every place the agent could go and picked one. That is a
                 // decision about the next few minutes, and letting the nearest snail outvote it
                 // made the model's choices lean rather than decide.
-                + (destinationFromModel && destination != null ? COMMITTED : 0);
+                + (destinationFromModel && destination != null ? COMMITTED : 0)
+                // A map that has killed it twice at about this level is a map to get out of.
+                + (deathsHere >= 2 ? LEAVE_A_KILLING_GROUND : 0);
 
         if (door.position().distance(self) < PORTAL_RANGE) {
             choices.add(new Choice("door",
@@ -1450,7 +1455,8 @@ public class ReflexPolicy implements Policy {
         Set<String> avoid = new HashSet<>(strandedBy(mind));
         avoid.addAll(doesNotAnswer(mind));
         Places.Facts facts = new Places.Facts(here, visitsTo(mind), errandMap,
-                worthHearingAgain(known), avoid, justBeen, shopMaps, sentMap, sentWhy);
+                worthHearingAgain(known), avoid, justBeen, shopMaps, sentMap, sentWhy,
+                deathsNearLevel(mind, levelOf(mind)));
         return Places.worthGoing(known, facts, weights(seekingACalling(mind)));
     }
 
@@ -1504,6 +1510,95 @@ public class ReflexPolicy implements Policy {
         }
         return "0".equals(job) && level >= 10;
     }
+
+    /** How many times the map it is in has killed it at about its level. */
+    private int deathsHere;
+
+    private static final double LEAVE_A_KILLING_GROUND = 1.5;
+
+    /** Deaths that still count: within this many levels of where it is now. */
+    private static final int DEATHS_COUNT_FOR = 5;
+
+    /**
+     * How many times each map has killed it at about the level it is now.
+     *
+     * Read from what it saw of its own deaths - "map:M killed_you_at_level 18" - so a map that
+     * killed it as a level-8 beginner stops counting once it is level 13.
+     */
+    private static Map<String, Integer> deathsNearLevel(Mind mind, int level) {
+        Map<String, Integer> deaths = new HashMap<>();
+        if (level <= 0) {
+            return deaths;
+        }
+        for (Belief belief : mind.semantic().liveBeliefs()) {
+            if (!belief.predicate().equals("killed_you_at_level")) {
+                continue;
+            }
+            try {
+                int at = Integer.parseInt(belief.object());
+                if (level - at < DEATHS_COUNT_FOR) {
+                    deaths.merge(belief.subject(), belief.supportedBy().size(), Integer::sum);
+                }
+            } catch (NumberFormatException ignored) {
+                // not a level
+            }
+        }
+        return deaths;
+    }
+
+    private static int levelOf(Mind mind) {
+        for (Belief belief : mind.semantic().liveBeliefs()) {
+            if (belief.subject().equals("self") && belief.predicate().equals("level")) {
+                try {
+                    return Integer.parseInt(belief.object());
+                } catch (NumberFormatException ignored) {
+                    return 0;
+                }
+            }
+        }
+        return 0;
+    }
+
+    /** Below this share of health with nothing to drink, it stops picking fights. */
+    static final double HURT = 0.35;
+
+    /** Below this it backs off even with something to drink, and lets the drinking catch up. */
+    static final double BADLY_HURT = 0.2;
+
+    /**
+     * Stops fighting and backs away when hurt with nothing to heal with.
+     *
+     * Six deaths in two hours, all of them the same way: an agent at a fifth of its health,
+     * carrying nothing to drink, walking up to the next monster because fighting was the
+     * best-scoring thing in sight. Health comes back on its own to a character left alone,
+     * so the thing to do is to be left alone: away from whatever is nearest, or, with nothing
+     * near, standing still.
+     */
+    private void backOffWhenHurt(List<Choice> choices, WorldModel world, Point self) {
+        if (world.hp() < 0 || world.maxHp() <= 0) {
+            return;
+        }
+        double health = (double) world.hp() / world.maxHp();
+        boolean nothingToDrink = world.inventory().known() && world.inventory().carried(agents.percept.Item.USE)
+                .stream().noneMatch(item -> Survival.isDrinkable(item.itemId()));
+        if (!(health < BADLY_HURT || (health < HURT && nothingToDrink))) {
+            return;
+        }
+        choices.removeIf(choice -> choice.kind().equals("fight") || choice.kind().equals("loot"));
+        Optional<WorldModel.Entity> threat = world.nearestMonster()
+                .filter(monster -> monster.position().distance(self) < THREAT_RANGE);
+        if (threat.isPresent()) {
+            int away = self.x >= threat.get().position().x ? 1 : -1;
+            choices.add(new Choice("recover",
+                    new Intent.MoveTo(new Point(self.x + away * THREAT_RANGE, self.y)),
+                    "back away from what is hurting me", RECOVER, null));
+        } else {
+            choices.add(new Choice("recover", new Intent.Wait(), "catch my breath", RECOVER, null));
+        }
+    }
+
+    private static final int THREAT_RANGE = 300;
+    private static final double RECOVER = 2.5;
 
     /** How many times this agent has walked into each map, counting every arrival. */
     private static Map<String, Integer> visitsTo(Mind mind) {

@@ -1051,4 +1051,42 @@ class ReflexPolicyTest {
         assertEquals("east00", policy.pickDoor(JUNCTION_DOORS, mind, 10000, "player:1").name(),
                 "it has spoken to its trainer since reaching 30, so the unopened door wins");
     }
+
+    private WorldModel hurt(int hp, int maxHp, boolean potions) {
+        world.update(new Observation.StatsChanged(2, Map.of("HP", hp, "MAXHP", maxHp)));
+        world.update(new Observation.InventoryShown(2, 0, Map.of(1, 24, 2, 24, 3, 24, 4, 24, 5, 24),
+                potions ? List.of(new agents.percept.Item(2, 1, 2000000, 5, null)) : List.of()));
+        world.update(new Observation.MonsterAppeared(3, 9001, 100100, new Point(20, 0)));
+        return world;
+    }
+
+    /** Six deaths in two hours: at a fifth of its health, with nothing to drink, it went on fighting. */
+    @Test
+    void backsAwayWhenHurtWithNothingToDrink() {
+        hurt(30, 150, false);
+        ReflexPolicy fighter = new ReflexPolicy(new Random(1), Disposition.FIGHTER);
+
+        Policy.Decision decision = fighter.decide(mind, world, 4);
+
+        assertFalse(decision.intent() instanceof Intent.Attack, "hit a monster at 30/150 with nothing to drink");
+        Point to = assertInstanceOf(Intent.MoveTo.class, decision.intent()).destination();
+        assertTrue(to.x < 0, "backed towards the monster rather than away: " + to);
+    }
+
+    /** With a potion in the bag and health not yet dire, drinking is Survival's job and fighting goes on. */
+    @Test
+    void keepsFightingWhenItHasSomethingToDrink() {
+        hurt(45, 150, true);
+        ReflexPolicy fighter = new ReflexPolicy(new Random(1), Disposition.FIGHTER);
+
+        assertInstanceOf(Intent.Attack.class, fighter.decide(mind, world, 4).intent());
+    }
+
+    @Test
+    void backsOffWhenBadlyHurtEvenWithSomethingToDrink() {
+        hurt(20, 150, true);
+        ReflexPolicy fighter = new ReflexPolicy(new Random(1), Disposition.FIGHTER);
+
+        assertFalse(fighter.decide(mind, world, 4).intent() instanceof Intent.Attack);
+    }
 }

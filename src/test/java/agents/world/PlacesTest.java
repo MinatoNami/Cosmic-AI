@@ -125,4 +125,18 @@ class PlacesTest {
 
         assertEquals("map:2, 1 door away: somebody you have never spoken to, been 3 times", line);
     }
+
+    /** Somewhere that killed it twice at about this level is not somewhere to go. */
+    @Test
+    void aMapThatKeepsKillingItIsNotOffered() {
+        believe("map:2", "has_door", "north00");
+        believe("map:3", "has_door", "north00");
+
+        List<Places.Place> places = Places.worthGoing(KnownWorld.rememberedBy(memory.liveBeliefs()),
+                new Places.Facts("map:1", visits, null, Set.of(), Set.of(), Map.of(), Set.of(), null, null,
+                        Map.of("map:2", 2)), WEIGHTS);
+
+        assertEquals(List.of("map:3"), places.stream().map(Places.Place::map).toList(),
+                "map:2 has an unopened door, and it died there twice");
+    }
 }
