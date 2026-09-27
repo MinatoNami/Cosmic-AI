@@ -127,6 +127,9 @@ public class ObservationDecoder {
         if (opcode == SendOpcode.REMOVE_ITEM_FROM_MAP.getValue()) {
             return decodeDropRemoved(tick, p);
         }
+        if (opcode == SendOpcode.KEYMAP.getValue()) {
+            return decodeKeymap(tick, p);
+        }
         if (opcode == SendOpcode.INVENTORY_OPERATION.getValue()) {
             return decodeInventoryOperation(tick, p);
         }
@@ -234,6 +237,26 @@ public class ObservationDecoder {
         }
         return changes.isEmpty() ? NOTHING_NEW : new Observation.InventoryChanged(tick, List.copyOf(changes));
     }
+
+    /**
+     * Ninety keys in order, each a kind and an action, unbound ones written as zeroes.
+     *
+     * @see tools.PacketCreator#getKeymap
+     */
+    private Observation decodeKeymap(long tick, InPacket p) {
+        p.readByte();
+        Map<Integer, Observation.KeysBound.Binding> keys = new LinkedHashMap<>();
+        for (int key = 0; key < KEYS; key++) {
+            int type = p.readUnsignedByte();
+            int action = p.readInt();
+            if (type != 0 || action != 0) {
+                keys.put(key, new Observation.KeysBound.Binding(type, action));
+            }
+        }
+        return new Observation.KeysBound(tick, Map.copyOf(keys));
+    }
+
+    private static final int KEYS = 90;
 
     private static final int INVENTORY_ADD = 0;
     private static final int INVENTORY_QUANTITY = 1;

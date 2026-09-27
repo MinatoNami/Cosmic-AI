@@ -135,6 +135,17 @@ public sealed interface Observation {
         }
     }
 
+    /**
+     * What each key on the agent's keyboard does, as the server stores it for the character.
+     * Sent once on entering the world; changes after that are the agent's own doing.
+     */
+    record KeysBound(long tick, Map<Integer, Binding> keys) implements Observation {
+
+        /** What a key is bound to: a kind (an item, a skill, a menu) and which one. */
+        public record Binding(int type, int action) {
+        }
+    }
+
     /** Somebody else in the map was hurt, by how much, and by what kind of monster (0 if none). */
     record PlayerHurt(long tick, int characterId, int damage, int monsterId) implements Observation {
     }

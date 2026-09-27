@@ -197,6 +197,19 @@ class ObservationDecoderTest {
     }
 
     @Test
+    void decodesTheKeyboard() {
+        java.util.Map<Integer, client.keybind.KeyBinding> bound = java.util.Map.of(
+                18, new client.keybind.KeyBinding(4, 0),
+                83, new client.keybind.KeyBinding(2, 2000000));
+
+        Observation.KeysBound keys = assertInstanceOf(Observation.KeysBound.class,
+                decode(PacketCreator.getKeymap(bound)));
+
+        assertEquals(2, keys.keys().size(), "unbound keys are left out");
+        assertEquals(new Observation.KeysBound.Binding(2, 2000000), keys.keys().get(83));
+    }
+
+    @Test
     void decodesChat() {
         Observation observation = decode(PacketCreator.getChatText(42, "where are the monsters", false, 0));
 

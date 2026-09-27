@@ -315,6 +315,39 @@ public final class ClientPackets {
     private static final int TOUCH = -1;
 
     /**
+     * Uses the first stack of an item in the use bag - what pressing a key an item is bound
+     * to sends. The server checks the item named is the one in that slot.
+     *
+     * @see net.server.channel.handlers.UseItemHandler
+     */
+    public static Packet useItem(int slot, int itemId) {
+        OutPacket p = packet(RecvOpcode.USE_ITEM);
+        p.writeInt(0);                  // timestamp
+        p.writeShort(slot);
+        p.writeInt(itemId);
+        return p;
+    }
+
+    /**
+     * Rebinds keys, as dragging something onto the keyboard window does. The server saves it
+     * with the character, so a binding made once is there the next time it logs in.
+     *
+     * @param bindings key to {type, action}
+     * @see net.server.channel.handlers.KeymapChangeHandler
+     */
+    public static Packet bindKeys(java.util.Map<Integer, int[]> bindings) {
+        OutPacket p = packet(RecvOpcode.CHANGE_KEYMAP);
+        p.writeInt(0);                  // mode 0: ordinary keys, not the auto-potion slots
+        p.writeInt(bindings.size());
+        bindings.forEach((key, binding) -> {
+            p.writeInt(key);
+            p.writeByte(binding[0]);
+            p.writeInt(binding[1]);
+        });
+        return p;
+    }
+
+    /**
      * Asks to be brought back after dying - the button on the "you have died" window. The
      * server sends a dead character to the nearest town with a little health.
      *

@@ -1,10 +1,12 @@
 package agents;
 
+import agents.body.Keyboard;
 import agents.body.Touch;
 import agents.mind.DialogueReader;
 import agents.mind.Disposition;
 import agents.mind.IntentExecutor;
 import agents.mind.Policy;
+import agents.mind.Survival;
 import agents.protocol.ClientPackets;
 import agents.net.LoginFlow.InWorld;
 import agents.memory.Belief;
@@ -91,6 +93,8 @@ public class Agent implements Runnable {
 
     private final Disposition disposition;
     private final Touch touch;
+    private final Keyboard keyboard = new Keyboard();
+    private final Survival survival = new Survival();
     private int steps;
 
     /** Steps spent dead so far, so the agent waits a moment before asking to come back. */
@@ -145,6 +149,7 @@ public class Agent implements Runnable {
         List<Observation> observations = perceiver.perceive(connection.inbox());
         for (Observation observation : observations) {
             world.update(observation);
+            keyboard.update(observation);
             mind.take(observation);
             acknowledgeArrival(observation);
             answerNpc(observation);
@@ -159,6 +164,7 @@ public class Agent implements Runnable {
         voice.next(System.currentTimeMillis()).ifPresent(this::say);
 
         feelForContact();
+        survival.step(mind, world, perceiver.currentTick()).ifPresent(this::drink);
 
         // Push the trace out to disk every step. Without this a buffered writer holds the
         // last few kilobytes indefinitely, so anything following the file live - a tail, or
@@ -218,6 +224,23 @@ public class Agent implements Runnable {
                     contact.monsterId(), contact.objectId(), contact.facingLeft()));
             mind.take(perceiver.felt(tick -> new Observation.TouchedBy(tick,
                     contact.objectId(), contact.monsterId(), contact.damage())));
+        });
+    }
+
+    /**
+     * Drinks something, the way a player does: bind it to a key if it is not on one, then
+     * press the key. With every potion key taken it is used straight from the bag instead,
+     * which is the double-click a player falls back on.
+     */
+    private void drink(int itemId) {
+        keyboard.bind(itemId).ifPresent(connection.session()::send);
+        Optional<net.packet.Packet> use = keyboard.keyFor(itemId)
+                .flatMap(key -> keyboard.press(key, world.inventory()))
+                .or(() -> world.inventory().firstOf(itemId)
+                        .map(item -> ClientPackets.useItem(item.slot(), item.itemId())));
+        use.ifPresent(packet -> {
+            log.info("{} drinks item:{} at {}/{} hp", mind.name(), itemId, world.hp(), world.maxHp());
+            connection.session().send(packet);
         });
     }
 
