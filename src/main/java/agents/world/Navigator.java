@@ -62,7 +62,7 @@ public final class Navigator {
     private Navigator() {
     }
 
-    public enum Kind { WALK, DROP, JUMP, CLIMB }
+    public enum Kind { WALK, DROP, JUMP, CLIMB, HOP }
 
     /**
      * The next thing to do: walk to {@code departX} on the current floor, then make the move.
@@ -162,8 +162,11 @@ public final class Navigator {
     }
 
     static synchronized Graph graphOf(int mapId) {
-        return GRAPHS.computeIfAbsent(mapId,
-                id -> Graph.build(MapGeometry.groundIn(id), MapGeometry.climbsIn(id)));
+        return GRAPHS.computeIfAbsent(mapId, id -> {
+            Graph graph = Graph.build(MapGeometry.groundIn(id), MapGeometry.climbsIn(id));
+            graph.linkHops(MapGeometry.hopsIn(id));
+            return graph;
+        });
     }
 
     /** One stretch of floor you can walk the length of. */
@@ -214,6 +217,17 @@ public final class Navigator {
             Graph graph = new Graph(joinIntoPlatforms(floors));
             graph.link(climbs);
             return graph;
+        }
+
+        /** Same-map portals: step in at one floor, come out on another. */
+        void linkHops(List<MapGeometry.Hop> hops) {
+            for (MapGeometry.Hop hop : hops) {
+                int from = platformUnder(hop.from().x, hop.from().y);
+                int to = platformUnder(hop.to().x, hop.to().y);
+                if (from >= 0 && to >= 0 && from != to) {
+                    edges.get(from).add(new Edge(to, Kind.HOP, hop.from().x, hop.to().x, null));
+                }
+            }
         }
 
         /** Union the footholds whose ends meet. */

@@ -28,6 +28,12 @@ import java.util.Optional;
  * through it to find out where it goes, and so does an agent. Where a portal leads is
  * learned by using it and perceiving the map change, and it becomes an ordinary belief with
  * an episode behind it like anything else.
+ *
+ * <p>The one exception is a portal whose target is the map it stands in: a hop across the
+ * same screen, which the client makes by itself - the server is not even told - and which a
+ * player sees happen in front of them. {@link #hopsIn} reads those, and only those. Without
+ * them an agent on Pet-Walking Road could never reach its only exit, which is at the end of a
+ * hop from the floor, and walked into the hop, saw the map not change, and wrote it off.
  */
 public class MapGeometry {
     private static final Map<Integer, List<PortalSighting>> CACHE = new HashMap<>();
@@ -56,7 +62,11 @@ public class MapGeometry {
 
     /** The portals worth trying, in no particular order. */
     public static List<PortalSighting> usablePortalsIn(int mapId) {
-        return portalsIn(mapId).stream().filter(PortalSighting::isUsable).toList();
+        // A hop within the map is a way to move about, not a way out of it.
+        java.util.Set<String> hops = new java.util.HashSet<>();
+        hopsIn(mapId).forEach(hop -> hops.add(hop.name()));
+        return portalsIn(mapId).stream().filter(PortalSighting::isUsable)
+                .filter(portal -> !hops.contains(portal.name())).toList();
     }
 
     /**
@@ -94,6 +104,42 @@ public class MapGeometry {
             sightings.add(new PortalSighting(portalId(portal), name, new Point(x, y), type));
         }
         return List.copyOf(sightings);
+    }
+
+    /** A hop across the same map: step into the portal at {@code from}, come out at {@code to}. */
+    public record Hop(String name, Point from, Point to) {
+    }
+
+    private static final Map<Integer, List<Hop>> HOPS = new HashMap<>();
+
+    /** The portals in this map that lead to another point in this same map. */
+    public static synchronized List<Hop> hopsIn(int mapId) {
+        return HOPS.computeIfAbsent(mapId, MapGeometry::loadHops);
+    }
+
+    private static List<Hop> loadHops(int mapId) {
+        DataProvider provider = DataProviderFactory.getDataProvider(WZFiles.MAP);
+        Data mapData = provider.getData(pathFor(mapId));
+        if (mapData == null || mapData.getChildByPath("portal") == null) {
+            return List.of();
+        }
+        Map<String, Point> byName = new HashMap<>();
+        for (PortalSighting sighting : portalsIn(mapId)) {
+            byName.putIfAbsent(sighting.name(), sighting.position());
+        }
+        List<Hop> hops = new ArrayList<>();
+        for (Data portal : mapData.getChildByPath("portal")) {
+            if (DataTool.getInt(portal.getChildByPath("tm"), 0) != mapId) {
+                continue;       // somewhere else, or nowhere: not ours to read
+            }
+            Point to = byName.get(DataTool.getString(portal.getChildByPath("tn"), ""));
+            if (to != null) {
+                hops.add(new Hop(DataTool.getString(portal.getChildByPath("pn"), ""),
+                        new Point(DataTool.getInt(portal.getChildByPath("x"), 0),
+                                DataTool.getInt(portal.getChildByPath("y"), 0)), to));
+            }
+        }
+        return List.copyOf(hops);
     }
 
     /** The server numbers portals by their node name in the file, and so must we. */

@@ -227,6 +227,12 @@ public class IntentExecutor {
         }
         switch (step.kind()) {
             case JUMP -> leap(from, step.landing(), world, true);
+            case HOP -> {
+                // A portal to elsewhere in this map: the client moves itself, and says so.
+                session.send(ClientPackets.move(from, step.landing(), foothold(map, step.landing()),
+                        STANCE_STAND_RIGHT, (short) 100));
+                world.movedTo(step.landing());
+            }
             case DROP -> leap(from, step.landing(), world, false);
             case CLIMB -> {
                 riding = step.rope();

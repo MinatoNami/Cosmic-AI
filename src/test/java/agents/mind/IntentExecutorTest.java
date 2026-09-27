@@ -162,4 +162,27 @@ class IntentExecutorTest {
 
         assertTrue(end.distance(new Point(100, -355)) <= 8, "never reached east00: " + end);
     }
+
+    /**
+     * Pet-Walking Road's only exit, out00, is reached by stepping into h001 on the floor, which
+     * puts you beside it - a hop within the map that the client makes by itself. Without it an
+     * agent wandered the floor for an hour, the exit 300px overhead.
+     */
+    @Test
+    void takesTheHopToTheWayOutOfPetWalkingRoad() {
+        WorldModel world = standingAt(100000202, new Point(686, 154));
+        Point exit = new Point(43, -147);
+
+        for (int i = 0; i < 60 && world.selfPosition().distance(exit) > 60; i++) {
+            executor.execute(new Intent.MoveTo(exit), world);
+        }
+
+        assertTrue(world.selfPosition().distance(exit) <= 60, "never got to out00: " + world.selfPosition());
+    }
+
+    @Test
+    void aHopWithinTheMapIsNotADoorOutOfIt() {
+        assertTrue(MapGeometry.usablePortalsIn(100000202).stream().noneMatch(p -> p.name().equals("h001")),
+                "h001 goes to out00 in the same map; trying it as a way out taught the agent it led nowhere");
+    }
 }
