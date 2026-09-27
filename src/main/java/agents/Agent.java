@@ -251,9 +251,13 @@ public class Agent implements Runnable {
                     (byte) dialogue.style(), answer, NO_SELECTION));
             return;
         }
+        // How the agent is placed is worked out here, on its own thread, and handed over as
+        // text. Worked out inside the reading task it walked the agent's beliefs while this
+        // thread was adding to them, and the exception it threw ended the agent.
+        String situation = situation();
         pendingDialogue = new PendingDialogue((byte) dialogue.style(), dialogue.npcId(),
                 System.currentTimeMillis(),
-                CompletableFuture.supplyAsync(() -> dialogueReader.read(dialogue, situation()),
+                CompletableFuture.supplyAsync(() -> dialogueReader.read(dialogue, situation),
                         reading));
     }
 

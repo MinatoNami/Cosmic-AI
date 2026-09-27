@@ -78,4 +78,32 @@ class SemanticMemoryTest {
         assertThrows(IllegalArgumentException.class, () ->
                 new Belief(0, "a", "b", "c", 0.5, Provenance.FIRST_HAND, List.of(), 1, 1, null, null));
     }
+
+    /**
+     * A mind is read from other threads while its agent writes to it. With a plain list, a
+     * reader walking live beliefs during a write threw ConcurrentModificationException, and
+     * one thrown inside an agent's step ended that agent.
+     */
+    @Test
+    void canBeReadWhileItIsBeingWritten() throws Exception {
+        SemanticMemory memory = new SemanticMemory();
+        java.util.concurrent.atomic.AtomicReference<Throwable> failed = new java.util.concurrent.atomic.AtomicReference<>();
+        Thread reader = new Thread(() -> {
+            try {
+                for (int i = 0; i < 2_000; i++) {
+                    memory.liveBeliefs().stream().filter(b -> b.predicate().equals("p")).count();
+                }
+            } catch (Throwable t) {
+                failed.set(t);
+            }
+        });
+        reader.start();
+        for (int i = 0; i < 4_000; i++) {
+            memory.assertTriple("s" + i, "p", "o", i, i, Belief.Provenance.FIRST_HAND);
+            memory.assertTriple("s" + (i / 2), "p", "o", i, i, Belief.Provenance.FIRST_HAND);
+        }
+        reader.join();
+
+        org.junit.jupiter.api.Assertions.assertNull(failed.get(), "a reader failed while the agent wrote");
+    }
 }

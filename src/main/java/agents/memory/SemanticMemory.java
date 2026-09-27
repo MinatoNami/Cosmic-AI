@@ -2,10 +2,10 @@ package agents.memory;
 
 import agents.memory.Belief.Provenance;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
  * What an agent has concluded, as triples with evidence attached.
@@ -31,7 +31,14 @@ public class SemanticMemory {
             "named", "level", "in_map", "hp", "maxhp", "mp", "maxmp", "exp", "meso", "job",
             "state");
 
-    private final List<Belief> beliefs = new ArrayList<>();
+    /**
+     * Copy-on-write, because a mind is read from more threads than the one that writes it:
+     * the dialogue reader, the saver, the status page. A plain list read while the agent was
+     * adding to it threw ConcurrentModificationException in the reader - once inside an
+     * agent's own step, which ended it. Writes are a few per tick against sixteen thousand
+     * beliefs, so copying on each costs little; every reader now iterates a snapshot.
+     */
+    private final List<Belief> beliefs = new CopyOnWriteArrayList<>();
 
     /**
      * Records a triple, merging with an existing belief where one already says the same
