@@ -177,4 +177,29 @@ class InheritanceTest {
         assertEquals(1, found.size());
         assertEquals("Agent0.mind", found.getFirst().getFileName().toString());
     }
+
+    /** What the last generation learnt the hard way is what a newborn most needs. */
+    @Test
+    void passesOnWhereItDiedWhatHealsAndWhoIsNoUse() {
+        Path agent = mindOf("Agent0", new String[][]{
+                {"map:105050000", "killed_you_at_level", "18"},
+                {"npc:1012004", "runs_shop", "true"},
+                {"npc:1012004", "sells", "item:2120000"},
+                {"item:2000000", "restores_hp", "true"},
+                {"npc:12100", "does_not_answer", "true"},
+                {"npc:10203", "strands_you", "true"},
+                {"self", "trained_by", "npc:1022000"},
+                {"npc:1012004", "shop_was_no_use", "392"}});
+
+        Inheritance.merge(java.util.List.of(agent), minds.resolve("inherited.mind"), "Inherited");
+        SemanticMemory inherited = read(minds.resolve("inherited.mind"));
+
+        assertTrue(holds(inherited, "map:105050000", "killed_you_at_level", "18"));
+        assertTrue(holds(inherited, "npc:1012004", "sells", "item:2120000"));
+        assertTrue(holds(inherited, "item:2000000", "restores_hp", "true"));
+        assertTrue(holds(inherited, "npc:12100", "does_not_answer", "true"));
+        assertTrue(holds(inherited, "npc:10203", "strands_you", "true"));
+        assertFalse(holds(inherited, "self", "trained_by", "npc:1022000"), "about a body that is gone");
+        assertFalse(holds(inherited, "npc:1012004", "shop_was_no_use", "392"), "about money it no longer has");
+    }
 }

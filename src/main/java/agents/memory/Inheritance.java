@@ -49,7 +49,15 @@ public final class Inheritance {
             "present_in",    // where a monster or an NPC was standing
             "talks_in",      // which map an NPC holds its conversations in
             "wants_first",   // what an NPC said it needed before it would help
-            "drops");        // what a monster was seen to leave behind
+            "drops",         // what a monster was seen to leave behind
+            // Learnt the hard way by the last generation, and every bit as true for the next:
+            "killed_you_at_level", // where a predecessor died, and how strong it was then
+            "runs_shop",     // who keeps a shop
+            "sells",         // and what is on their shelves
+            "restores_hp",   // what an item did when it was drunk
+            "restores_mp",
+            "does_not_answer", // who never says a word, however often greeted
+            "strands_you");  // who sends you somewhere there is no leaving
 
     private Inheritance() {
     }
