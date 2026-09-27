@@ -127,6 +127,9 @@ public class ObservationDecoder {
         if (opcode == SendOpcode.REMOVE_ITEM_FROM_MAP.getValue()) {
             return decodeDropRemoved(tick, p);
         }
+        if (opcode == SendOpcode.OPEN_NPC_SHOP.getValue()) {
+            return decodeShop(tick, p);
+        }
         if (opcode == SendOpcode.KEYMAP.getValue()) {
             return decodeKeymap(tick, p);
         }
@@ -257,6 +260,26 @@ public class ObservationDecoder {
     }
 
     private static final int KEYS = 90;
+
+    /**
+     * A shop's stock. Throwing stars and bullets are written with a refill price instead of
+     * a stack size, so they take more bytes than anything else.
+     *
+     * @see tools.PacketCreator#getNPCShop
+     */
+    private Observation decodeShop(long tick, InPacket p) {
+        int npcId = p.readInt();
+        int count = p.readShort();
+        List<Observation.ShopOpened.ShopItem> items = new ArrayList<>();
+        for (int index = 0; index < count; index++) {
+            int itemId = p.readInt();
+            int price = p.readInt();
+            p.skip(12);                                 // perfect pitch, and two unused
+            p.skip(ItemReader.isRechargeable(itemId) ? 10 : 4);
+            items.add(new Observation.ShopOpened.ShopItem(index, itemId, price));
+        }
+        return new Observation.ShopOpened(tick, npcId, List.copyOf(items));
+    }
 
     private static final int INVENTORY_ADD = 0;
     private static final int INVENTORY_QUANTITY = 1;

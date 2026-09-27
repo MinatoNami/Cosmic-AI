@@ -454,7 +454,25 @@ public class LlmPolicy implements Policy {
             out.append(", hp ").append(world.hp()).append("/").append(world.maxHp());
         }
         out.append(", standing at ").append(point(world.selfPosition()))
-                .append(" in map:").append(world.mapId()).append(".\n\n");
+                .append(" in map:").append(world.mapId()).append(".\n");
+        // What it carries, in the same terms as everything else: ids and counts. A full bag
+        // is the one thing here that changes what is worth doing - loot it cannot pick up.
+        if (world.inventory().known()) {
+            out.append("You carry ").append(world.inventory().meso()).append(" mesos");
+            List<String> drinkable = world.inventory().carried(agents.percept.Item.USE).stream()
+                    .filter(item -> Survival.isDrinkable(item.itemId()))
+                    .map(item -> "item:" + item.itemId() + " x" + item.quantity())
+                    .limit(4)
+                    .toList();
+            if (!drinkable.isEmpty()) {
+                out.append(", and ").append(String.join(", ", drinkable));
+            }
+            if (world.inventory().anyBagFull()) {
+                out.append(". Your bag is full: you cannot pick anything else up");
+            }
+            out.append(".\n");
+        }
+        out.append("\n");
 
         out.append("What you can see:\n");
         world.nearestMonster().ifPresentOrElse(

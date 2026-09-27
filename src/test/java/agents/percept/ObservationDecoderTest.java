@@ -10,6 +10,7 @@ import org.junit.jupiter.api.Test;
 import tools.PacketCreator;
 
 import java.awt.Point;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -207,6 +208,42 @@ class ObservationDecoderTest {
 
         assertEquals(2, keys.keys().size(), "unbound keys are left out");
         assertEquals(new Observation.KeysBound.Binding(2, 2000000), keys.keys().get(83));
+    }
+
+    /**
+     * A shop's stock, laid out by hand as getNPCShop writes it (building one for real needs a
+     * connected client). Throwing stars take six bytes more than a potion, so a star in the
+     * middle checks the items after it still line up.
+     */
+    @Test
+    void decodesAShopsStock() {
+        OutPacket shop = OutPacket.create(SendOpcode.OPEN_NPC_SHOP);
+        shop.writeInt(1012000);
+        shop.writeShort(3);
+        for (int[] item : new int[][]{{2000000, 50}, {2070000, 500}, {2000001, 160}}) {
+            shop.writeInt(item[0]);
+            shop.writeInt(item[1]);
+            shop.writeInt(0);
+            shop.writeInt(0);
+            shop.writeInt(0);
+            if (item[0] / 10000 == 207) {
+                shop.writeShort(0);
+                shop.writeInt(0);
+                shop.writeShort(0);
+                shop.writeShort(800);
+            } else {
+                shop.writeShort(1);
+                shop.writeShort(100);
+            }
+        }
+
+        Observation.ShopOpened opened = assertInstanceOf(Observation.ShopOpened.class, decode(shop));
+
+        assertEquals(1012000, opened.npcId());
+        assertEquals(List.of(2000000, 2070000, 2000001),
+                opened.items().stream().map(Observation.ShopOpened.ShopItem::itemId).toList());
+        assertEquals(160, opened.items().get(2).price());
+        assertEquals(2, opened.items().get(2).index());
     }
 
     @Test

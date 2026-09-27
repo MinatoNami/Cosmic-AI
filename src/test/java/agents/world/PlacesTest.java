@@ -22,7 +22,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class PlacesTest {
 
     private static final Places.Weights WEIGHTS =
-            new Places.Weights(2.0, 1.5, 0.8, 3.0, 0.6, 1.5, 0.3, 0.35, 1.0, 1.0);
+            new Places.Weights(2.0, 1.5, 0.8, 3.0, 3.5, 0.6, 1.5, 0.3, 0.35, 1.0, 1.0);
 
     private SemanticMemory memory;
     private final Map<String, Integer> visits = new HashMap<>();
@@ -50,7 +50,7 @@ class PlacesTest {
 
     private List<Places.Place> rank(String errandMap, Set<String> avoid, Map<String, Double> justBeen) {
         return Places.worthGoing(KnownWorld.rememberedBy(memory.liveBeliefs()),
-                new Places.Facts("map:1", visits, errandMap, Set.of(), avoid, justBeen), WEIGHTS);
+                new Places.Facts("map:1", visits, errandMap, Set.of(), avoid, justBeen, Set.of()), WEIGHTS);
     }
 
     @Test
@@ -77,6 +77,17 @@ class PlacesTest {
         believe("npc:5", "present_in", "map:2");
 
         assertEquals("map:2", rank("map:2", Set.of(), Map.of()).get(0).map());
+    }
+
+    /** A full bag makes a shopkeeper two maps away worth more than an unopened door. */
+    @Test
+    void aShopOutweighsCuriosityWhenTheAgentNeedsOne() {
+        believe("map:2", "has_door", "north00");
+        List<Places.Place> places = Places.worthGoing(KnownWorld.rememberedBy(memory.liveBeliefs()),
+                new Places.Facts("map:1", visits, null, Set.of(), Set.of(), Map.of(), Set.of("map:3")), WEIGHTS);
+
+        assertEquals("map:3", places.get(0).map());
+        assertTrue(places.get(0).reasons().contains("somebody who buys and sells, and you need to"));
     }
 
     /** The loop this was written for: a trip just made is not the next one to make. */

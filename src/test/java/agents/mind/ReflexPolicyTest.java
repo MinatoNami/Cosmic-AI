@@ -911,4 +911,48 @@ class ReflexPolicyTest {
         assertEquals(java.util.Set.of("west00"), headedFor,
                 "only west00 can be reached from this ledge");
     }
+
+    private void fullBagNextToAShopkeeper(int x) {
+        mind.take(new Observation.ShopOpened(2, 1012000, List.of()));
+        world.update(new Observation.InventoryShown(2, 100, Map.of(1, 24, 2, 24, 3, 24, 4, 1, 5, 24),
+                List.of(new agents.percept.Item(4, 1, 4000019, 1, null))));
+        world.update(new Observation.NpcAppeared(3, 7001, 1012000, new Point(x, 0)));
+    }
+
+    /** With a full bag, somebody who has opened a shop before is worth the walk. */
+    @Test
+    void goesToSellWhenTheBagIsFull() {
+        fullBagNextToAShopkeeper(20);
+
+        Intent intent = policy.decide(mind, world, 4).intent();
+
+        assertEquals(1012000, assertInstanceOf(Intent.TalkTo.class, intent).npcId());
+    }
+
+    @Test
+    void walksOverToAShopkeeperOutOfReach() {
+        fullBagNextToAShopkeeper(300);
+
+        Intent intent = policy.decide(mind, world, 4).intent();
+
+        assertEquals(new Point(300, 0), assertInstanceOf(Intent.MoveTo.class, intent).destination());
+    }
+
+    @Test
+    void hasNoBusinessWithAShopWithRoomInTheBag() {
+        mind.take(new Observation.ShopOpened(2, 1012000, List.of()));
+        world.update(new Observation.InventoryShown(2, 0, Map.of(1, 24, 2, 24, 3, 24, 4, 24, 5, 24), List.of()));
+
+        assertFalse(ReflexPolicy.needsAShop(world, mind, 4));
+    }
+
+    /** Knowing what heals and carrying none of it, with money, is business too. */
+    @Test
+    void goesShoppingWhenOutOfWhatHeals() {
+        mind.take(new Observation.NoticeShown(2, "hello"));
+        mind.infer("item:2000000", "restores_hp", "true", 2);
+        world.update(new Observation.InventoryShown(2, 300, Map.of(1, 24, 2, 24, 3, 24, 4, 24, 5, 24), List.of()));
+
+        assertTrue(ReflexPolicy.needsAShop(world, mind, 4));
+    }
 }

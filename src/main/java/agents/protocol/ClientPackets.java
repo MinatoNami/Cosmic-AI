@@ -345,6 +345,45 @@ public final class ClientPackets {
     }
 
     /**
+     * Sells from a bag slot to the shop that is open.
+     *
+     * @see net.server.channel.handlers.NPCShopHandler
+     */
+    public static Packet sellToShop(int slot, int itemId, int quantity) {
+        OutPacket p = packet(RecvOpcode.NPC_SHOP);
+        p.writeByte(SHOP_SELL);
+        p.writeShort(slot);
+        p.writeInt(itemId);
+        p.writeShort(quantity);
+        return p;
+    }
+
+    /**
+     * Buys from the shop that is open, naming the item by its place in the shop's list.
+     *
+     * @see net.server.channel.handlers.NPCShopHandler
+     */
+    public static Packet buyFromShop(int index, int itemId, int quantity) {
+        OutPacket p = packet(RecvOpcode.NPC_SHOP);
+        p.writeByte(SHOP_BUY);
+        p.writeShort(index);
+        p.writeInt(itemId);
+        p.writeShort(quantity);
+        return p;
+    }
+
+    /** Walks away from the counter. Until this the server considers the shop still open. */
+    public static Packet leaveShop() {
+        OutPacket p = packet(RecvOpcode.NPC_SHOP);
+        p.writeByte(SHOP_LEAVE);
+        return p;
+    }
+
+    private static final int SHOP_BUY = 0;
+    private static final int SHOP_SELL = 1;
+    private static final int SHOP_LEAVE = 3;
+
+    /**
      * Rebinds keys, as dragging something onto the keyboard window does. The server saves it
      * with the character, so a binding made once is there the next time it logs in.
      *

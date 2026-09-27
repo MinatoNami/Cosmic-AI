@@ -66,6 +66,9 @@ public class BeliefFormer {
                     triples.add(Triple.firstHand(itemRef(drop), "dropped_in", mapRef(currentMap)));
             // Felt, not concluded: something of this kind walked into the agent and it hurt.
             // Whether that makes it worth avoiding is the agent's to decide.
+            // Seen, not guessed: talking to this one opened a shop.
+            case Observation.ShopOpened shop ->
+                    triples.add(Triple.firstHand("npc:" + shop.npcId(), "runs_shop", "true"));
             case Observation.TouchedBy touched ->
                     triples.add(Triple.firstHand("monster:" + touched.monsterId(), "hurts_you", "true"));
             case Observation.DialogueShown dialogue ->

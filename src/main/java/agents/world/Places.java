@@ -37,8 +37,8 @@ public final class Places {
      * door of walking costs.
      */
     public record Weights(double unopenedDoor, double stranger, double worthHearingAgain,
-                          double errand, double hunting, double neverBeen, double novelty,
-                          double perHop, double spentRoom, double justBeenFor) {
+                          double errand, double shop, double hunting, double neverBeen,
+                          double novelty, double perHop, double spentRoom, double justBeenFor) {
         // justBeenFor is a share, not an amount: 1 wipes out a place's reasons on arrival.
     }
 
@@ -52,9 +52,13 @@ public final class Places {
      * @param justBeenFor  how recently each map was a destination it reached, from 1 (just
      *                     now) falling to 0 - a trip that has just been made is not worth
      *                     making again straight away
+     * @param shopMaps     where somebody who buys and sells stands, when the agent has
+     *                     reason to see one - a full bag, or nothing left that heals - and
+     *                     empty otherwise
      */
     public record Facts(String here, Map<String, Integer> visits, String errandMap,
-                        Set<String> hearAgain, Set<String> avoid, Map<String, Double> justBeenFor) {
+                        Set<String> hearAgain, Set<String> avoid, Map<String, Double> justBeenFor,
+                        Set<String> shopMaps) {
     }
 
     /** A place worth considering, why, and the first door towards it. */
@@ -105,6 +109,10 @@ public final class Places {
             } else if (known.anyOfIn(map, withoutAvoided(facts.hearAgain(), facts.avoid()))) {
                 value += w.worthHearingAgain();
                 reasons.add("somebody worth talking to again");
+            }
+            if (facts.shopMaps().contains(map)) {
+                value += w.shop();
+                reasons.add("somebody who buys and sells, and you need to");
             }
             if (known.huntingIn(map)) {
                 value += w.hunting();

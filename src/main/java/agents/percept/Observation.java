@@ -146,6 +146,16 @@ public sealed interface Observation {
         }
     }
 
+    /**
+     * An NPC opened a shop: what it sells, in order, and for how much. The order matters -
+     * buying names an item by its place in this list.
+     */
+    record ShopOpened(long tick, int npcId, java.util.List<ShopItem> items) implements Observation {
+
+        public record ShopItem(int index, int itemId, int price) {
+        }
+    }
+
     /** Somebody else in the map was hurt, by how much, and by what kind of monster (0 if none). */
     record PlayerHurt(long tick, int characterId, int damage, int monsterId) implements Observation {
     }

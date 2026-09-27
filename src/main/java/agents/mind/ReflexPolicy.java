@@ -79,6 +79,12 @@ public class ReflexPolicy implements Policy {
      */
     private final Map<Integer, Integer> greetedAt = new HashMap<>();
 
+    /** When each shopkeeper was last walked up to, so one that did not open is not pestered. */
+    private final Map<Integer, Integer> shopTriedAt = new HashMap<>();
+
+    /** Where a shopkeeper stands, when the agent needs one and none is in sight; see Places. */
+    private Set<String> shopMaps = Set.of();
+
     /**
      * How long an agent will take "nothing to say" for an answer.
      *
@@ -448,6 +454,7 @@ public class ReflexPolicy implements Policy {
         somethingToFight(choices, world, self);
         unfinishedBusiness(choices, world, self, unfinished);
         someoneToTalkTo(choices, world, mind, self);
+        somewhereToSell(choices, world, mind, self, tick);
         awayOutOfHere(choices, world, mind, self, stale);
         choices.add(new Choice("wander", new Intent.MoveTo(wanderTarget(world, self)),
                 "wander", WANDERING_IS_BETTER_THAN_NOTHING, null));
@@ -750,6 +757,92 @@ public class ReflexPolicy implements Policy {
                         arrived();
                     }));
         });
+    }
+
+    /**
+     * A shopkeeper, when the agent needs one.
+     *
+     * Needing one is a full bag - the loot it walks past is the cost of not going - or
+     * knowing what heals and carrying none of it, with money to buy some. A shopkeeper is
+     * anyone whose conversation has opened a shop before; one in sight is walked to and
+     * talked to, and the counter does the rest. One elsewhere becomes a reason to travel,
+     * weighed with every other in {@link Places}.
+     */
+    private void somewhereToSell(List<Choice> choices, WorldModel world, Mind mind, Point self,
+                                 long tick) {
+        shopMaps = Set.of();
+        if (!needsAShop(world, mind, tick)) {
+            return;
+        }
+        Set<String> keepers = shopkeepers(mind);
+        Optional<WorldModel.Entity> keeper = world.visibleNpcs().stream()
+                .filter(npc -> keepers.contains("npc:" + npc.typeId()))
+                .filter(npc -> decisionsMade - shopTriedAt.getOrDefault(npc.typeId(), -SHOP_AGAIN) >= SHOP_AGAIN)
+                .min(Comparator.comparingDouble(npc -> npc.position().distance(self)));
+        if (keeper.isEmpty()) {
+            Set<String> maps = new HashSet<>();
+            String here = KnownWorld.mapRef(world.mapId());
+            for (String who : keepers) {
+                lastSeenIn(mind, who).filter(map -> !map.equals(here)).ifPresent(maps::add);
+            }
+            shopMaps = Set.copyOf(maps);
+            return;
+        }
+        WorldModel.Entity npc = keeper.get();
+        double score = SHOP_URGENCY + NEGLECT_MATTERS * neglect("shop")
+                + commitmentTo("shop", npc.position());
+        if (npc.position().distance(self) >= NPC_RANGE) {
+            Point where = npc.position();
+            choices.add(new Choice("shop", new Intent.MoveTo(where),
+                    "go and sell what I cannot carry", score, () -> settingOff("shop", where)));
+            return;
+        }
+        choices.add(new Choice("shop", new Intent.TalkTo(npc.objectId(), npc.typeId(), npc.position()),
+                "sell what I cannot carry", score, () -> {
+                    shopTriedAt.put(npc.typeId(), decisionsMade);
+                    arrived();
+                }));
+    }
+
+    /** Enough to outrank a fight: a full bag makes every kill worth only its money. */
+    private static final double SHOP_URGENCY = 2.0;
+
+    /** Decisions before walking up to a shopkeeper who did not open a shop again. */
+    private static final int SHOP_AGAIN = 30;
+
+    /** Whether the agent has business with a shop: no room, or nothing left that heals. */
+    static boolean needsAShop(WorldModel world, Mind mind, long tick) {
+        if (world.inventoryFull(tick)) {
+            return true;
+        }
+        if (world.inventory().meso() < MONEY_FOR_POTIONS) {
+            return false;
+        }
+        Set<Integer> healers = new HashSet<>();
+        for (Belief belief : mind.semantic().liveBeliefs()) {
+            if (belief.predicate().equals("restores_hp") && belief.object().equals("true")
+                    && belief.subject().startsWith("item:")) {
+                try {
+                    healers.add(Integer.parseInt(belief.subject().substring("item:".length())));
+                } catch (NumberFormatException notAnId) {
+                    // not an item this agent could carry
+                }
+            }
+        }
+        return !healers.isEmpty() && healers.stream().allMatch(id -> world.inventory().count(id) == 0);
+    }
+
+    /** Enough for a handful of the cheapest potions. */
+    private static final int MONEY_FOR_POTIONS = 100;
+
+    private static Set<String> shopkeepers(Mind mind) {
+        Set<String> keepers = new HashSet<>();
+        for (Belief belief : mind.semantic().liveBeliefs()) {
+            if (belief.predicate().equals("runs_shop") && belief.object().equals("true")) {
+                keepers.add(belief.subject());
+            }
+        }
+        return keepers;
     }
 
     /**
@@ -1357,7 +1450,7 @@ public class ReflexPolicy implements Policy {
         Set<String> avoid = new HashSet<>(strandedBy(mind));
         avoid.addAll(doesNotAnswer(mind));
         Places.Facts facts = new Places.Facts(here, visitsTo(mind), errandMap,
-                worthHearingAgain(known), avoid, justBeen);
+                worthHearingAgain(known), avoid, justBeen, shopMaps);
         return Places.worthGoing(known, facts, weights());
     }
 
@@ -1375,6 +1468,7 @@ public class ReflexPolicy implements Policy {
                 1.2 + disposition.curiosity() * 0.6,        // somebody never spoken to
                 0.8,                                        // somebody worth hearing again
                 3.0,                                        // somebody owed a visit
+                3.5,                                        // a shop, when the bag is full
                 0.4 + disposition.aggression() * 1.2,       // something to hunt
                 1.5,                                        // somewhere never stood in
                 0.3,                                        // the less visited, the better

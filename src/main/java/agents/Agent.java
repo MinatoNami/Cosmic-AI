@@ -6,6 +6,7 @@ import agents.mind.DialogueReader;
 import agents.mind.Disposition;
 import agents.mind.IntentExecutor;
 import agents.mind.Policy;
+import agents.mind.Shopkeeping;
 import agents.mind.Survival;
 import agents.mind.Wardrobe;
 import agents.protocol.ClientPackets;
@@ -97,6 +98,7 @@ public class Agent implements Runnable {
     private final Keyboard keyboard = new Keyboard();
     private final Survival survival = new Survival();
     private final Wardrobe wardrobe = new Wardrobe();
+    private final Shopkeeping shopkeeping = new Shopkeeping();
     private int steps;
 
     /** Steps spent dead so far, so the agent waits a moment before asking to come back. */
@@ -156,6 +158,9 @@ public class Agent implements Runnable {
             acknowledgeArrival(observation);
             answerNpc(observation);
             converse(observation);
+            if (observation instanceof Observation.ShopOpened shop) {
+                shopkeeping.opened(shop, world, mind);
+            }
         }
 
         if (steps++ % disposition.shareInterval() == disposition.shareInterval() - 1) {
@@ -183,6 +188,17 @@ public class Agent implements Runnable {
             return;
         }
         deadFor = 0;
+
+        // At a shop counter the agent does its business there and nothing else, one
+        // transaction a step, as a player standing at one does.
+        if (shopkeeping.atCounter()) {
+            connection.session().send(shopkeeping.next(world, mind));
+            if (!shopkeeping.atCounter()) {
+                world.madeRoom();
+                log.info("{} leaves the shop with {} mesos", mind.name(), world.inventory().meso());
+            }
+            return;
+        }
 
         long tick = perceiver.currentTick();
         Policy.Decision decision = policy.decide(mind, world, tick);
