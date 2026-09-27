@@ -110,6 +110,37 @@ public class Agent implements Runnable {
     /** The last NPC whose offer this agent accepted, so a dead end has somebody to blame. */
     private int wentAlongWith = -1;
 
+    /**
+     * Asks for the health and mana that return on their own, as a client does every ten
+     * seconds.
+     *
+     * A client asks and the server grants; nothing asked, so an agent never recovered a single
+     * point without a potion. Backing off to rest when hurt did nothing but stand there: two
+     * agents spent ten minutes at exactly 50 health, "catching their breath". The amounts are
+     * a resting character's, far inside what the server will allow at once, and no oftener
+     * than it allows.
+     */
+    private void recoverOverTime() {
+        long now = System.currentTimeMillis();
+        if (now - lastRecovered < RECOVER_EVERY_MILLIS || world.isDead()) {
+            return;
+        }
+        boolean hurt = world.hp() >= 0 && world.maxHp() > 0 && world.hp() < world.maxHp();
+        int mp = world.stat("MP");
+        int maxMp = world.stat("MAXMP");
+        boolean drained = mp >= 0 && maxMp > 0 && mp < maxMp;
+        if (!hurt && !drained) {
+            return;
+        }
+        lastRecovered = now;
+        connection.session().send(ClientPackets.healOverTime(hurt ? RESTING_HP : 0, drained ? RESTING_MP : 0));
+    }
+
+    private long lastRecovered;
+    private static final long RECOVER_EVERY_MILLIS = 10_000;
+    private static final int RESTING_HP = 10;
+    private static final int RESTING_MP = 3;
+
     /** Who the agent was last in conversation with, and what job it had then. */
     private int lastSpokeWith = -1;
     private int lastJob = -1;
@@ -235,6 +266,7 @@ public class Agent implements Runnable {
                     agents.percept.Item.EQUIP, change.fromSlot(), change.toSlot(), 1));
         });
         training.step(world).ifPresent(point -> connection.session().send(point));
+        recoverOverTime();
         makingRoom.step(world).ifPresent(drop -> {
             log.info("{} drops something ordinary to make room for a quest item", mind.name());
             connection.session().send(drop);

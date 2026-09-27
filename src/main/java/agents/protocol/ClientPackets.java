@@ -347,6 +347,22 @@ public final class ClientPackets {
         return p;
     }
 
+    /**
+     * Asks for the health and mana that come back on their own, which the client asks for and
+     * the server grants. Nothing sent this, so an agent never recovered a point by resting.
+     *
+     * @see net.server.channel.handlers.HealOvertimeHandler
+     */
+    public static Packet healOverTime(int hp, int mp) {
+        OutPacket p = packet(RecvOpcode.HEAL_OVER_TIME);
+        p.writeInt(0);                  // timestamp
+        p.writeInt(0);                  // which stats; the server reads the amounts instead
+        p.writeShort(hp);
+        p.writeShort(mp);
+        p.writeByte(0);
+        return p;
+    }
+
     /** @see net.server.channel.handlers.DistributeSPHandler */
     public static Packet distributeSp(int skillId) {
         OutPacket p = packet(RecvOpcode.DISTRIBUTE_SP);
