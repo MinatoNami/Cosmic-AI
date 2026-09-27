@@ -148,4 +148,18 @@ class IntentExecutorTest {
         executor.execute(new Intent.Attack(9001, new Point(800, 527)), world);
         assertEquals(2, sent.size(), "close enough now: step in and swing");
     }
+
+    /**
+     * The way into Henesys from A Hill West of Henesys: up a ladder, then a thirty-pixel step
+     * onto the floor with the door. The step was not counted as a jump, so there was no route,
+     * and no agent had ever stood in Henesys - where the bowman instructor is.
+     */
+    @Test
+    void findsTheWayToTheDoorIntoHenesys() {
+        WorldModel world = standingAt(104030000, new Point(-2300, -115));
+
+        Point end = walkTowards(world, new Point(100, -355), 400);
+
+        assertTrue(end.distance(new Point(100, -355)) <= 8, "never reached east00: " + end);
+    }
 }

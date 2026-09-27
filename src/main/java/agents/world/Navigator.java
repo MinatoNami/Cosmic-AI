@@ -36,6 +36,9 @@ public final class Navigator {
      */
     static final int JUMP_RISE = 76;
 
+    /** The smallest rise onto an overlapping floor that counts as a floor overhead at all. */
+    private static final int MIN_STEP_UP = 4;
+
     /** How finely an overlap between two floors is searched for the easiest place to jump. */
     private static final int JUMP_SEARCH_STEP = 16;
 
@@ -333,8 +336,11 @@ public final class Navigator {
                     int bestX = Integer.MIN_VALUE;
                     int bestRise = Integer.MAX_VALUE;
                     for (int x = lo + 4; x <= hi - 4; x = x + JUMP_SEARCH_STEP > hi - 4 && x != hi - 4 ? hi - 4 : x + JUMP_SEARCH_STEP) {
+                        // Anything more than a few pixels up is a jump. It was "more than the
+                        // standing tolerance", which left out the thirty-pixel step between a
+                        // ladder's head and the floor with the door to Henesys on it.
                         int rise = p.heightAt(x) - q.heightAt(x);
-                        if (rise > STANDING && rise < bestRise) {
+                        if (rise > MIN_STEP_UP && rise < bestRise) {
                             bestRise = rise;
                             bestX = x;
                         }
