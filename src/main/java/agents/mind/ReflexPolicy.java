@@ -455,8 +455,16 @@ public class ReflexPolicy implements Policy {
         unfinishedBusiness(choices, world, self, unfinished);
         someoneToTalkTo(choices, world, mind, self);
         somewhereToSell(choices, world, mind, self, tick);
-        deathsHere = deathsNearLevel(mind, world.level())
-                .getOrDefault(KnownWorld.mapRef(world.mapId()), 0);
+        Map<String, Integer> deaths = deathsNearLevel(mind, world.level());
+        deathsHere = deaths.getOrDefault(KnownWorld.mapRef(world.mapId()), 0);
+        Set<String> grounds = new HashSet<>();
+        deaths.forEach((map, died) -> {
+            if (died >= Places.KILLING_GROUND && !map.equals(KnownWorld.mapRef(world.mapId()))) {
+                grounds.add(map);
+            }
+        });
+        killingGrounds = grounds;
+        rethinkAfterDying(deaths);
         awayOutOfHere(choices, world, mind, self, stale);
         choices.add(new Choice("wander", new Intent.MoveTo(wanderTarget(world, self)),
                 "wander", WANDERING_IS_BETTER_THAN_NOTHING, null));
@@ -1432,10 +1440,19 @@ public class ReflexPolicy implements Policy {
 
     private Optional<WorldModel.PortalTarget> firstDoorTo(KnownWorld known, String here, String to,
                                                            List<WorldModel.PortalTarget> portals) {
-        return known.routeTo(here, to).flatMap(route -> portals.stream()
-                .filter(portal -> portal.name().equals(route.firstDoor()))
-                .findFirst());
+        // Around the places that keep killing it, not through them.
+        KnownWorld.Hop hop = known.reachableFrom(here, killingGrounds).get(to);
+        if (hop == null || hop.firstDoor() == null) {
+            return Optional.empty();
+        }
+        return portals.stream().filter(portal -> portal.name().equals(hop.firstDoor())).findFirst();
     }
+
+    /** Maps not to pass through, as of this decision. */
+    private Set<String> killingGrounds = Set.of();
+
+    /** How many deaths it remembers in all, to notice a new one. */
+    private int deathsRemembered = -1;
 
     private void setOffFor(String map, String why, boolean fromModel) {
         destination = map;
@@ -1511,6 +1528,25 @@ public class ReflexPolicy implements Policy {
         return "0".equals(job) && level >= 10;
     }
 
+    /**
+     * Drops whatever it was doing when it died.
+     *
+     * The plan that killed it is not worth resuming: an agent revived in Sleepywood with a
+     * sixth of its health and walked straight back down the tunnel it had died in, because
+     * that was still the way to where it had been going - twelve times in ten minutes.
+     */
+    private void rethinkAfterDying(Map<String, Integer> deaths) {
+        int total = deaths.values().stream().mapToInt(Integer::intValue).sum();
+        if (deathsRemembered >= 0 && total > deathsRemembered) {
+            destination = null;
+            destinationFromModel = false;
+            doorInMind = null;
+            committedPortal = null;
+            arrived();
+        }
+        deathsRemembered = total;
+    }
+
     /** How many times the map it is in has killed it at about its level. */
     private int deathsHere;
 
@@ -1581,7 +1617,16 @@ public class ReflexPolicy implements Policy {
         double health = (double) world.hp() / world.maxHp();
         boolean nothingToDrink = world.inventory().known() && world.inventory().carried(agents.percept.Item.USE)
                 .stream().noneMatch(item -> Survival.isDrinkable(item.itemId()));
+        // Setting off hurt is walking into the next map's monsters hurt. Rest first - unless
+        // this map is the one that keeps killing it, in which case leaving is the rest.
+        boolean readyToTravel = health >= (nothingToDrink ? TRAVEL_UNAIDED : TRAVEL_WITH_POTIONS);
+        if (!readyToTravel && deathsHere < Places.KILLING_GROUND) {
+            choices.removeIf(choice -> choice.kind().equals("door"));
+        }
         if (!(health < BADLY_HURT || (health < HURT && nothingToDrink))) {
+            if (!readyToTravel && choices.stream().noneMatch(c -> !c.kind().equals("wander"))) {
+                choices.add(new Choice("recover", new Intent.Wait(), "rest before setting off", RECOVER, null));
+            }
             return;
         }
         choices.removeIf(choice -> choice.kind().equals("fight") || choice.kind().equals("loot"));
@@ -1596,6 +1641,10 @@ public class ReflexPolicy implements Policy {
             choices.add(new Choice("recover", new Intent.Wait(), "catch my breath", RECOVER, null));
         }
     }
+
+    /** How healthy to be before taking a door: with nothing to drink, and with something. */
+    static final double TRAVEL_UNAIDED = 0.7;
+    static final double TRAVEL_WITH_POTIONS = 0.4;
 
     private static final int THREAT_RANGE = 300;
     private static final double RECOVER = 2.5;

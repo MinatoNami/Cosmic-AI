@@ -136,7 +136,22 @@ class PlacesTest {
                 new Places.Facts("map:1", visits, null, Set.of(), Set.of(), Map.of(), Set.of(), null, null,
                         Map.of("map:2", 2)), WEIGHTS);
 
-        assertEquals(List.of("map:3"), places.stream().map(Places.Place::map).toList(),
-                "map:2 has an unopened door, and it died there twice");
+        assertTrue(places.isEmpty(), "map:2 killed it twice, and map:3 is only reachable through it: " + places);
+    }
+
+    /** With a way round, the far side of a killing ground is still somewhere to go. */
+    @Test
+    void goesAroundAKillingGroundWhenThereIsAWay() {
+        believe("map:3", "has_door", "north00");
+        door(1, "south00", 4);      // a second way: 1 -> 4 -> 3
+        door(4, "east00", 3);
+        visits.put("map:4", 3);
+
+        List<Places.Place> places = Places.worthGoing(KnownWorld.rememberedBy(memory.liveBeliefs()),
+                new Places.Facts("map:1", visits, null, Set.of(), Set.of(), Map.of(), Set.of(), null, null,
+                        Map.of("map:2", 2)), WEIGHTS);
+
+        assertEquals("map:3", places.get(0).map());
+        assertEquals("south00", places.get(0).firstDoor(), "the long way, around map:2");
     }
 }

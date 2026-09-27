@@ -1089,4 +1089,38 @@ class ReflexPolicyTest {
 
         assertFalse(fighter.decide(mind, world, 4).intent() instanceof Intent.Attack);
     }
+
+    /** Revived at a sixth of its health, it walked straight back into the tunnel it died in. */
+    @Test
+    void restsBeforeSettingOffWhenHurtWithNothingToDrink() {
+        aJunction();
+        world.update(new Observation.MapEntered(5, 10000, 0));
+        world.update(new Observation.StatsChanged(5, Map.of("HP", 50, "MAXHP", 295)));
+        world.update(new Observation.InventoryShown(5, 0, Map.of(1, 24, 2, 24, 3, 24, 4, 24, 5, 24), List.of()));
+        ReflexPolicy wanderer = new ReflexPolicy(new Random(1), Disposition.WANDERER);
+        wanderer.headFor(KnownWorld.mapRef(30000), "somewhere the model chose");
+
+        for (int decision = 6; decision < 40; decision++) {
+            Policy.Decision d = wanderer.decide(mind, world, decision);
+            assertFalse(d.goal().startsWith("walk to a way out") || d.intent() instanceof Intent.EnterPortal,
+                    "set off at 50/295 with nothing to drink: " + d.goal());
+        }
+    }
+
+    /** The plan that killed it is not the plan to resume. */
+    @Test
+    void forgetsWhereItWasGoingWhenItDies() {
+        aJunction();
+        world.update(new Observation.MapEntered(5, 10000, 0));
+        world.update(new Observation.StatsChanged(5, Map.of("LEVEL", 18, "HP", 290, "MAXHP", 295)));
+        mind.take(new Observation.StatsChanged(5, Map.of("LEVEL", 18)));
+        ReflexPolicy wanderer = new ReflexPolicy(new Random(1), Disposition.WANDERER);
+        wanderer.decide(mind, world, 6);
+        wanderer.headFor(KnownWorld.mapRef(30000), "somewhere the model chose");
+
+        mind.saw("map:105050000", "killed_you_at_level", "18", 7);
+        wanderer.decide(mind, world, 8);
+
+        assertEquals(Optional.empty(), wanderer.destination());
+    }
 }

@@ -102,7 +102,8 @@ public final class Places {
      */
     public static List<Place> worthGoing(KnownWorld known, Facts facts, Weights w) {
         List<Place> places = new ArrayList<>();
-        for (Map.Entry<String, KnownWorld.Hop> entry : known.reachableFrom(facts.here()).entrySet()) {
+        for (Map.Entry<String, KnownWorld.Hop> entry
+                : known.reachableFrom(facts.here(), killingGrounds(facts)).entrySet()) {
             String map = entry.getKey();
             KnownWorld.Hop hop = entry.getValue();
             if (hop.hops() == 0) {
@@ -191,6 +192,19 @@ public final class Places {
                 .thenComparing(Place::map));
         return places;
     }
+
+    /** Maps that have killed the agent twice or more at about its level: not to pass through. */
+    public static Set<String> killingGrounds(Facts facts) {
+        Set<String> grounds = new java.util.HashSet<>();
+        facts.deaths().forEach((map, died) -> {
+            if (died >= KILLING_GROUND && !map.equals(facts.here())) {
+                grounds.add(map);
+            }
+        });
+        return grounds;
+    }
+
+    public static final int KILLING_GROUND = 2;
 
     private static Set<String> withoutAvoided(Set<String> people, Set<String> avoid) {
         if (avoid.isEmpty()) {

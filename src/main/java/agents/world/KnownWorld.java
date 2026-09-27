@@ -266,6 +266,15 @@ public final class KnownWorld {
      * asking one question at a time and taking the first yes.
      */
     public Map<String, Hop> reachableFrom(String fromMap) {
+        return reachableFrom(fromMap, Set.of());
+    }
+
+    /**
+     * The same, never passing through the maps given - somewhere that keeps killing the agent
+     * is not a corridor to anywhere else either. An agent whose route to a town ran through an
+     * ant tunnel died there twelve times in ten minutes on the way.
+     */
+    public Map<String, Hop> reachableFrom(String fromMap, Set<String> avoiding) {
         Map<String, Hop> reached = new HashMap<>();
         Deque<String> queue = new ArrayDeque<>();
         queue.add(fromMap);
@@ -275,7 +284,7 @@ public final class KnownWorld {
             Hop sofar = reached.get(here);
             for (Map.Entry<String, String> exit : exits.getOrDefault(here, Map.of()).entrySet()) {
                 String destination = exit.getValue();
-                if (reached.containsKey(destination)) {
+                if (reached.containsKey(destination) || avoiding.contains(destination)) {
                     continue;
                 }
                 reached.put(destination, new Hop(sofar.hops() + 1,
