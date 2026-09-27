@@ -224,9 +224,22 @@ public class WorldModel {
      */
     public Optional<Entity> nearestDropWorthTaking(long tick) {
         boolean full = inventoryFullAt >= 0 && tick - inventoryFullAt < FULL_FOR_TICKS;
+        // A quest item is worth taking whatever the bag says: room is made for it rather than
+        // it being left for want of room. Thirty Dark Marbles are the whole of a second-job test.
         return full
-                ? nearest(drops.values().stream().filter(d -> mesoDrops.contains(d.objectId())).toList())
-                : nearest(drops.values().stream().filter(this::roomFor).toList());
+                ? nearest(drops.values().stream()
+                        .filter(d -> mesoDrops.contains(d.objectId()) || isQuestDrop(d)).toList())
+                : nearest(drops.values().stream().filter(d -> roomFor(d) || isQuestDrop(d)).toList());
+    }
+
+    /** A drop on the ground that a quest needs. */
+    public boolean isQuestDrop(Entity drop) {
+        return !mesoDrops.contains(drop.objectId()) && QuestItems.isQuestItem(drop.typeId());
+    }
+
+    /** Every drop in sight that a quest needs and there is no room for yet. */
+    public List<Entity> questDropsWithoutRoom() {
+        return drops.values().stream().filter(d -> isQuestDrop(d) && !roomFor(d)).toList();
     }
 
     /**

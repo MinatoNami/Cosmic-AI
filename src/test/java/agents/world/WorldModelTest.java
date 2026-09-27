@@ -203,4 +203,25 @@ class WorldModelTest {
 
         assertEquals(java.util.List.of(1000, 1001, 1002), ids);
     }
+
+    /** The item data marks what quests need: the letter, the marbles, the proof. */
+    @Test
+    void knowsAQuestItemFromItsTooltip() {
+        assertTrue(QuestItems.isQuestItem(4031013), "Dark Marble");
+        assertTrue(QuestItems.isQuestItem(4031012), "The Proof of a Hero");
+        assertFalse(QuestItems.isQuestItem(4000000), "a snail shell is only loot");
+    }
+
+    /** A full etc bag leaves the shell on the floor, never the marble. */
+    @Test
+    void aFullBagStillReachesForWhatAQuestNeeds() {
+        world.update(new Observation.InventoryShown(1, 0, Map.of(1, 24, 2, 24, 3, 24, 4, 1, 5, 24),
+                List.of(new agents.percept.Item(4, 1, 4000019, 1, null))));
+        world.movedTo(new Point(0, 0));
+        world.update(new Observation.DropAppeared(2, 700, 4000000, false, new Point(10, 0)));
+        world.update(new Observation.DropAppeared(3, 701, 4031013, false, new Point(50, 0)));
+
+        assertEquals(701, world.nearestDropWorthTaking(4).orElseThrow().objectId());
+        assertEquals(List.of(701), world.questDropsWithoutRoom().stream().map(WorldModel.Entity::objectId).toList());
+    }
 }

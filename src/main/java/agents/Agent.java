@@ -99,6 +99,7 @@ public class Agent implements Runnable {
     private final Survival survival = new Survival();
     private final Wardrobe wardrobe = new Wardrobe();
     private final agents.mind.Training training;
+    private final agents.mind.MakingRoom makingRoom = new agents.mind.MakingRoom();
     private final Shopkeeping shopkeeping = new Shopkeeping();
     private int steps;
 
@@ -234,6 +235,10 @@ public class Agent implements Runnable {
                     agents.percept.Item.EQUIP, change.fromSlot(), change.toSlot(), 1));
         });
         training.step(world).ifPresent(point -> connection.session().send(point));
+        makingRoom.step(world).ifPresent(drop -> {
+            log.info("{} drops something ordinary to make room for a quest item", mind.name());
+            connection.session().send(drop);
+        });
 
         // Push the trace out to disk every step. Without this a buffered writer holds the
         // last few kilobytes indefinitely, so anything following the file live - a tail, or
