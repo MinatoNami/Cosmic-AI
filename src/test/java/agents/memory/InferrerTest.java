@@ -44,6 +44,28 @@ class InferrerTest {
                 "it already believes this; repeating it is corroboration, not a conclusion");
     }
 
+    /** A kill followed at once by experience, twice over, is what that monster is worth. */
+    @Test
+    void concludesWhatAKillIsWorth() {
+        for (int i = 1; i <= 2; i++) {
+            long at = i * 20L;
+            inferrer.consider(new Observation.MonsterAppeared(at, i, 100100, new Point(100, 0)));
+            inferrer.consider(new Observation.MonsterDied(at + 1, i));
+            List<Inferrer.Conclusion> said = inferrer.consider(new Observation.ExpGained(at + 2, 3));
+            if (i == 2) {
+                assertEquals(List.of(new Inferrer.Conclusion("monster:100100", "gives_exp", "3")), said);
+            } else {
+                assertTrue(said.isEmpty());
+            }
+        }
+    }
+
+    @Test
+    void experienceWithNoDeathNearbyIsCreditedToNothing() {
+        assertTrue(inferrer.consider(new Observation.ExpGained(5, 3)).isEmpty());
+        assertTrue(inferrer.consider(new Observation.ExpGained(6, 3)).isEmpty());
+    }
+
     /** Going out of sight is not dying, so whatever falls next is not what it dropped. */
     @Test
     void creditsNothingToAMonsterThatOnlyVanished() {

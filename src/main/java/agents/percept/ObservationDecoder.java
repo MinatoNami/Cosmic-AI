@@ -103,8 +103,16 @@ public class ObservationDecoder {
             return decodeDrop(tick, p);
         }
         if (opcode == SendOpcode.REMOVE_ITEM_FROM_MAP.getValue()) {
-            p.readByte();                               // how it went: expired, picked up
-            return new Observation.DropTaken(tick, p.readInt());
+            return decodeDropRemoved(tick, p);
+        }
+        if (opcode == SendOpcode.SHOW_MONSTER_HP.getValue()) {
+            return new Observation.MonsterHurt(tick, p.readInt(), p.readUnsignedByte());
+        }
+        if (opcode == SendOpcode.DAMAGE_PLAYER.getValue()) {
+            return decodeDamagePlayer(tick, p);
+        }
+        if (opcode == SendOpcode.SHOW_ITEM_GAIN_INCHAT.getValue()) {
+            return decodeItemGainInChat(tick, p);
         }
         if (opcode == SendOpcode.CHATTEXT.getValue()) {
             return decodeChat(tick, p);
@@ -340,10 +348,15 @@ public class ObservationDecoder {
      */
     private Observation decodeStatusInfo(long tick, InPacket p) {
         int kind = p.readUnsignedByte();
-        if (kind == STATUS_INFO_ITEM) {
-            // The same message a player sees as "you cannot hold any more". Without it an
-            // agent with a full bag tried to pick the same drop up hundreds of times.
-            return p.readUnsignedByte() == INVENTORY_FULL ? new Observation.InventoryFull(tick) : null;
+        if (kind == STATUS_INFO_PICKUP) {
+            return decodePickupMessage(tick, p);
+        }
+        if (kind == STATUS_INFO_EXP) {
+            p.readByte();                               // white text or yellow
+            return new Observation.ExpGained(tick, p.readInt());
+        }
+        if (kind == STATUS_INFO_MESO_IN_CHAT) {
+            return new Observation.MesoGained(tick, p.readInt());
         }
         if (kind != STATUS_INFO_QUEST) {
             return null;
@@ -353,11 +366,87 @@ public class ObservationDecoder {
         return new Observation.QuestStateChanged(tick, questId, state);
     }
 
-    private static final int STATUS_INFO_QUEST = 1;
+    /**
+     * The messages that scroll up the corner of the screen as you pick things up, told apart
+     * by a second byte: what went in the bag, how much money, or that nothing would fit.
+     *
+     * @see tools.PacketCreator#getShowItemGain(int, short, boolean)
+     * @see tools.PacketCreator#getShowMesoGain(int, boolean)
+     * @see tools.PacketCreator#getShowInventoryStatus
+     */
+    private Observation decodePickupMessage(long tick, InPacket p) {
+        int what = p.readUnsignedByte();
+        if (what == PICKED_UP_ITEM) {
+            int itemId = p.readInt();
+            return new Observation.ItemGained(tick, itemId, p.readInt());
+        }
+        if (what == PICKED_UP_MESO) {
+            p.readByte();                               // high byte of the short the encoder wrote
+            return new Observation.MesoGained(tick, p.readInt());
+        }
+        // The same message a player sees as "you cannot hold any more". Without it an agent
+        // with a full bag tried to pick the same drop up hundreds of times.
+        return what == INVENTORY_FULL ? new Observation.InventoryFull(tick) : null;
+    }
 
-    /** @see tools.PacketCreator#getShowInventoryFull */
-    private static final int STATUS_INFO_ITEM = 0;
+    private static final int STATUS_INFO_PICKUP = 0;
+    private static final int STATUS_INFO_QUEST = 1;
+    private static final int STATUS_INFO_EXP = 3;
+    private static final int STATUS_INFO_MESO_IN_CHAT = 5;
+    private static final int PICKED_UP_ITEM = 0;
+    private static final int PICKED_UP_MESO = 1;
     private static final int INVENTORY_FULL = 0xFF;
+
+    /**
+     * An item handed over rather than picked up - a quest reward, a purchase - announced in
+     * the chat log. The opcode carries several other effects; only this one is a gain.
+     *
+     * @see tools.PacketCreator#getShowItemGain(int, short, boolean)
+     */
+    private Observation decodeItemGainInChat(long tick, InPacket p) {
+        if (p.readUnsignedByte() != ITEM_GAIN_IN_CHAT) {
+            return null;
+        }
+        p.readByte();                                   // how many kinds follow; always one
+        int itemId = p.readInt();
+        return new Observation.ItemGained(tick, itemId, p.readInt());
+    }
+
+    private static final int ITEM_GAIN_IN_CHAT = 3;
+
+    /**
+     * Who picked it up is only written for a pick-up; an expiry names nobody.
+     *
+     * @see tools.PacketCreator#removeItemFromMap(int, int, int, boolean, int)
+     */
+    private Observation decodeDropRemoved(long tick, InPacket p) {
+        int how = p.readUnsignedByte();
+        int objectId = p.readInt();
+        int takenBy = how >= DROP_PICKED_UP ? p.readInt() : Observation.DropTaken.NOBODY;
+        return new Observation.DropTaken(tick, objectId, takenBy);
+    }
+
+    private static final int DROP_PICKED_UP = 2;
+
+    /**
+     * Somebody else being hit. The server sends this to everyone in the map but the victim,
+     * who learns it from their own health going down.
+     *
+     * @see tools.PacketCreator#damagePlayer
+     */
+    private Observation decodeDamagePlayer(long tick, InPacket p) {
+        int characterId = p.readInt();
+        int from = p.readByte();
+        if (from == DAMAGE_FROM_MAP_OBJECT) {
+            p.readInt();
+        }
+        int damage = p.readInt();
+        int monsterId = from == DAMAGE_FROM_FALLING ? 0 : p.readInt();
+        return new Observation.PlayerHurt(tick, characterId, damage, monsterId);
+    }
+
+    private static final int DAMAGE_FROM_MAP_OBJECT = -3;
+    private static final int DAMAGE_FROM_FALLING = -4;
 
     /**
      * The whisper opcode carries several unrelated things - delivery receipts, /find results

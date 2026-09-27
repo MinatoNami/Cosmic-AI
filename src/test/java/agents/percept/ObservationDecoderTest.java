@@ -129,6 +129,74 @@ class ObservationDecoderTest {
     }
 
     @Test
+    void decodesAMonstersHealthBar() {
+        Observation.MonsterHurt hurt = assertInstanceOf(Observation.MonsterHurt.class,
+                decode(PacketCreator.showMonsterHP(9001, 35)));
+
+        assertEquals(9001, hurt.objectId());
+        assertEquals(35, hurt.hpPercent());
+    }
+
+    @Test
+    void decodesExperienceGained() {
+        Observation.ExpGained gained = assertInstanceOf(Observation.ExpGained.class,
+                decode(PacketCreator.getShowExpGain(12, 0, 0, false, true)));
+
+        assertEquals(12, gained.amount());
+    }
+
+    @Test
+    void decodesMoneyPickedUpAndMoneyHandedOver() {
+        Observation.MesoGained picked = assertInstanceOf(Observation.MesoGained.class,
+                decode(PacketCreator.getShowMesoGain(40, false)));
+        Observation.MesoGained handed = assertInstanceOf(Observation.MesoGained.class,
+                decode(PacketCreator.getShowMesoGain(500, true)));
+
+        assertEquals(40, picked.amount());
+        assertEquals(500, handed.amount());
+    }
+
+    @Test
+    void decodesItemsPickedUpAndItemsHandedOver() {
+        Observation.ItemGained picked = assertInstanceOf(Observation.ItemGained.class,
+                decode(PacketCreator.getShowItemGain(4000019, (short) 3, false)));
+        Observation.ItemGained handed = assertInstanceOf(Observation.ItemGained.class,
+                decode(PacketCreator.getShowItemGain(2000000, (short) 5, true)));
+
+        assertEquals(4000019, picked.itemId());
+        assertEquals(3, picked.quantity());
+        assertEquals(2000000, handed.itemId());
+        assertEquals(5, handed.quantity());
+    }
+
+    @Test
+    void stillDecodesAFullBag() {
+        assertInstanceOf(Observation.InventoryFull.class, decode(PacketCreator.getShowInventoryFull()));
+    }
+
+    @Test
+    void aPickUpSaysWhoPickedItUp() {
+        Observation.DropTaken picked = assertInstanceOf(Observation.DropTaken.class,
+                decode(PacketCreator.removeItemFromMap(700, 2, 42)));
+        Observation.DropTaken expired = assertInstanceOf(Observation.DropTaken.class,
+                decode(PacketCreator.removeItemFromMap(701, 0, 42)));
+
+        assertEquals(700, picked.objectId());
+        assertEquals(42, picked.takenBy());
+        assertEquals(Observation.DropTaken.NOBODY, expired.takenBy());
+    }
+
+    @Test
+    void decodesSomebodyElseBeingHit() {
+        Observation.PlayerHurt hurt = assertInstanceOf(Observation.PlayerHurt.class,
+                decode(PacketCreator.damagePlayer(-1, 100100, 7, 15, 0, 0, false, 0, true, 0, 0, 0)));
+
+        assertEquals(7, hurt.characterId());
+        assertEquals(15, hurt.damage());
+        assertEquals(100100, hurt.monsterId());
+    }
+
+    @Test
     void decodesChat() {
         Observation observation = decode(PacketCreator.getChatText(42, "where are the monsters", false, 0));
 

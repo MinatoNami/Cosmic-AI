@@ -69,7 +69,41 @@ public sealed interface Observation {
                         Point position) implements Observation {
     }
 
-    record DropTaken(long tick, int objectId) implements Observation {
+    /**
+     * A drop left the ground. {@code takenBy} is the character who picked it up, or
+     * {@link #NOBODY} when it simply expired - which is how an agent tells its own pick-up
+     * from a rival's.
+     */
+    record DropTaken(long tick, int objectId, int takenBy) implements Observation {
+        public static final int NOBODY = -1;
+    }
+
+    /**
+     * How much of a monster is left, as the bar over its head shows it: a percentage, not a
+     * number. Sent to whoever hit it, which makes it the first sign an attack did anything.
+     */
+    record MonsterHurt(long tick, int objectId, int hpPercent) implements Observation {
+    }
+
+    /** Somebody else in the map was hurt, by how much, and by what kind of monster (0 if none). */
+    record PlayerHurt(long tick, int characterId, int damage, int monsterId) implements Observation {
+    }
+
+    /**
+     * The agent's experience went up by this much.
+     *
+     * The stat update says what the total now is; this says what just changed and arrives
+     * next to whatever caused it, which is what makes the cause findable.
+     */
+    record ExpGained(long tick, int amount) implements Observation {
+    }
+
+    /** The agent's purse went up by this much. */
+    record MesoGained(long tick, int amount) implements Observation {
+    }
+
+    /** Something went into the agent's bag. */
+    record ItemGained(long tick, int itemId, int quantity) implements Observation {
     }
 
     record ChatHeard(long tick, int speakerId, String text) implements Observation {

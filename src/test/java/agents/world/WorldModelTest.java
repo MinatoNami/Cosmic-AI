@@ -110,6 +110,17 @@ class WorldModelTest {
     }
 
     @Test
+    void remembersHowHurtAMonsterIsUntilItGoes() {
+        world.update(new Observation.MonsterAppeared(1, 9001, 100100, new Point(10, 0)));
+        world.update(new Observation.MonsterHurt(2, 9001, 40));
+
+        assertEquals(Optional.of(40), world.monsterHealth(9001));
+
+        world.update(new Observation.MonsterDied(3, 9001));
+        assertTrue(world.monsterHealth(9001).isEmpty());
+    }
+
+    @Test
     void readsOwnHealthFromStatUpdates() {
         world.update(new Observation.StatsChanged(1, Map.of("HP", 40, "MAXHP", 50)));
 

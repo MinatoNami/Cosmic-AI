@@ -44,6 +44,9 @@ public class WorldModel {
     private int mapId = -1;
     private Point self = new Point(0, 0);
     private long inventoryFullAt = -1;
+
+    /** What the bar over each monster the agent has hit last showed, as a percentage. */
+    private final Map<Integer, Integer> monsterHealth = new HashMap<>();
     private final java.util.Set<Integer> mesoDrops = new java.util.HashSet<>();
     private int hp = -1;
     private int maxHp = -1;
@@ -81,8 +84,13 @@ public class WorldModel {
             }
             case Observation.MonsterAppeared monster ->
                     monsters.put(monster.objectId(), new Entity(monster.objectId(), monster.monsterId(), monster.position()));
-            case Observation.MonsterDied died -> monsters.remove(died.objectId());
-            case Observation.MonsterVanished vanished -> monsters.remove(vanished.objectId());
+            case Observation.MonsterDied died -> forgetMonster(died.objectId());
+            case Observation.MonsterVanished vanished -> forgetMonster(vanished.objectId());
+            case Observation.MonsterHurt hurt -> {
+                if (monsters.containsKey(hurt.objectId())) {
+                    monsterHealth.put(hurt.objectId(), hurt.hpPercent());
+                }
+            }
             case Observation.DropTaken taken -> {
                 drops.remove(taken.objectId());
                 mesoDrops.remove(taken.objectId());
@@ -130,6 +138,7 @@ public class WorldModel {
         arrivals.of(newMapId, spawnPoint).ifPresent(arrival -> self = arrival);
         if (newMapId != mapId) {
             monsters.clear();
+            monsterHealth.clear();
             npcs.clear();
             drops.clear();
             mesoDrops.clear();
@@ -137,6 +146,19 @@ public class WorldModel {
             positions.clear();
         }
         mapId = newMapId;
+    }
+
+    private void forgetMonster(int objectId) {
+        monsters.remove(objectId);
+        monsterHealth.remove(objectId);
+    }
+
+    /**
+     * How much of this monster is left, as a percentage, if the agent has hit it - the server
+     * only shows the bar to whoever did the hitting.
+     */
+    public Optional<Integer> monsterHealth(int objectId) {
+        return Optional.ofNullable(monsterHealth.get(objectId));
     }
 
     public Optional<Entity> nearestMonster() {

@@ -23,9 +23,10 @@ import java.util.Optional;
  * confidence curve already scores below a sighting, because a conclusion drawn from two
  * coincidences can be wrong in ways a sighting cannot.
  *
- * <p>The one rule it knows: things that fall where something just died probably came from it.
- * That is a guess a person makes in the first minute of playing, from the same evidence, and it
- * is wrong often enough to be worth holding at low confidence and revising.
+ * <p>The rules it knows: things that fall where something just died probably came from it, and
+ * experience that arrives just after something died was probably for killing it. Those are
+ * guesses a person makes in the first minute of playing, from the same evidence, and they are
+ * wrong often enough to be worth holding at low confidence and revising.
  */
 public class Inferrer {
 
@@ -95,6 +96,9 @@ public class Inferrer {
             case Observation.DropAppeared drop -> {
                 return creditFor(drop);
             }
+            case Observation.ExpGained gained -> {
+                return experienceFor(gained);
+            }
             default -> {
                 // Nothing here concludes anything from the rest, which is most of them.
             }
@@ -122,6 +126,33 @@ public class Inferrer {
         }
         alreadySaid.add(pair);
         return List.of(new Conclusion(subject, "drops", object));
+    }
+
+    /**
+     * Credits experience to the most recent death close enough in time to have earned it.
+     *
+     * Only the amount is compared, not the fact of it: the same kind of monster giving the
+     * same amount twice is a pattern, and a different amount is a different pattern rather
+     * than a contradiction - bonuses and parties change it.
+     */
+    private List<Conclusion> experienceFor(Observation.ExpGained gained) {
+        forget(gained.tick());
+        Optional<Death> earnedFrom = deaths.stream()
+                .filter(death -> gained.tick() - death.tick() <= WITHIN_TICKS)
+                .reduce((first, second) -> second);
+        if (earnedFrom.isEmpty()) {
+            return List.of();
+        }
+        String subject = "monster:" + earnedFrom.get().monsterId();
+        String object = String.valueOf(gained.amount());
+        String pair = subject + "|gives_exp|" + object;
+
+        int together = timesSeenTogether.merge(pair, 1, Integer::sum);
+        if (together < SEEN_TOGETHER || alreadySaid.contains(pair)) {
+            return List.of();
+        }
+        alreadySaid.add(pair);
+        return List.of(new Conclusion(subject, "gives_exp", object));
     }
 
     /** Deaths too old to have produced anything falling now. */
