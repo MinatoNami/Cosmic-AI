@@ -980,7 +980,7 @@ public class ReflexPolicy implements Policy {
         // seven tests said so at once.
         boolean alreadyOnTheWay = committedPortal != null;
         if (doorInMind == null) {
-            doorInMind = chooseDoor(world.portals(), mind, world.mapId(),
+            doorInMind = chooseDoor(doorsWithinReach(world, self), mind, world.mapId(),
                     "player:" + world.characterId());
         }
         WorldModel.PortalTarget door = alreadyOnTheWay ? committedPortal : doorInMind;
@@ -1054,6 +1054,23 @@ public class ReflexPolicy implements Policy {
                     // one thing an agent is in the middle of.
                     settingOff("door", door.position());
                 }));
+    }
+
+    /**
+     * The doors in this map the agent could actually walk to from where it stands, and has
+     * not just given up trying to reach.
+     *
+     * Choosing among every door in the map meant choosing one it had no way to reach: it set
+     * off, got nowhere, gave up - and chose the same door again, because nothing about the
+     * choice had changed. An agent paced a ledge for as long as anyone watched while the
+     * door option it kept rejecting scored 3.3 against wander's scraps.
+     */
+    private List<WorldModel.PortalTarget> doorsWithinReach(WorldModel world, Point self) {
+        return world.portals().stream()
+                .filter(door -> !outOfMind(door.position()))
+                .filter(door -> door.position().distance(self) < PORTAL_RANGE
+                        || agents.world.Navigator.nextStep(world.mapId(), self, door.position()).isPresent())
+                .toList();
     }
 
     /**

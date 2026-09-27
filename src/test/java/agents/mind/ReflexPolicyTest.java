@@ -884,4 +884,31 @@ class ReflexPolicyTest {
 
         assertTrue(reversals <= 6, "turned round " + reversals + " times in 78 decisions of wandering");
     }
+
+    /**
+     * A Hill West of Henesys, from a ledge at y=-115. Two of the map's three doors have no way
+     * to them from there; the agent set off for one, got nowhere, gave up, chose it again, and
+     * paced the ledge. Only a door it can reach is a door to choose.
+     */
+    @Test
+    void choosesADoorItCanActuallyGetTo() {
+        int hill = 104030000;
+        WorldModel ledge = new WorldModel();
+        ledge.update(new Observation.MapEntered(1, hill, 0));
+        ledge.movedTo(new Point(-2300, -115));
+        mind.take(new Observation.MapEntered(1, hill, 0));
+        ReflexPolicy wanderer = new ReflexPolicy(new Random(1), Disposition.WANDERER);
+
+        java.util.Set<String> headedFor = new java.util.HashSet<>();
+        for (int decision = 2; decision < 400; decision++) {
+            Policy.Decision d = wanderer.decide(mind, ledge, decision);
+            if (d.goal().startsWith("walk to a way out: ")) {
+                headedFor.add(d.goal().substring("walk to a way out: ".length()).split(" ")[0]);
+            }
+        }
+
+        assertFalse(headedFor.isEmpty(), "never set off for a door at all");
+        assertEquals(java.util.Set.of("west00"), headedFor,
+                "only west00 can be reached from this ledge");
+    }
 }
