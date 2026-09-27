@@ -94,6 +94,9 @@ public class ObservationDecoder {
         if (opcode == SendOpcode.SET_FIELD.getValue()) {
             return decodeSetField(tick, p);
         }
+        if (opcode == SendOpcode.UPDATE_SKILLS.getValue()) {
+            return decodeSkillUpdate(tick, p);
+        }
         if (opcode == SendOpcode.STAT_CHANGED.getValue()) {
             return decodeStatChanged(tick, p);
         }
@@ -518,6 +521,24 @@ public class ObservationDecoder {
 
     private static final int STATUS_INFO_PICKUP = 0;
     private static final int STATUS_INFO_QUEST = 1;
+
+    /**
+     * The server saying a skill now stands at a level, which is how a point spent is known to
+     * have landed. Only the first entry is read; the server sends one at a time.
+     *
+     * @see tools.PacketCreator#updateSkill
+     */
+    private Observation decodeSkillUpdate(long tick, InPacket p) {
+        p.readByte();
+        int count = p.readShort();
+        if (count < 1) {
+            return null;
+        }
+        int skill = p.readInt();
+        int level = p.readInt();
+        int master = p.readInt();
+        return new Observation.SkillChanged(tick, skill, level, master);
+    }
     private static final int STATUS_INFO_EXP = 3;
     private static final int STATUS_INFO_MESO_IN_CHAT = 5;
     private static final int PICKED_UP_ITEM = 0;

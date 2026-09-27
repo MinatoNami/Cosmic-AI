@@ -334,6 +334,27 @@ public final class ClientPackets {
      *
      * @see net.server.channel.handlers.ItemMoveHandler
      */
+    /**
+     * Puts one ability point into a stat, named by its bit: 0x40 STR, 0x80 DEX, 0x100 INT,
+     * 0x200 LUK.
+     *
+     * @see net.server.channel.handlers.DistributeAPHandler
+     */
+    public static Packet distributeAp(int statMask) {
+        OutPacket p = packet(RecvOpcode.DISTRIBUTE_AP);
+        p.writeInt(0);                  // timestamp
+        p.writeInt(statMask);
+        return p;
+    }
+
+    /** @see net.server.channel.handlers.DistributeSPHandler */
+    public static Packet distributeSp(int skillId) {
+        OutPacket p = packet(RecvOpcode.DISTRIBUTE_SP);
+        p.writeInt(0);                  // timestamp
+        p.writeInt(skillId);
+        return p;
+    }
+
     public static Packet moveItem(int type, int fromSlot, int toSlot, int quantity) {
         OutPacket p = packet(RecvOpcode.ITEM_MOVE);
         p.writeInt(0);                  // timestamp

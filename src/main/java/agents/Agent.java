@@ -98,6 +98,7 @@ public class Agent implements Runnable {
     private final Keyboard keyboard = new Keyboard();
     private final Survival survival = new Survival();
     private final Wardrobe wardrobe = new Wardrobe();
+    private final agents.mind.Training training;
     private final Shopkeeping shopkeeping = new Shopkeeping();
     private int steps;
 
@@ -115,6 +116,7 @@ public class Agent implements Runnable {
         this.mind = mind;
         this.policy = policy;
         this.disposition = disposition;
+        this.training = new agents.mind.Training(disposition);
         this.executor = new IntentExecutor(connection.session());
         // Seeded from the name so a given agent paces the same way run to run, and two
         // agents never pace identically.
@@ -177,6 +179,7 @@ public class Agent implements Runnable {
             connection.session().send(ClientPackets.moveItem(
                     agents.percept.Item.EQUIP, change.fromSlot(), change.toSlot(), 1));
         });
+        training.step(world).ifPresent(point -> connection.session().send(point));
 
         // Push the trace out to disk every step. Without this a buffered writer holds the
         // last few kilobytes indefinitely, so anything following the file live - a tail, or
@@ -495,7 +498,35 @@ public class Agent implements Runnable {
                   + "walk to that you have not already seen."
                 : ". There is still somewhere you have not been, or somebody here you have "
                   + "not spoken to.");
+        // Whether it has a calling yet, and what sort of character it is. Without these an
+        // offer to become something read like any other offer with no way back, and the
+        // prompt says to turn those down - so a character could meet the person who would
+        // train it and walk away.
+        if (world.job() == 0) {
+            placed.append(" You have not taken up any calling or way of life yet.");
+        } else if (world.job() > 0) {
+            placed.append(" You have already taken up a calling; you cannot take up another.");
+        }
+        placed.append(" By temperament you are someone who ").append(temperament()).append('.');
         return placed.toString();
+    }
+
+    /** The disposition in words a reader of an NPC's offer can weigh it against. */
+    private String temperament() {
+        List<String> traits = new java.util.ArrayList<>();
+        if (disposition.aggression() >= 0.6) {
+            traits.add("likes a straight fight up close");
+        }
+        if (disposition.wanderlust() >= 0.6) {
+            traits.add("keeps moving and likes to see far");
+        }
+        if (disposition.greed() >= 0.6) {
+            traits.add("likes to gather things and slip about quietly");
+        }
+        if (disposition.curiosity() >= 0.6 || disposition.sociability() >= 0.8) {
+            traits.add("likes to learn and to talk");
+        }
+        return traits.isEmpty() ? "takes things as they come" : String.join(" and ", traits);
     }
 
     /** What the server last told this agent about its own purse. */

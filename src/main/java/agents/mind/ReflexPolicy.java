@@ -1451,7 +1451,7 @@ public class ReflexPolicy implements Policy {
         avoid.addAll(doesNotAnswer(mind));
         Places.Facts facts = new Places.Facts(here, visitsTo(mind), errandMap,
                 worthHearingAgain(known), avoid, justBeen, shopMaps);
-        return Places.worthGoing(known, facts, weights());
+        return Places.worthGoing(known, facts, weights(seekingACalling(mind)));
     }
 
     /**
@@ -1462,10 +1462,11 @@ public class ReflexPolicy implements Policy {
      * lesser reason can outweigh a greater one and the whole lot is paid for by distance.
      * A fighter weighs a hunting ground far more heavily; a curious agent weighs strangers.
      */
-    private Places.Weights weights() {
+    private Places.Weights weights(boolean seekingACalling) {
         return new Places.Weights(
                 2.0,                                        // a door never opened
-                1.2 + disposition.curiosity() * 0.6,        // somebody never spoken to
+                1.2 + disposition.curiosity() * 0.6         // somebody never spoken to,
+                        + (seekingACalling ? 1.0 : 0),      // who might be the one to train it
                 0.8,                                        // somebody worth hearing again
                 3.0,                                        // somebody owed a visit
                 3.5,                                        // a shop, when the bag is full
@@ -1475,6 +1476,33 @@ public class ReflexPolicy implements Policy {
                 0.35,                                       // each door of walking
                 1.0,                                        // a room already seen all of
                 1.0);                                       // just went there: wipes its reasons, for now
+    }
+
+    /**
+     * Whether this is a beginner old enough to be taken on by somebody and not yet taken on.
+     *
+     * Such a character has one thing to find that it cannot find by fighting, and it is a
+     * person: two agents reached levels 18 and 27 without a job because nothing in how they
+     * chose where to go cared more about meeting people than it did at level one.
+     */
+    private static boolean seekingACalling(Mind mind) {
+        String job = null;
+        int level = 0;
+        for (Belief belief : mind.semantic().liveBeliefs()) {
+            if (!belief.subject().equals("self")) {
+                continue;
+            }
+            if (belief.predicate().equals("job")) {
+                job = belief.object();
+            } else if (belief.predicate().equals("level")) {
+                try {
+                    level = Integer.parseInt(belief.object());
+                } catch (NumberFormatException ignored) {
+                    // not a number
+                }
+            }
+        }
+        return "0".equals(job) && level >= 10;
     }
 
     /** How many times this agent has walked into each map, counting every arrival. */

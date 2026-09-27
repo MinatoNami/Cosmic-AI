@@ -318,4 +318,11 @@ class ObservationDecoderTest {
         org.junit.jupiter.api.Assertions.assertFalse(
                 decode(PacketCreator.showItemUnavailable()) instanceof Observation.InventoryFull);
     }
+
+    /** How a skill point is known to have landed. */
+    @Test
+    void readsASkillRising() {
+        assertEquals(new Observation.SkillChanged(1L, 1001004, 3, 0),
+                decode(PacketCreator.updateSkill(1001004, 3, 0, -1)));
+    }
 }

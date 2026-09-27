@@ -183,4 +183,24 @@ class WorldModelTest {
         assertEquals(501, world.nearestDropWorthTaking(4 + 1000).orElseThrow().objectId(),
                 "long enough later it is worth trying again");
     }
+
+    /** The skill window, read from Skill.wz: what a warrior can learn, and in what order. */
+    @Test
+    void readsAWarriorsSkillWindow() {
+        var book = SkillBook.forJob(100);
+
+        assertEquals(6, book.size(), "" + book);
+        var powerStrike = book.stream().filter(s -> s.id() == 1001004).findFirst().orElseThrow();
+        assertTrue(powerStrike.dealsDamage());
+        assertEquals(20, powerStrike.maxLevel());
+        var slashBlast = book.stream().filter(s -> s.id() == 1001005).findFirst().orElseThrow();
+        assertEquals(java.util.Map.of(1001004, 1), slashBlast.requires());
+    }
+
+    @Test
+    void aBeginnerSeesOnlyTheThreeSkillsInItsWindow() {
+        var ids = SkillBook.forJob(0).stream().map(SkillBook.Skill::id).sorted().toList();
+
+        assertEquals(java.util.List.of(1000, 1001, 1002), ids);
+    }
 }

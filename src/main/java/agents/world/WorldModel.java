@@ -80,6 +80,7 @@ public class WorldModel {
             }
             case Observation.MapEntered entered -> enterMap(entered.mapId(), entered.spawnPoint());
             case Observation.StatsChanged changed -> absorb(changed.stats());
+            case Observation.SkillChanged skill -> skillLevels.put(skill.skillId(), skill.level());
             case Observation.MonsterAppeared monster ->
                     monsters.put(monster.objectId(), new Entity(monster.objectId(), monster.monsterId(), monster.position()));
             case Observation.MonsterDied died -> forgetMonster(died.objectId());
@@ -176,6 +177,17 @@ public class WorldModel {
     }
 
     /** Health at nothing: the "you have died" window is up and nothing else can be done. */
+    /**
+     * What each skill stands at, as far as the server has said since this session began.
+     * A skill not heard of reads as 0, which after a restart may be less than it really is;
+     * whoever spends points on it finds out when the server declines.
+     */
+    public int skillLevel(int skillId) {
+        return skillLevels.getOrDefault(skillId, 0);
+    }
+
+    private final Map<Integer, Integer> skillLevels = new HashMap<>();
+
     public boolean isDead() {
         return hp == 0;
     }

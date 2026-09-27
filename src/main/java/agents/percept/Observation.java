@@ -63,6 +63,10 @@ public sealed interface Observation {
     record ThingMoved(long tick, int objectId, Point position) implements Observation {
     }
 
+    /** A skill's level changed: learnt, or raised with a point. */
+    record SkillChanged(long tick, int skillId, int level, int masterLevel) implements Observation {
+    }
+
     /** The server refused a pick-up because there is no room left to carry it. */
     record InventoryFull(long tick) implements Observation {
     }

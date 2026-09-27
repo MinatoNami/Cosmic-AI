@@ -56,7 +56,13 @@ public class DialogueReader {
             somewhere with no way back. You are told how you are placed before the NPC's \
             words - weigh the offer against that. Somewhere to go and things unfinished \
             mean an offer of passage is a distraction; nothing left within walking distance \
-            means it is the only way on.""";
+            means it is the only way on.
+
+            An offer to take you on as one of them - to become something, to learn a way of \
+            fighting or living - is different. It is how a character grows, and it is meant \
+            to be final. If you have not yet taken up any calling and you meet what it asks, \
+            CONTINUE through it when it suits your temperament, or when it is the first one \
+            you have been offered in a long while. If you have one already, DECLINE.""";
 
     /**
      * What to send back: the action byte, a menu selection when one was asked for, and
