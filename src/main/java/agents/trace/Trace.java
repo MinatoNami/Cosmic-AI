@@ -31,29 +31,54 @@ import java.util.Map;
 public class Trace implements AutoCloseable {
     private static final Logger log = LoggerFactory.getLogger(Trace.class);
 
-    private final BufferedWriter writer;
+    private BufferedWriter writer;
     private final String agent;
+
+    /**
+     * Where this trace is written, and roughly how big it has got, so it can be rotated.
+     *
+     * Traces grew without limit - 20GB for one agent after two days - until nobody could read
+     * them. Past {@link #ROTATE_AT} the file is compressed aside and a new one started, and
+     * only the last {@link #KEEP_ROTATED} compressed files are kept.
+     */
+    private final Path path;
+    private long bytes;
+    private final long rotateAt;
+    static final long ROTATE_AT = 256L * 1024 * 1024;
+    static final int KEEP_ROTATED = 3;
     private final java.util.Set<String> labelled = new java.util.HashSet<>();
     private long nextDeliberationId;
     private long nextActionId;
 
-    private Trace(BufferedWriter writer, String agent) {
+    private Trace(BufferedWriter writer, String agent, Path path, long bytes, long rotateAt) {
         this.writer = writer;
         this.agent = agent;
+        this.path = path;
+        this.bytes = bytes;
+        this.rotateAt = rotateAt;
     }
 
     public static Trace toFile(Path path, String agent) {
+        return toFile(path, agent, ROTATE_AT);
+    }
+
+    /** With a rotation size of the caller's choosing, which is for tests. */
+    static Trace toFile(Path path, String agent, long rotateAt) {
         try {
             Files.createDirectories(path.getParent());
-            BufferedWriter writer = Files.newBufferedWriter(path, StandardCharsets.UTF_8,
-                    StandardOpenOption.CREATE, StandardOpenOption.APPEND);
-            return new Trace(writer, agent);
+            return new Trace(open(path), agent, path,
+                    Files.isRegularFile(path) ? Files.size(path) : 0, rotateAt);
         } catch (IOException e) {
             throw new UncheckedIOException("Could not open trace file " + path, e);
         }
     }
 
     public void observed(Episode episode) {
+        // A packet nothing understood says nothing a replay can use, and was a fifth of every
+        // trace. It is still an episode; it is just not written out.
+        if (episode.observation() instanceof agents.percept.Observation.Unrecognised) {
+            return;
+        }
         write("observe", episode.tick(), Map.of(
                 "id", episode.ref(),
                 "obs", describe(episode)));
@@ -172,7 +197,51 @@ public class Trace implements AutoCloseable {
         }
     }
 
-    private void write(String kind, long tick, Map<String, Object> fields) {
+    private static BufferedWriter open(Path path) throws IOException {
+        return Files.newBufferedWriter(path, StandardCharsets.UTF_8,
+                StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+    }
+
+    /**
+     * Compresses the full trace aside as {@code <name>.1.gz}, shifting older ones along and
+     * dropping the oldest, and starts an empty one.
+     *
+     * Done in line rather than on another thread: compressing 256MB takes a few seconds once
+     * a day or so, and a second writer racing this one for the same file is not worth that.
+     */
+    private void rotate() {
+        try {
+            writer.close();
+            Path oldest = rotated(KEEP_ROTATED);
+            Files.deleteIfExists(oldest);
+            for (int i = KEEP_ROTATED - 1; i >= 1; i--) {
+                if (Files.exists(rotated(i))) {
+                    Files.move(rotated(i), rotated(i + 1), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                }
+            }
+            try (var in = Files.newInputStream(path);
+                 var out = new java.util.zip.GZIPOutputStream(Files.newOutputStream(rotated(1)))) {
+                in.transferTo(out);
+            }
+            Files.delete(path);
+            log.info("Rotated the trace for {} to {}", agent, rotated(1).getFileName());
+        } catch (IOException e) {
+            log.warn("Could not rotate the trace for {}; carrying on in the same file", agent, e);
+        }
+        try {
+            writer = open(path);
+            bytes = Files.isRegularFile(path) ? Files.size(path) : 0;
+        } catch (IOException e) {
+            throw new UncheckedIOException("Could not reopen the trace at " + path, e);
+        }
+    }
+
+    private Path rotated(int generation) {
+        String name = path.getFileName().toString().replaceFirst("\\.jsonl$", "");
+        return path.resolveSibling(name + "." + generation + ".jsonl.gz");
+    }
+
+    private synchronized void write(String kind, long tick, Map<String, Object> fields) {
         Map<String, Object> event = new LinkedHashMap<>();
         event.put("t", tick);
         event.put("agent", agent);
@@ -180,8 +249,13 @@ public class Trace implements AutoCloseable {
         event.putAll(fields);
 
         try {
-            writer.write(Json.object(event));
+            String line = Json.object(event);
+            writer.write(line);
             writer.newLine();
+            bytes += line.length() + 1;
+            if (bytes >= rotateAt) {
+                rotate();
+            }
         } catch (IOException e) {
             // A broken trace must not take the agent down with it: losing the record of a run
             // is bad, losing the run is worse.
@@ -201,7 +275,7 @@ public class Trace implements AutoCloseable {
         return Math.round(value * 1000) / 1000.0;
     }
 
-    public void flush() {
+    public synchronized void flush() {
         try {
             writer.flush();
         } catch (IOException e) {
@@ -210,7 +284,7 @@ public class Trace implements AutoCloseable {
     }
 
     @Override
-    public void close() {
+    public synchronized void close() {
         flush();
         try {
             writer.close();
