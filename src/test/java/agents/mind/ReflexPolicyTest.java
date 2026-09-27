@@ -11,6 +11,7 @@ import org.junit.jupiter.api.io.TempDir;
 
 import java.awt.Point;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -1224,5 +1225,34 @@ class ReflexPolicyTest {
 
         assertEquals("east00", wanderer.pickDoor(JUNCTION_DOORS, mind, hub, "player:1").name(),
                 "west00 goes straight back to where it just came from");
+    }
+
+    /**
+     * The new generation's first ten minutes: three agents crossing between Southperry and
+     * Split Road every second and a half, each map's best door pointing at the other. Once it
+     * is going back and forth, the way back is not taken while there is another.
+     */
+    @Test
+    void stopsGoingBackAndForthBetweenTwoMaps() {
+        int hub = 990000001, before = 990000002, other = 990000003;
+        mind.take(new Observation.MapEntered(1, other, 0));
+        for (String door : new String[]{"west00", "east00"}) {
+            mind.saw(KnownWorld.mapRef(hub), "has_door", door, 2);
+        }
+        mind.infer(KnownWorld.portalRef(hub, "west00"), "leads_to", KnownWorld.mapRef(before), 2);
+        mind.infer(KnownWorld.portalRef(hub, "east00"), "leads_to", KnownWorld.mapRef(other), 2);
+        mind.saw(KnownWorld.mapRef(before), "has_door", "north00", 2);    // a reason to go back west
+        ReflexPolicy wanderer = new ReflexPolicy(new Random(1), Disposition.WANDERER);
+        int tick = 3;
+        for (int map : new int[]{hub, before, hub, before, hub}) {
+            world.update(new Observation.MapEntered(tick, map, 0));
+            mind.take(new Observation.MapEntered(tick, map, 0));
+            wanderer.decide(mind, world, tick++);
+        }
+        assertTrue(wanderer.bouncing());
+        wanderer.cameInAt(new Point(500, 0));
+
+        assertEquals("east00", wanderer.pickDoor(JUNCTION_DOORS, mind, hub, "player:1").name(),
+                "the unopened door beyond west00 would draw it back to the map it keeps bouncing to");
     }
 }

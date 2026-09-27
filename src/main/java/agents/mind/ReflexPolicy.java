@@ -406,6 +406,15 @@ public class ReflexPolicy implements Policy {
             }
             cameFrom = lastMapId >= 0 ? KnownWorld.mapRef(lastMapId) : null;
             lastMapId = world.mapId();
+            recentMaps.addLast(world.mapId());
+            while (recentMaps.size() > 6) {
+                recentMaps.removeFirst();
+            }
+            if (bouncing()) {
+                // Whatever was drawing it back and forth is not getting it anywhere.
+                destination = null;
+                destinationFromModel = false;
+            }
             decisionsHere = 0;
             wanderingTo = null;         // somewhere in the last map means nothing here
             String arrivedIn = KnownWorld.mapRef(world.mapId());
@@ -1135,7 +1144,7 @@ public class ReflexPolicy implements Policy {
         // seven tests said so at once.
         boolean alreadyOnTheWay = committedPortal != null;
         if (doorInMind == null) {
-            doorInMind = chooseDoor(doorsWithinReach(world, self), mind, world.mapId(),
+            doorInMind = chooseDoor(doorsWithinReach(world, self, mind), mind, world.mapId(),
                     "player:" + world.characterId());
         }
         WorldModel.PortalTarget door = alreadyOnTheWay ? committedPortal : doorInMind;
@@ -1222,12 +1231,44 @@ public class ReflexPolicy implements Policy {
      * choice had changed. An agent paced a ledge for as long as anyone watched while the
      * door option it kept rejecting scored 3.3 against wander's scraps.
      */
-    private List<WorldModel.PortalTarget> doorsWithinReach(WorldModel world, Point self) {
-        return world.portals().stream()
+    private List<WorldModel.PortalTarget> doorsWithinReach(WorldModel world, Point self, Mind mind) {
+        List<WorldModel.PortalTarget> reachable = world.portals().stream()
                 .filter(door -> !outOfMind(door.position()))
                 .filter(door -> door.position().distance(self) < PORTAL_RANGE
                         || agents.world.Navigator.nextStep(world.mapId(), self, door.position()).isPresent())
                 .toList();
+        return reachable;
+    }
+
+    /**
+     * Going back and forth between two maps: whichever rule proposes the door back, it is not
+     * taken while there is another. The new generation's first ten minutes were three agents
+     * crossing between Southperry and Split Road every second and a half.
+     */
+    private List<WorldModel.PortalTarget> notBackIfBouncing(List<WorldModel.PortalTarget> portals,
+                                                            KnownWorld known, int mapId) {
+        if (!bouncing() || cameFrom == null) {
+            return portals;
+        }
+        List<WorldModel.PortalTarget> onward = portals.stream()
+                .filter(door -> !known.destinationOf(KnownWorld.portalRef(mapId, door.name()))
+                        .map(cameFrom::equals).orElse(false))
+                .toList();
+        return onward.isEmpty() ? portals : onward;
+    }
+
+    /** The last few maps entered, to notice going back and forth. */
+    private final java.util.ArrayDeque<Integer> recentMaps = new java.util.ArrayDeque<>();
+
+    /** Whether the last four maps entered alternate between two. */
+    boolean bouncing() {
+        if (recentMaps.size() < 4) {
+            return false;
+        }
+        Integer[] maps = recentMaps.toArray(new Integer[0]);
+        int n = maps.length;
+        return !maps[n - 1].equals(maps[n - 2]) && maps[n - 1].equals(maps[n - 3])
+                && maps[n - 2].equals(maps[n - 4]);
     }
 
     /**
@@ -1329,6 +1370,7 @@ public class ReflexPolicy implements Policy {
             return null;
         }
         KnownWorld known = KnownWorld.rememberedBy(mind.semantic().liveBeliefs());
+        portals = notBackIfBouncing(portals, known, mapId);
         Set<String> beenThere = mapsVisited(mind);
         Set<String> companionsAre = companionMaps(mind, mapId, selfRef);
 
