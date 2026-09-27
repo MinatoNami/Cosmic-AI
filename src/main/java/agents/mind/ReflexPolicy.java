@@ -786,6 +786,7 @@ public class ReflexPolicy implements Policy {
             return;
         }
         Set<String> keepers = shopkeepers(mind);
+        keepers.removeAll(noUseNow(mind, world));
         Optional<WorldModel.Entity> keeper = world.visibleNpcs().stream()
                 .filter(npc -> keepers.contains("npc:" + npc.typeId()))
                 .filter(npc -> decisionsMade - shopTriedAt.getOrDefault(npc.typeId(), -SHOP_AGAIN) >= SHOP_AGAIN)
@@ -845,6 +846,22 @@ public class ReflexPolicy implements Policy {
 
     /** Enough for a handful of the cheapest potions. */
     private static final int MONEY_FOR_POTIONS = 100;
+
+    /**
+     * Shops that sold it nothing and bought nothing from it last time, while nothing has
+     * changed since: same money, nothing new in its bags. Going back would go the same way.
+     */
+    private Set<String> noUseNow(Mind mind, WorldModel world) {
+        Set<String> useless = new HashSet<>();
+        String meso = String.valueOf(world.inventory().meso());
+        for (Belief belief : mind.semantic().liveBeliefs()) {
+            if (belief.predicate().equals("shop_was_no_use") && belief.object().equals(meso)
+                    && belief.lastSeen() >= newThingSince) {
+                useless.add(belief.subject());
+            }
+        }
+        return useless;
+    }
 
     private static Set<String> shopkeepers(Mind mind) {
         Set<String> keepers = new HashSet<>();
@@ -1495,7 +1512,7 @@ public class ReflexPolicy implements Policy {
         return new Places.Weights(
                 2.0,                                        // a door never opened
                 1.2 + disposition.curiosity() * 0.6         // somebody never spoken to,
-                        + (seekingACalling ? 1.0 : 0),      // who might be the one to train it
+                        + (seekingACalling ? 2.0 : 0),      // who might be the one to train it
                 0.8,                                        // somebody worth hearing again
                 3.0,                                        // somebody owed a visit
                 3.5,                                        // a shop, when the bag is full

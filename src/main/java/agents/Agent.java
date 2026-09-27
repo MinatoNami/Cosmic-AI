@@ -141,6 +141,19 @@ public class Agent implements Runnable {
     private static final int RESTING_HP = 10;
     private static final int RESTING_MP = 3;
 
+    /** The shop last opened, and how the agent stood when it did. */
+    private int shopNpc = -1;
+    private int mesosAtCounter = -1;
+    private int stacksAtCounter = -1;
+
+    private int stacksCarried() {
+        int stacks = 0;
+        for (int type = agents.percept.Item.EQUIP; type <= agents.percept.Item.ETC; type++) {
+            stacks += world.inventory().carried(type).size();
+        }
+        return stacks;
+    }
+
     /** Who the agent was last in conversation with, and what job it had then. */
     private int lastSpokeWith = -1;
     private int lastJob = -1;
@@ -248,6 +261,9 @@ public class Agent implements Runnable {
             converse(observation);
             if (observation instanceof Observation.ShopOpened shop) {
                 shopkeeping.opened(shop, world, mind);
+                shopNpc = shop.npcId();
+                mesosAtCounter = world.inventory().meso();
+                stacksAtCounter = stacksCarried();
             }
         }
 
@@ -290,6 +306,14 @@ public class Agent implements Runnable {
             if (!shopkeeping.atCounter()) {
                 world.madeRoom();
                 log.info("{} leaves the shop with {} mesos", mind.name(), world.inventory().meso());
+                // Nothing sold, nothing bought: this counter has nothing for it as things stand.
+                // Writing that down is what stops the walk back here every half minute - one
+                // agent went to a pet-food shop for potions forty times in an hour.
+                if (shopNpc > 0 && world.inventory().meso() == mesosAtCounter
+                        && stacksCarried() == stacksAtCounter) {
+                    mind.saw("npc:" + shopNpc, "shop_was_no_use", String.valueOf(mesosAtCounter),
+                            perceiver.currentTick());
+                }
             }
             return;
         }

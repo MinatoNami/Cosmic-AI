@@ -1144,4 +1144,30 @@ class ReflexPolicyTest {
         assertEquals("west00", wanderer.pickDoor(JUNCTION_DOORS, mind, 10000, "player:1").name(),
                 "east00 leads into the map that killed it twice");
     }
+
+    /**
+     * A pet-food shop has no potions. Agent2 walked back to one for them about forty times an
+     * hour, came away with the same 392 mesos every time, and went back.
+     */
+    @Test
+    void doesNotGoBackToAShopThatWasNoUseWhileNothingHasChanged() {
+        fullBagNextToAShopkeeper(20);
+        mind.saw("npc:1012000", "shop_was_no_use", "100", 3);
+
+        String goal = policy.decide(mind, world, 4).goal();
+
+        assertFalse(goal.contains("sell what I cannot carry"),
+                "went straight back to a shop that did nothing for it, with the same 100 mesos: " + goal);
+    }
+
+    /** With different money it might be of use again, so it is worth another look. */
+    @Test
+    void triesTheShopAgainOnceItsMoneyHasChanged() {
+        fullBagNextToAShopkeeper(20);
+        mind.saw("npc:1012000", "shop_was_no_use", "40", 3);
+
+        Intent intent = policy.decide(mind, world, 4).intent();
+
+        assertEquals(1012000, assertInstanceOf(Intent.TalkTo.class, intent).npcId());
+    }
 }
