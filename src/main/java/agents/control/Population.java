@@ -432,15 +432,22 @@ public class Population {
                                 display(b.subject()), b.predicate(), display(b.object()),
                                 Math.round(b.confidence() * 1000) / 1000.0,
                                 b.provenance().name().toLowerCase(),
-                                b.supportedBy().size()))
+                                b.supportedBy().size(),
+                                b.subject(), b.object()))
                         .toList();
             }
         }
         return List.of();
     }
 
+    /**
+     * A belief as the pages show it: names to read, and the ids underneath them - which say
+     * what kind of thing each side is (npc:, monster:, map:, item:) so a page can group what
+     * an agent knows by what it is about.
+     */
     public record BeliefView(String id, String subject, String predicate, String object,
-                             double confidence, String provenance, int evidence) {
+                             double confidence, String provenance, int evidence,
+                             String subjectRef, String objectRef) {
     }
 
     /** Ids with their human names attached, for display only - see {@link Labels}. */

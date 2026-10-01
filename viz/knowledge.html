@@ -1,0 +1,684 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agent Knowledge</title>
+<style>
+  :root {
+    --bg: #fbfaf9; --panel: #ffffff; --panel-2: #f5f3f0; --line: #e4e0db; --ink: #1d1b19;
+    --ink-soft: #6b645d; --ink-faint: #9a938b; --accent: #2f6f4e; --accent-soft: #e8f1eb;
+    --hearsay: #9a6b2f; --hearsay-soft: #f6eddf; --inferred: #3d64a8; --inferred-soft: #e6ecf7;
+    --danger: #b4483c; --danger-soft: #f7e4e1; --radius: 8px;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #16151a; --panel: #1e1d24; --panel-2: #24232b; --line: #32303a; --ink: #eceaf0;
+      --ink-soft: #a8a3b2; --ink-faint: #736e7e; --accent: #6fcf9a; --accent-soft: #23342b;
+      --hearsay: #d6a45e; --hearsay-soft: #362c1e; --inferred: #8fb1ee; --inferred-soft: #222b3d;
+      --danger: #e2796b; --danger-soft: #3a2422;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  button, input, select { font: inherit; color: var(--ink); background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 5px 10px; }
+  button { cursor: pointer; }
+  button:hover { border-color: var(--ink-faint); }
+
+  header { position: sticky; top: 0; z-index: 5; background: var(--panel); border-bottom: 1px solid var(--line); }
+  .bar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 10px 16px; max-width: 1280px; margin: 0 auto; }
+  h1 { font-size: 15px; margin: 0; font-weight: 600; }
+  .spacer { flex: 1; }
+  .tabs { display: flex; gap: 4px; flex-wrap: wrap; }
+  .tab { border-radius: 999px; padding: 4px 12px; font-size: 13px; }
+  .tab.on { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+  .muted { color: var(--ink-soft); font-size: 12px; }
+
+  main { max-width: 1280px; margin: 0 auto; padding: 16px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); min-width: 0; }
+  .goal, .sub, td, .lesson li { overflow-wrap: anywhere; }
+  .card > h2 { margin: 0; padding: 10px 14px; font-size: 12px; letter-spacing: 0.07em; text-transform: uppercase; color: var(--ink-soft); border-bottom: 1px solid var(--line); display: flex; align-items: center; gap: 8px; }
+  .card > h2 .count { font-family: var(--mono); color: var(--ink-faint); letter-spacing: 0; text-transform: none; }
+  .card > h2 .hint { margin-left: auto; text-transform: none; letter-spacing: 0; font-weight: 400; color: var(--ink-faint); }
+  .pad { padding: 12px 14px; }
+
+  /* who and how */
+  .who { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 2fr); gap: 16px; padding: 14px; }
+  .who .name { font-size: 20px; font-weight: 600; letter-spacing: -0.01em; }
+  .who .sub { color: var(--ink-soft); font-size: 13px; }
+  .goal { margin-top: 8px; padding: 8px 10px; background: var(--panel-2); border-radius: 6px; font-size: 13px; }
+  .goal b { font-weight: 600; }
+  .meter { height: 6px; background: var(--panel-2); border-radius: 3px; overflow: hidden; margin-top: 3px; }
+  .meter > span { display: block; height: 100%; background: var(--accent); }
+  .meter.hp > span { background: var(--danger); }
+  .stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 8px; }
+  .stat { background: var(--panel-2); border-radius: 6px; padding: 7px 10px; }
+  .stat .k { font-size: 11px; color: var(--ink-faint); text-transform: uppercase; letter-spacing: 0.06em; }
+  .stat .v { font-family: var(--mono); font-size: 15px; }
+
+  /* overview tiles */
+  .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+  .tile { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 12px; cursor: pointer; text-align: left; }
+  .tile:hover { border-color: var(--accent); }
+  .tile .n { font-size: 22px; font-weight: 600; font-family: var(--mono); }
+  .tile .l { font-size: 12px; color: var(--ink-soft); }
+  .tile .d { font-size: 11px; color: var(--ink-faint); margin-top: 2px; }
+
+  /* source mix */
+  .mix { display: flex; height: 10px; border-radius: 5px; overflow: hidden; background: var(--panel-2); }
+  .mix span { display: block; height: 100%; }
+  .legend { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 8px; font-size: 12px; color: var(--ink-soft); }
+  .chip { display: inline-flex; align-items: center; gap: 6px; border-radius: 999px; padding: 3px 10px; font-size: 12px; cursor: pointer; user-select: none; }
+  .chip input { display: none; }
+  .chip.off { opacity: 0.4; text-decoration: line-through; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex: none; }
+  .first_hand { background: var(--accent); }
+  .hearsay { background: var(--hearsay); }
+  .inferred { background: var(--inferred); }
+
+  .controls { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+  .controls input[type=search] { flex: 1; min-width: 220px; }
+
+  /* lessons */
+  .lessons { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 10px; }
+  .lesson { border: 1px solid var(--line); border-radius: 6px; padding: 9px 11px; background: var(--panel-2); }
+  .lesson h3 { margin: 0 0 6px; font-size: 13px; font-weight: 600; display: flex; gap: 6px; align-items: baseline; }
+  .lesson h3 .count { font-family: var(--mono); font-size: 11px; color: var(--ink-faint); font-weight: 400; }
+  .lesson.bad { border-left: 3px solid var(--danger); }
+  .lesson.good { border-left: 3px solid var(--accent); }
+  .lesson ul { margin: 0; padding: 0; list-style: none; font-size: 13px; }
+  .lesson li { display: flex; gap: 6px; align-items: baseline; padding: 1px 0; }
+  .lesson li .dot { transform: translateY(-1px); }
+
+  /* tables */
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { text-align: left; font-size: 11px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-faint); padding: 8px 10px; border-bottom: 1px solid var(--line); position: sticky; top: 0; background: var(--panel); cursor: pointer; white-space: nowrap; }
+  th.sorted::after { content: " \2193"; }
+  td { padding: 7px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  tr.row { cursor: pointer; }
+  tr.row:hover td { background: var(--panel-2); }
+  tr.detail td { background: var(--panel-2); padding: 10px 14px 14px; }
+  td.num { font-family: var(--mono); text-align: right; white-space: nowrap; }
+  .scroller { max-height: 560px; overflow: auto; }
+  .tag { display: inline-block; font-size: 11px; padding: 1px 7px; border-radius: 999px; margin: 1px 3px 1px 0; white-space: nowrap; }
+  .tag.good { background: var(--accent-soft); color: var(--accent); }
+  .tag.warn { background: var(--hearsay-soft); color: var(--hearsay); }
+  .tag.bad { background: var(--danger-soft); color: var(--danger); }
+  .tag.info { background: var(--inferred-soft); color: var(--inferred); }
+  .tag.plain { background: var(--panel-2); color: var(--ink-soft); border: 1px solid var(--line); }
+  .here { font-weight: 600; }
+  .list { display: flex; flex-wrap: wrap; gap: 2px 4px; }
+  .detail-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
+  .detail-grid h4 { margin: 0 0 4px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-faint); font-weight: 500; }
+  .detail-grid ul { margin: 0; padding: 0; list-style: none; font-size: 13px; }
+  .detail-grid li { display: flex; gap: 6px; align-items: baseline; }
+  .conf { font-family: var(--mono); font-size: 11px; color: var(--ink-faint); }
+  .empty { color: var(--ink-faint); font-style: italic; padding: 12px 14px; }
+  .more { padding: 8px 14px; font-size: 12px; color: var(--ink-faint); }
+  .two { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; }
+  .err { margin: 16px; padding: 12px 14px; border-radius: var(--radius); background: var(--danger-soft); color: var(--danger); }
+  @media (max-width: 1100px) { .two { grid-template-columns: 1fr; } }
+  @media (max-width: 900px) { .who { grid-template-columns: 1fr; } }
+  @media (max-width: 600px) { .bar, main { padding-left: 16px; padding-right: 16px; } th:nth-child(n+4), td:nth-child(n+4) { display: none; } }
+</style>
+</head>
+<body>
+<header>
+  <div class="bar">
+    <h1>Agent knowledge</h1>
+    <div class="tabs" id="tabs"></div>
+    <span class="spacer"></span>
+    <span class="muted" id="updated">loading</span>
+    <label class="muted"><input type="checkbox" id="auto" checked> keep up to date</label>
+    <a href="/" class="muted">live page</a>
+  </div>
+</header>
+<main id="main"><div class="empty">Loading what the agents know...</div></main>
+
+<script>
+/* Everything here is read from the daemon: /api/status for who is out there and what they
+   are doing, /api/beliefs/<name> for what one of them currently holds true. Beliefs arrive
+   as triples - subject, predicate, object - with the ids underneath the names, and this page
+   only regroups them by what they are about. It works nothing out that the agent has not. */
+
+const REFRESH_MS = 30000;
+const PER_TABLE = 150;
+const SOURCES = {
+  first_hand: { label: 'seen first-hand', short: 'seen' },
+  hearsay: { label: 'heard from others', short: 'heard' },
+  inferred: { label: 'worked out', short: 'worked out' },
+};
+
+const state = {
+  agents: [], agent: null, beliefs: [], loadedAt: null,
+  query: '', sources: new Set(Object.keys(SOURCES)),
+  open: new Set(),            // expanded table rows, by section:key
+  sort: {},                   // section -> column index
+  shown: {},                  // section -> how many rows to show
+};
+
+const $ = (sel, root = document) => root.querySelector(sel);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const kind = ref => !ref ? '' : ref === 'self' ? 'self' : ref.includes(':') ? ref.slice(0, ref.indexOf(':')) : 'value';
+const num = n => Number(n).toLocaleString();
+
+/* ---------------------------------------------------------------- loading */
+
+async function json(url) {
+  const r = await fetch(url, { cache: 'no-store' });
+  if (!r.ok) throw new Error(`${url} answered ${r.status}`);
+  return r.json();
+}
+
+async function load(quiet) {
+  try {
+    const status = await json('/api/status');
+    state.agents = status.agents || [];
+    if (!state.agent || !state.agents.some(a => a.name === state.agent)) {
+      const wanted = new URLSearchParams(location.search).get('agent');
+      state.agent = state.agents.some(a => a.name === wanted) ? wanted : state.agents[0]?.name ?? null;
+    }
+    if (state.agent) {
+      const held = await json(`/api/beliefs/${encodeURIComponent(state.agent)}`);
+      state.beliefs = held.beliefs || [];
+    } else {
+      state.beliefs = [];
+    }
+    state.loadedAt = new Date();
+    render();
+  } catch (e) {
+    if (!quiet || !state.loadedAt) {
+      $('#main').innerHTML = `<div class="err">Could not reach the agents: ${esc(e.message)}. Is the daemon running, and are you on Tailscale?</div>`;
+    }
+    $('#updated').textContent = 'not updating';
+  }
+}
+
+function pick(name) {
+  if (name === state.agent) return;
+  state.agent = name;
+  state.open.clear();
+  state.shown = {};
+  const url = new URL(location.href);
+  url.searchParams.set('agent', name);
+  history.replaceState(null, '', url);
+  $('#main').innerHTML = `<div class="empty">Loading what ${esc(name)} knows...</div>`;
+  load();
+}
+
+/* ---------------------------------------------------------------- reading the beliefs */
+
+/* Stats that only ever grow keep their largest value, and spent points their smallest, so a
+   mind still carrying old duplicates of a single-valued stat reads as its latest state. */
+const GROWS = new Set(['level', 'str', 'dex', 'int', 'luk', 'exp', 'maxhp', 'maxmp']);
+const SPENDS = new Set(['availableap', 'availablesp']);
+
+function visible(b) {
+  if (!state.sources.has(b.provenance)) return false;
+  if (!state.query) return true;
+  const q = state.query;
+  return [b.subject, b.predicate, b.object, b.subjectRef, b.objectRef].some(v => String(v ?? '').toLowerCase().includes(q));
+}
+
+function model(all, filtered = true) {
+  const beliefs = filtered ? all.filter(visible) : all;
+  const self = {};
+  const maps = new Map(), npcs = new Map(), monsters = new Map(), items = new Map(),
+        quests = new Map(), players = new Map(), lessons = {};
+  const claims = [];
+  const ref = b => b.subjectRef ?? b.subject;
+  const oref = b => b.objectRef ?? b.object;
+
+  const entry = (table, key, name, make) => {
+    if (!table.has(key)) table.set(key, Object.assign({ key, name: name || key, facts: [] }, make()));
+    const e = table.get(key);
+    if (name && (e.name === key || e.name.includes(':'))) e.name = name;
+    return e;
+  };
+  const place = (r, name) => entry(maps, r, name, () => ({ doors: new Map(), npcs: new Map(), monsters: new Map(), drops: new Map(), players: new Map(), deaths: [], firstHand: false }));
+  const npc = (r, name) => entry(npcs, r, name, () => ({ where: new Map(), spoke: false, shop: false, sells: [], wants: [], warnings: [] }));
+  const monster = (r, name) => entry(monsters, r, name, () => ({ where: new Map(), hurts: null, exp: [], drops: [] }));
+  const item = (r, name) => entry(items, r, name, () => ({ effects: [], soldBy: [], droppedBy: [], where: new Map() }));
+  const lesson = (name, tone, b, text) => (lessons[name] ??= { tone, items: [] }).items.push({ b, text });
+
+  for (const b of beliefs) {
+    const s = ref(b), o = oref(b), p = b.predicate;
+    const sk = kind(s), ok = kind(o);
+
+    if (sk === 'self') {
+      const prev = self[p];
+      const v = Number(b.object);
+      if (prev === undefined || (GROWS.has(p) && v > Number(prev.object)) || (SPENDS.has(p) && v < Number(prev.object))) self[p] = b;
+      continue;
+    }
+    if (p === 'said') { claims.push(b); continue; }
+
+    switch (sk) {
+      case 'map': {
+        const m = place(s, b.subject);
+        m.facts.push(b);
+        if (b.provenance === 'first_hand') m.firstHand = true;
+        if (p === 'has_door') {
+          const d = m.doors.get(b.object) ?? { name: b.object, to: null, toName: null, known: b };
+          d.known = b; m.doors.set(b.object, d);
+        } else if (p === 'killed_you_at_level') {
+          m.deaths.push(b);
+          lesson('Places that killed it', 'bad', b, `${b.subject} - at level ${b.object}`);
+        }
+        break;
+      }
+      case 'portal': {
+        // portal:<mapId>/<door> leads_to map:<id> or nowhere
+        const at = s.slice('portal:'.length);
+        const slash = at.lastIndexOf('/');
+        const m = place('map:' + at.slice(0, slash));
+        const door = at.slice(slash + 1);
+        const d = m.doors.get(door) ?? { name: door, to: null, toName: null, known: null };
+        if (p === 'leads_to') { d.to = o; d.toName = b.object; d.via = b; }
+        m.doors.set(door, d);
+        if (ok === 'map') place(o, b.object);
+        break;
+      }
+      case 'npc': {
+        const n = npc(s, b.subject);
+        n.facts.push(b);
+        if (p === 'present_in' || p === 'talks_in') {
+          n.where.set(o, b.object);
+          place(o, b.object).npcs.set(s, n);
+          if (p === 'talks_in') n.spoke = true;
+        } else if (p === 'runs_shop') {
+          n.shop = true;
+        } else if (p === 'sells') {
+          n.sells.push(b);
+          item(o, b.object).soldBy.push({ b, who: n });
+        } else if (p === 'wants_first') {
+          n.wants.push(b);
+        } else if (p === 'strands_you') {
+          n.warnings.push({ b, text: 'strands you' });
+          lesson('People to avoid', 'bad', b, `${b.subject} - took it somewhere with no way out`);
+        } else if (p === 'does_not_answer') {
+          n.warnings.push({ b, text: 'never answers' });
+        } else if (p === 'shop_was_no_use') {
+          n.warnings.push({ b, text: 'shop was no use' });
+        } else if (p === 'sends_you_to' || p === 'trained_by') {
+          lesson('Where people send it', 'info', b, `${b.subject} ${p.replace(/_/g, ' ')} ${b.object}`);
+        }
+        break;
+      }
+      case 'monster': {
+        const mo = monster(s, b.subject);
+        mo.facts.push(b);
+        if (p === 'present_in') {
+          mo.where.set(o, b.object);
+          place(o, b.object).monsters.set(s, mo);
+        } else if (p === 'hurts_you') {
+          mo.hurts = b;
+          lesson('Monsters that hurt it', 'bad', b, b.subject);
+        } else if (p === 'gives_exp') {
+          mo.exp.push(b);
+          lesson('What a kill is worth', 'good', b, `${b.subject} - ${b.object} exp`);
+        } else if (p === 'drops') {
+          mo.drops.push(b);
+          if (ok === 'item') item(o, b.object).droppedBy.push({ b, who: mo });
+          lesson('What monsters drop', 'good', b, `${b.subject} drops ${b.object}`);
+        }
+        break;
+      }
+      case 'item': case 'meso': {
+        const it = item(s, b.subject);
+        it.facts.push(b);
+        if (p === 'dropped_in') {
+          it.where.set(o, b.object);
+          place(o, b.object).drops.set(s, it);
+        } else if (p.startsWith('restores_')) {
+          const what = p.slice('restores_'.length).toUpperCase();
+          const works = b.object === 'true';
+          it.effects.push({ b, text: works ? `restores ${what}` : `does not restore ${what}`, works });
+          lesson(works ? `What restores ${what}` : 'Drunk, and it did not help', works ? 'good' : 'plain', b,
+            works ? b.subject : `${b.subject} - not for ${what}`);
+        }
+        break;
+      }
+      case 'quest': {
+        const q = entry(quests, s, b.subject, () => ({ state: null }));
+        q.facts.push(b);
+        if (p === 'state') q.state = b;
+        break;
+      }
+      case 'player': {
+        const pl = entry(players, s, null, () => ({ named: null, level: null, at: null }));
+        pl.facts.push(b);
+        if (p === 'named') { pl.named = b; pl.name = b.object; }
+        else if (p === 'level') pl.level = b;
+        else if (p === 'in_map') { pl.at = b; place(o, b.object).players.set(s, pl); }
+        break;
+      }
+    }
+  }
+  for (const c of claims) {
+    const pl = entry(players, ref(c), null, () => ({ named: null, level: null, at: null }));
+    (pl.claims ??= []).push(c);
+  }
+  for (const pl of players.values()) if (pl.named) pl.name = pl.named.object;
+  // One line a person, however many conditions they named: an NPC asked eight times names
+  // eight slightly different prices, and a line each buried everyone else.
+  for (const n of npcs.values()) {
+    if (!n.wants.length) continue;
+    const first = strongest(n.wants);
+    lesson('People who want something first', 'info', first,
+      `${n.name}: ${first.object}${n.wants.length > 1 ? ` (and ${n.wants.length - 1} other condition${n.wants.length === 2 ? '' : 's'})` : ''}`);
+  }
+  return { beliefs, self, maps, npcs, monsters, items, quests, players, lessons, claims };
+}
+
+/* ---------------------------------------------------------------- pieces */
+
+const src = b => b ? `<span class="dot ${esc(b.provenance)}" title="${esc(SOURCES[b.provenance]?.label ?? b.provenance)}, confidence ${Math.round(b.confidence * 100)}%${b.evidence ? `, ${b.evidence} sighting${b.evidence === 1 ? '' : 's'}` : ''}"></span>` : '';
+const tag = (text, tone = 'plain', b) => `<span class="tag ${tone}"${b ? ` title="${esc(SOURCES[b.provenance]?.label)}, ${Math.round(b.confidence * 100)}%"` : ''}>${esc(text)}</span>`;
+const strongest = list => list.reduce((best, b) => !best || (b && b.provenance === 'first_hand' && best.provenance !== 'first_hand') || (b && b.confidence > best.confidence) ? b : best, null);
+
+function meter(value, max, cls = '') {
+  if (!(value >= 0) || !(max > 0)) return '';
+  return `<div class="meter ${cls}"><span style="width:${Math.min(100, value / max * 100).toFixed(1)}%"></span></div>`;
+}
+
+function renderWho(agent, m) {
+  const s = k => m.self[k]?.object;
+  const level = agent?.level ?? s('level');
+  const hp = agent?.hp ?? s('hp'), maxHp = agent?.maxHp ?? s('maxhp');
+  const stat = (k, v, extra = '') => v === undefined || v === null || v === '' ? '' : `<div class="stat"><div class="k">${k}</div><div class="v">${esc(v)}</div>${extra}</div>`;
+  const job = s('job');
+  return `
+  <section class="card">
+    <div class="who">
+      <div>
+        <div class="name">${esc(state.agent)}</div>
+        <div class="sub">${agent ? `${esc(agent.disposition)} &middot; ${esc(agent.policy)} &middot; ${agent.alive ? 'online' : 'offline'}` : 'not running'}</div>
+        <div class="sub">in <b>${esc(agent?.mapName ?? m.self.in_map?.object ?? 'unknown')}</b></div>
+        ${agent?.goal ? `<div class="goal"><b>${esc(agent.intent)}</b> &middot; ${esc(agent.goal)}</div>` : ''}
+      </div>
+      <div class="stats">
+        ${stat('Level', level)}
+        ${stat('Job', job === undefined ? undefined : job === '0' ? 'Beginner' : job)}
+        ${stat('HP', hp >= 0 ? `${hp} / ${maxHp}` : undefined, meter(hp, maxHp, 'hp'))}
+        ${stat('MP', s('mp') !== undefined ? `${s('mp')} / ${s('maxmp') ?? '?'}` : undefined, meter(Number(s('mp')), Number(s('maxmp'))))}
+        ${stat('Mesos', s('meso') !== undefined ? num(s('meso')) : undefined)}
+        ${stat('EXP', s('exp') !== undefined ? num(s('exp')) : undefined)}
+        ${stat('STR', s('str'))}${stat('DEX', s('dex'))}${stat('INT', s('int'))}${stat('LUK', s('luk'))}
+        ${stat('AP to spend', s('availableap'))}${stat('SP to spend', s('availablesp'))}
+      </div>
+    </div>
+  </section>`;
+}
+
+function renderOverview(m, all) {
+  const doors = [...m.maps.values()].flatMap(x => [...x.doors.values()]);
+  const opened = doors.filter(d => d.to && d.to !== 'nowhere').length;
+  const dead = doors.filter(d => d.to === 'nowhere').length;
+  const unopened = doors.filter(d => !d.to).length;
+  const visited = [...m.maps.values()].filter(x => x.firstHand).length;
+  const spoke = [...m.npcs.values()].filter(n => n.spoke).length;
+  const shops = [...m.npcs.values()].filter(n => n.shop).length;
+  const hurt = [...m.monsters.values()].filter(x => x.hurts).length;
+  const healers = [...m.items.values()].filter(x => x.effects.some(e => e.works)).length;
+  const active = [...m.quests.values()].filter(q => q.state?.object === '1').length;
+  const done = [...m.quests.values()].filter(q => q.state?.object === '2').length;
+  const tile = (id, n, label, detail) => `<button class="tile" data-jump="${id}"><div class="n">${num(n)}</div><div class="l">${label}</div><div class="d">${detail}</div></button>`;
+
+  const counts = { first_hand: 0, hearsay: 0, inferred: 0 };
+  for (const b of all) counts[b.provenance] = (counts[b.provenance] ?? 0) + 1;
+  const total = all.length || 1;
+  const chip = k => `<label class="chip ${state.sources.has(k) ? '' : 'off'}" style="background: var(--panel-2)"><input type="checkbox" data-source="${k}" ${state.sources.has(k) ? 'checked' : ''}><span class="dot ${k}"></span>${SOURCES[k].label} <b>${num(counts[k] ?? 0)}</b></label>`;
+
+  return `
+  <section class="card">
+    <h2>What it knows <span class="count">${num(all.length)} beliefs</span></h2>
+    <div class="pad">
+      <div class="tiles">
+        ${tile('places', m.maps.size, 'places known', `${visited} stood in`)}
+        ${tile('places', doors.length, 'doors known', `${opened} lead somewhere, ${dead} dead ends, ${unopened} never opened`)}
+        ${tile('people', m.npcs.size, 'people known', `${spoke} spoken to, ${shops} run a shop`)}
+        ${tile('monsters', m.monsters.size, 'monsters known', `${hurt} known to hurt`)}
+        ${tile('items', m.items.size, 'items known', `${healers} known to heal`)}
+        ${tile('quests', m.quests.size, 'quests', `${active} under way, ${done} done`)}
+        ${tile('players', m.players.size, 'other players', `${num(m.claims.length)} things they said`)}
+      </div>
+      <div style="margin-top: 14px">
+        <div class="mix" title="where its beliefs came from">
+          ${Object.keys(SOURCES).map(k => `<span class="${k}" style="width:${((counts[k] ?? 0) / total * 100).toFixed(2)}%"></span>`).join('')}
+        </div>
+        <div class="controls" style="margin-top: 10px">
+          ${Object.keys(SOURCES).map(chip).join('')}
+          <input type="search" id="q" placeholder="Search everything it knows: a map, a person, a monster, an item..." value="${esc(state.query)}">
+        </div>
+      </div>
+    </div>
+  </section>`;
+}
+
+function renderLessons(m) {
+  const order = ['Monsters that hurt it', 'Places that killed it', 'People to avoid', 'What restores HP', 'What restores MP', 'What a kill is worth', 'What monsters drop', 'People who want something first', 'Where people send it', 'Drunk, and it did not help'];
+  const shown = order.filter(k => m.lessons[k]);
+  if (!shown.length) return '';
+  const card = k => {
+    const l = m.lessons[k];
+    const items = l.items.slice(0, 12);
+    return `<div class="lesson ${l.tone}"><h3>${esc(k)} <span class="count">${l.items.length}</span></h3><ul>
+      ${items.map(i => `<li>${src(i.b)}<span>${esc(i.text)}</span></li>`).join('')}
+      ${l.items.length > items.length ? `<li class="muted">and ${l.items.length - items.length} more</li>` : ''}
+    </ul></div>`;
+  };
+  return `
+  <section class="card" id="lessons">
+    <h2>What it has learnt <span class="hint">the conclusions that change what it does</span></h2>
+    <div class="pad"><div class="lessons">${shown.map(card).join('')}</div></div>
+  </section>`;
+}
+
+/* A sortable, expandable table. columns: [{ label, value(row) for sorting, html(row), num }] */
+function table(id, title, hint, rows, columns, detail, here, defaultSort = 0) {
+  if (!rows.length) {
+    return `<section class="card" id="${id}"><h2>${title} <span class="count">0</span></h2><div class="empty">${state.query ? 'Nothing here matches the search.' : 'Nothing known yet.'}</div></section>`;
+  }
+  const sortCol = state.sort[id] ?? defaultSort;
+  const col = columns[sortCol];
+  const sorted = [...rows].sort((a, b) => {
+    if (here && (here(a) !== here(b))) return here(a) ? -1 : 1;
+    const x = col.value(a), y = col.value(b);
+    const by = typeof x === 'number' ? y - x : String(x).localeCompare(String(y));
+    return by || String(a.name ?? '').localeCompare(String(b.name ?? ''));
+  });
+  const limit = state.shown[id] ?? PER_TABLE;
+  const body = sorted.slice(0, limit).map(r => {
+    const key = `${id}:${r.key}`;
+    const open = state.open.has(key);
+    return `<tr class="row" data-open="${esc(key)}">${columns.map(c => `<td class="${c.num ? 'num' : ''}">${c.html(r)}</td>`).join('')}</tr>
+      ${open ? `<tr class="detail"><td colspan="${columns.length}">${detail(r)}</td></tr>` : ''}`;
+  }).join('');
+  return `
+  <section class="card" id="${id}">
+    <h2>${title} <span class="count">${num(rows.length)}</span><span class="hint">${hint}</span></h2>
+    <div class="scroller"><table>
+      <thead><tr>${columns.map((c, i) => `<th data-sort="${id}:${i}" class="${i === sortCol ? 'sorted' : ''}">${c.label}</th>`).join('')}</tr></thead>
+      <tbody>${body}</tbody>
+    </table></div>
+    ${sorted.length > limit ? `<div class="more">${num(sorted.length - limit)} more. <a href="#" data-more="${id}">Show them</a> or narrow the search.</div>` : ''}
+  </section>`;
+}
+
+const names = (map, max = 4) => {
+  const all = [...map.values()].map(v => typeof v === 'string' ? v : v.name);
+  const head = all.slice(0, max).map(n => esc(n)).join(', ');
+  return all.length > max ? `${head} <span class="muted">+${all.length - max}</span>` : head || '<span class="muted">-</span>';
+};
+const factList = facts => `<ul>${facts.map(b => `<li>${src(b)}<span>${esc(b.predicate.replace(/_/g, ' '))} <b>${esc(b.object)}</b></span> <span class="conf">${Math.round(b.confidence * 100)}%</span></li>`).join('')}</ul>`;
+
+function renderPlaces(m, agent) {
+  const hereRef = agent ? `map:${agent.mapId}` : m.self.in_map?.objectRef;
+  const rows = [...m.maps.values()].filter(x => x.key.startsWith('map:'));
+  const doorsOf = x => [...x.doors.values()];
+  return table('places', 'Places', 'click a place for its doors and who is there', rows, [
+    { label: 'Place', value: x => x.name, html: x => `${x.key === hereRef ? '<span class="tag good">here now</span> ' : ''}<span class="${x.key === hereRef ? 'here' : ''}">${esc(x.name)}</span>${x.firstHand && x.key !== hereRef ? ' <span class="tag info" title="it has stood here itself">been here</span>' : ''}${x.deaths.length ? ` <span class="tag bad">died here ${x.deaths.length}&times;</span>` : ''}` },
+    { label: 'Doors', value: x => x.doors.size, html: x => {
+        const d = doorsOf(x), open = d.filter(y => y.to && y.to !== 'nowhere').length, none = d.filter(y => !y.to).length;
+        return `${d.length}${none ? ` <span class="tag warn" title="doors it has never opened">${none} unopened</span>` : ''}`; } },
+    { label: 'People', num: true, value: x => x.npcs.size, html: x => x.npcs.size || '' },
+    { label: 'Monsters', value: x => x.monsters.size, html: x => names(x.monsters, 3) },
+  ], x => {
+    const rank = y => y.to && y.to !== 'nowhere' ? 0 : !y.to ? 1 : 2;
+    const d = doorsOf(x).sort((a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name));
+    return `<div class="detail-grid">
+      <div><h4>Doors</h4><ul>${d.map(y => `<li>${src(y.via ?? y.known)}<span><b>${esc(y.name)}</b> &rarr; ${y.to === 'nowhere' ? '<span class="tag plain">goes nowhere</span>' : y.to ? esc(y.toName) : '<span class="tag warn">never opened</span>'}</span></li>`).join('') || '<li class="muted">none known</li>'}</ul></div>
+      <div><h4>People here</h4><ul>${[...x.npcs.values()].map(n => `<li>${src(strongest(n.facts))}<span>${esc(n.name)}${n.shop ? ' <span class="tag good">shop</span>' : ''}${n.spoke ? '' : ' <span class="tag warn">stranger</span>'}</span></li>`).join('') || '<li class="muted">nobody known</li>'}</ul></div>
+      <div><h4>Monsters here</h4><ul>${[...x.monsters.values()].map(mo => `<li>${src(strongest(mo.facts))}<span>${esc(mo.name)}${mo.hurts ? ' <span class="tag bad">hurts</span>' : ''}</span></li>`).join('') || '<li class="muted">none seen</li>'}</ul></div>
+      <div><h4>Dropped here</h4><ul>${[...x.drops.values()].slice(0, 30).map(it => `<li><span>${esc(it.name)}</span></li>`).join('') || '<li class="muted">nothing seen</li>'}</ul>
+        ${x.players.size ? `<h4 style="margin-top:10px">Players last seen here</h4><ul>${[...x.players.values()].map(p => `<li>${esc(p.name)}</li>`).join('')}</ul>` : ''}
+        ${x.deaths.length ? `<h4 style="margin-top:10px">Died here</h4>${factList(x.deaths)}` : ''}</div>
+    </div>`;
+  }, x => x.key === hereRef);
+}
+
+function renderPeople(m) {
+  const rows = [...m.npcs.values()];
+  return table('people', 'People', 'shops, errands and who to avoid', rows, [
+    { label: 'Who', value: x => x.name, html: x => `${src(strongest(x.facts))} ${esc(x.name)}` },
+    { label: 'Where', value: x => [...x.where.values()][0] ?? '', html: x => names(x.where, 2) },
+    { label: 'Known for', value: x => (x.shop ? 4 : 0) + (x.wants.length ? 2 : 0) + (x.warnings.length ? 1 : 0), html: x => [
+        x.spoke ? tag('spoken to', 'good') : tag('stranger', 'warn'),
+        x.shop ? tag(`shop${x.sells.length ? `, ${x.sells.length} items` : ''}`, 'good') : '',
+        ...x.wants.map(w => tag(`wants ${w.object}`, 'info', w)),
+        ...x.warnings.map(w => tag(w.text, 'bad', w.b)),
+      ].join('') },
+  ], x => `<div class="detail-grid">
+      <div><h4>Everything known about ${esc(x.name)}</h4>${factList(x.facts.filter(b => b.predicate !== 'sells'))}</div>
+      ${x.sells.length ? `<div><h4>Sells</h4><div class="list">${x.sells.map(s => tag(s.object, 'plain', s)).join('')}</div></div>` : ''}
+    </div>`, null, 2);
+}
+
+function renderMonsters(m) {
+  const rows = [...m.monsters.values()];
+  return table('monsters', 'Monsters', 'where they live and what fighting them is like', rows, [
+    { label: 'Monster', value: x => x.name, html: x => `${src(strongest(x.facts))} ${esc(x.name)}` },
+    { label: 'Seen in', num: true, value: x => x.where.size, html: x => x.where.size },
+    { label: 'Learnt', value: x => (x.hurts ? 2 : 0) + x.exp.length + x.drops.length, html: x => [
+        x.hurts ? tag('hurts you', 'bad', x.hurts) : '',
+        ...x.exp.map(e => tag(`${e.object} exp`, 'good', e)),
+        ...x.drops.slice(0, 4).map(d => tag(`drops ${d.object}`, 'info', d)),
+      ].join('') },
+  ], x => `<div class="detail-grid">
+      <div><h4>Seen in</h4><ul>${[...x.where.values()].map(w => `<li>${esc(w)}</li>`).join('')}</ul></div>
+      <div><h4>Everything known</h4>${factList(x.facts.filter(b => b.predicate !== 'present_in'))}</div>
+    </div>`, null, 2);
+}
+
+function renderItems(m) {
+  const rows = [...m.items.values()];
+  return table('items', 'Items', 'what things do, and where to get them', rows, [
+    { label: 'Item', value: x => x.name, html: x => `${src(strongest(x.facts.concat(x.soldBy.map(s => s.b))))} ${esc(x.name)}` },
+    { label: 'Does', value: x => x.effects.length ? (x.effects.some(e => e.works) ? 2 : 1) : 0, html: x => x.effects.map(e => tag(e.text, e.works ? 'good' : 'plain', e.b)).join('') || '<span class="muted">not tried</span>' },
+    { label: 'Get it from', value: x => x.soldBy.length + x.droppedBy.length, html: x => [
+        ...x.soldBy.slice(0, 2).map(s => tag(`${s.who.name} sells it`, 'plain', s.b)),
+        ...x.droppedBy.slice(0, 2).map(s => tag(`${s.who.name} drops it`, 'info', s.b)),
+        x.soldBy.length + x.droppedBy.length > 4 ? `<span class="muted">+${x.soldBy.length + x.droppedBy.length - 4}</span>` : '',
+      ].join('') },
+    { label: 'Found in', num: true, value: x => x.where.size, html: x => x.where.size || '' },
+  ], x => `<div class="detail-grid">
+      ${x.soldBy.length ? `<div><h4>Sold by</h4><ul>${x.soldBy.map(s => `<li>${src(s.b)}${esc(s.who.name)}</li>`).join('')}</ul></div>` : ''}
+      ${x.droppedBy.length ? `<div><h4>Dropped by</h4><ul>${x.droppedBy.map(s => `<li>${src(s.b)}${esc(s.who.name)}</li>`).join('')}</ul></div>` : ''}
+      ${x.where.size ? `<div><h4>Seen on the ground in</h4><ul>${[...x.where.values()].map(w => `<li>${esc(w)}</li>`).join('')}</ul></div>` : ''}
+      ${x.effects.length ? `<div><h4>What drinking it did</h4><ul>${x.effects.map(e => `<li>${src(e.b)}${esc(e.text)}</li>`).join('')}</ul></div>` : ''}
+    </div>`, null, 1);
+}
+
+function renderQuests(m) {
+  const label = s => s === '2' ? tag('done', 'good') : s === '1' ? tag('under way', 'warn') : tag('not started', 'plain');
+  const rows = [...m.quests.values()];
+  return table('quests', 'Quests', 'what it has taken on', rows, [
+    { label: 'Quest', value: x => x.name, html: x => `${src(x.state)} ${esc(x.name)}` },
+    { label: 'State', value: x => ({ '1': 2, '2': 1 })[x.state?.object] ?? 0, html: x => label(x.state?.object) },
+  ], x => factList(x.facts), null, 1);
+}
+
+function renderPlayers(m) {
+  const rows = [...m.players.values()];
+  return table('players', 'Other players', 'and what they have told it', rows, [
+    { label: 'Who', value: x => x.name, html: x => `${src(x.named)} ${esc(x.name)}` },
+    { label: 'Level', num: true, value: x => Number(x.level?.object ?? 0), html: x => esc(x.level?.object ?? '') },
+    { label: 'Last seen in', value: x => x.at?.object ?? '', html: x => esc(x.at?.object ?? '') },
+    { label: 'Has said', num: true, value: x => x.claims?.length ?? 0, html: x => x.claims?.length ?? 0 },
+  ], x => `<ul style="margin:0;padding:0;list-style:none;font-family:var(--mono);font-size:12px">${(x.claims ?? []).slice(0, 60).map(c => `<li>${esc(c.object.replace(/^!know\s*/, ''))}</li>`).join('') || '<li class="muted">nothing</li>'}</ul>`);
+}
+
+function renderEverything(m) {
+  const rows = m.beliefs.map(b => ({ key: b.id, b }));
+  return table('everything', 'Every belief', 'the raw triples, for anything the sections above do not cover', rows, [
+    { label: 'About', value: r => r.b.subject, html: r => `${src(r.b)} ${esc(r.b.subject)}` },
+    { label: 'Believes', value: r => r.b.predicate, html: r => esc(r.b.predicate.replace(/_/g, ' ')) },
+    { label: 'What', value: r => r.b.object, html: r => esc(r.b.object) },
+    { label: 'Confidence', num: true, value: r => r.b.confidence, html: r => `${Math.round(r.b.confidence * 100)}%` },
+  ], r => `<div class="muted">${esc(SOURCES[r.b.provenance]?.label)}, confidence ${Math.round(r.b.confidence * 100)}%, ${r.b.evidence} piece${r.b.evidence === 1 ? '' : 's'} of evidence. Ids: <code>${esc(r.b.subjectRef ?? '?')}</code> ${esc(r.b.predicate)} <code>${esc(r.b.objectRef ?? '?')}</code> (${esc(r.b.id)})</div>`);
+}
+
+/* ---------------------------------------------------------------- page */
+
+function render() {
+  $('#tabs').innerHTML = state.agents.map(a => `<button class="tab ${a.name === state.agent ? 'on' : ''}" data-agent="${esc(a.name)}">${esc(a.name)} <span class="muted">lv ${esc(a.level)}</span></button>`).join('');
+  $('#updated').textContent = state.loadedAt ? `updated ${state.loadedAt.toLocaleTimeString()}` : '';
+  if (!state.agent) {
+    $('#main').innerHTML = `<div class="empty">No agents are running. Start some from the <a href="/">live page</a>.</div>`;
+    return;
+  }
+  const agent = state.agents.find(a => a.name === state.agent);
+  const m = model(state.beliefs);
+  const focused = document.activeElement?.id === 'q';
+  const caret = focused ? document.activeElement.selectionStart : 0;
+  const scroll = window.scrollY;
+  // Beliefs from a daemon older than this page carry names but not the ids beneath them,
+  // and without ids nothing can be told apart: a monster and a map are both just names.
+  const old = state.beliefs.length && !state.beliefs.some(b => b.subjectRef);
+  $('#main').innerHTML = [
+    old ? `<div class="err">This agent daemon is older than this page: it sends what each belief says but not what kind of thing it is about, so the sections below are incomplete and partly mixed up. Rebuild and restart the agents to fix this. <b>Every belief</b>, at the bottom, is accurate either way.</div>` : '',
+    renderWho(agent, model(state.beliefs.filter(b => (b.subjectRef ?? b.subject) === 'self'), false)),
+    renderOverview(m, state.beliefs),
+    renderLessons(m),
+    renderPlaces(m, agent),
+    `<div class="two">${renderPeople(m)}${renderMonsters(m)}</div>`,
+    `<div class="two">${renderItems(m)}${renderQuests(m)}</div>`,
+    renderPlayers(m),
+    renderEverything(m),
+  ].join('');
+  if (focused) { const q = $('#q'); q.focus(); q.setSelectionRange(caret, caret); }
+  window.scrollTo(0, scroll);
+}
+
+document.addEventListener('click', e => {
+  const t = e.target.closest('[data-agent],[data-jump],[data-open],[data-sort],[data-more]');
+  if (!t) return;
+  if (t.dataset.agent) return pick(t.dataset.agent);
+  if (t.dataset.jump) return document.getElementById(t.dataset.jump)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  if (t.dataset.more) { e.preventDefault(); state.shown[t.dataset.more] = Infinity; return render(); }
+  if (t.dataset.sort) { const [id, i] = t.dataset.sort.split(':'); state.sort[id] = Number(i); return render(); }
+  if (t.dataset.open) { state.open.has(t.dataset.open) ? state.open.delete(t.dataset.open) : state.open.add(t.dataset.open); return render(); }
+});
+document.addEventListener('change', e => {
+  if (e.target.dataset.source) {
+    const k = e.target.dataset.source;
+    state.sources.has(k) ? state.sources.delete(k) : state.sources.add(k);
+    render();
+  }
+});
+let typing;
+document.addEventListener('input', e => {
+  if (e.target.id !== 'q') return;
+  clearTimeout(typing);
+  typing = setTimeout(() => { state.query = e.target.value.trim().toLowerCase(); state.shown = {}; render(); }, 200);
+});
+
+load();
+setInterval(() => { if ($('#auto').checked && !document.hidden) load(true); }, REFRESH_MS);
+</script>
+</body>
+</html>

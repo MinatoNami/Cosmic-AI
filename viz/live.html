@@ -118,7 +118,7 @@
     <div class="pane-title">
       <span>what <span id="watchedName">nobody</span> knows and is doing</span>
       <span class="spacer"></span>
-      <a id="graphLink" href="#" target="_blank" style="color: var(--accent); font-size: 12px;">full graph</a>
+      <a id="graphLink" href="/knowledge.html" target="_blank" style="color: var(--accent); font-size: 12px;">everything it knows</a>
     </div>
     <div class="scroll" id="beliefs"><div class="empty">pick an agent</div></div>
     <div class="pane-title">
@@ -217,7 +217,7 @@ function watch(name) {
   state.decisions.clear();
   state.decided = [];
   document.getElementById('watchedName').textContent = name;
-  document.getElementById('graphLink').href = `/replay.html?trace=/api/trace/${name}`;
+  document.getElementById('graphLink').href = `/knowledge.html?agent=${encodeURIComponent(name)}`;
   renderBeliefs([]);
   renderEvents();
   pollBeliefs();
