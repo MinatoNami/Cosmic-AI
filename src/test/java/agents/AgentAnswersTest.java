@@ -46,7 +46,17 @@ class AgentAnswersTest {
     void acknowledgesAStatement() {
         assertEquals(YES_OR_NEXT, Agent.withoutReading(0, false), "style 0 is sendNext");
         assertEquals(YES_OR_NEXT, Agent.withoutReading(0, true));
-        assertEquals(YES_OR_NEXT, Agent.withoutReading(4, false), "a menu is not a yes-or-no");
+    }
+
+    /**
+     * A list wants one of its options or nothing, and "next" with none chosen leaves the
+     * script waiting forever - and the server deaf to every greeting after it. Unread, a
+     * list is walked away from; choosing blind could mean paying for something.
+     */
+    @Test
+    void walksAwayFromAListItCannotRead() {
+        assertEquals(NO, Agent.withoutReading(4, false), "style 4 is sendSimple");
+        assertEquals(NO, Agent.withoutReading(4, true), "even with nowhere left to go");
     }
 
     /**

@@ -4,6 +4,7 @@ import agents.body.Keyboard;
 import agents.body.Touch;
 import agents.mind.DialogueReader;
 import agents.mind.Disposition;
+import agents.mind.Intent;
 import agents.mind.IntentExecutor;
 import agents.mind.Policy;
 import agents.mind.Refusals;
@@ -103,6 +104,10 @@ public class Agent implements Runnable {
     private final agents.mind.MakingRoom makingRoom = new agents.mind.MakingRoom();
     private final Shopkeeping shopkeeping = new Shopkeeping();
     private final Refusals refusals = new Refusals();
+
+    /** The style of the last NPC line answered, and greetings since anyone said anything. */
+    private int lastDialogueStyle = -1;
+    private int greetedWithoutAnswer;
     private int steps;
 
     /** Steps spent dead so far, so the agent waits a moment before asking to come back. */
@@ -332,6 +337,7 @@ public class Agent implements Runnable {
                 decision.fellBackBecause(), world.selfPosition());
 
         executor.execute(decision.intent(), world);
+        noticeTheSilence(decision.intent());
 
         // Some maps cannot be left. Map 1020100 is an empty tutorial staging room: one
         // portal, and it is a spawn point, so there is nothing to walk through, nobody to
@@ -459,9 +465,13 @@ public class Agent implements Runnable {
      * agreed to by watching what changes afterwards.
      */
     private void answerNpc(Observation observation) {
+        if (observation instanceof Observation.ShopOpened) {
+            greetedWithoutAnswer = 0;
+        }
         if (!(observation instanceof Observation.DialogueShown dialogue)) {
             return;
         }
+        greetedWithoutAnswer = 0;
         lastSpokeWith = dialogue.npcId();
         rememberWhatWasSaid(dialogue);
         // Somebody who has stranded this agent before gets a no, whoever would otherwise have
@@ -469,8 +479,7 @@ public class Agent implements Runnable {
         // reading dialogue it was asked afresh every time, said yes every time, and two agents
         // were rescued from the same rooms fifty-two times in half an hour.
         if (strandedMeBefore(dialogue.npcId())) {
-            connection.session().send(ClientPackets.npcTalkMore(
-                    (byte) dialogue.style(), NPC_NO, NO_SELECTION));
+            reply(dialogue.style(), NPC_NO, NO_SELECTION);
             return;
         }
         // No model, or already thinking about the last thing it said: answer by reflex rather
@@ -478,8 +487,7 @@ public class Agent implements Runnable {
         if (dialogueReader == null || pendingDialogue != null) {
             byte answer = withoutReading(dialogue.style(), nothingKeepsMeHere(dialogue.npcId()));
             noteAnswer(dialogue.npcId(), dialogue.style(), answer);
-            connection.session().send(ClientPackets.npcTalkMore(
-                    (byte) dialogue.style(), answer, NO_SELECTION));
+            reply(dialogue.style(), answer, NO_SELECTION);
             return;
         }
         // How the agent is placed is worked out here, on its own thread, and handed over as
@@ -538,10 +546,52 @@ public class Agent implements Runnable {
         noteAnswer(pending.npcId(), pending.style(), reply.action());
 
         log.debug("{} answers the NPC: {}", mind.name(), reply.why());
-        connection.session().send(ClientPackets.npcTalkMore(
-                pending.style(), reply.action(), reply.selection()));
+        reply(pending.style(), reply.action(), reply.selection());
         pendingDialogue = null;
     }
+
+    /**
+     * Sends an answer to an NPC, making sure it is one the conversation can end on.
+     *
+     * A list wants one of its options or nothing. "Next" with no option chosen is neither:
+     * the script has nothing to act on, sends nothing more, and never closes - and while a
+     * conversation is open the server ignores every greeting to every NPC. That is how one
+     * unanswered menu at the Sleepywood Hotel was followed by 550 greetings nobody answered.
+     * So "next" to a list with nothing picked becomes walking away from it.
+     */
+    private void reply(int style, byte action, int selection) {
+        byte sent = style == MENU && action == NPC_YES_OR_NEXT && selection < 0 ? NPC_NO : action;
+        connection.session().send(ClientPackets.npcTalkMore((byte) style, sent, selection));
+        lastDialogueStyle = style;
+    }
+
+    /**
+     * Closes whatever conversation is still open, as pressing Escape on a dialogue does.
+     *
+     * The last line of defence: some conversation the agent answered was left open by the
+     * script anyway, and it can tell only because nobody answers it any more. Greeting three
+     * people and hearing nothing from any of them is not three people ignoring it.
+     */
+    private void noticeTheSilence(Intent intent) {
+        if (!(intent instanceof Intent.TalkTo)) {
+            return;
+        }
+        if (++greetedWithoutAnswer < GREETINGS_BEFORE_CLOSING || lastDialogueStyle < 0) {
+            return;
+        }
+        log.info("{} has had no answer from anyone in {} greetings; closing the last conversation",
+                mind.name(), greetedWithoutAnswer);
+        connection.session().send(ClientPackets.npcTalkMore((byte) lastDialogueStyle, NPC_CLOSE, NO_SELECTION));
+        greetedWithoutAnswer = 0;
+    }
+
+    private static final int GREETINGS_BEFORE_CLOSING = 3;
+
+    /** Mode -1: the dialogue window closed. Scripts dispose on it whatever they were waiting for. */
+    private static final byte NPC_CLOSE = -1;
+
+    /** sendSimple: a list of #L options. */
+    private static final int MENU = 4;
 
     /** Action 1 means yes, or next, depending on what was asked. */
     private static final byte NPC_YES_OR_NEXT = 1;
@@ -577,6 +627,10 @@ public class Agent implements Runnable {
     }
 
     static byte withoutReading(int style, boolean nowhereLeftToGo) {
+        if (style == MENU) {
+            // Choosing from a list blind could mean paying for a sauna. Walking away cannot.
+            return NPC_NO;
+        }
         if (!isAQuestion(style)) {
             return NPC_YES_OR_NEXT;
         }
