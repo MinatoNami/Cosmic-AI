@@ -6,6 +6,7 @@ import agents.mind.DialogueReader;
 import agents.mind.Disposition;
 import agents.mind.IntentExecutor;
 import agents.mind.Policy;
+import agents.mind.Refusals;
 import agents.mind.Shopkeeping;
 import agents.mind.Survival;
 import agents.mind.Wardrobe;
@@ -101,6 +102,7 @@ public class Agent implements Runnable {
     private final agents.mind.Training training;
     private final agents.mind.MakingRoom makingRoom = new agents.mind.MakingRoom();
     private final Shopkeeping shopkeeping = new Shopkeeping();
+    private final Refusals refusals = new Refusals();
     private int steps;
 
     /** Steps spent dead so far, so the agent waits a moment before asking to come back. */
@@ -474,10 +476,8 @@ public class Agent implements Runnable {
         // No model, or already thinking about the last thing it said: answer by reflex rather
         // than leave a conversation open with nobody attending it.
         if (dialogueReader == null || pendingDialogue != null) {
-            byte answer = withoutReading(dialogue.style(), nowhereLeftToGo());
-            if (answer == NPC_YES_OR_NEXT && isAQuestion(dialogue.style())) {
-                wentAlongWith = dialogue.npcId();
-            }
+            byte answer = withoutReading(dialogue.style(), nothingKeepsMeHere(dialogue.npcId()));
+            noteAnswer(dialogue.npcId(), dialogue.style(), answer);
             connection.session().send(ClientPackets.npcTalkMore(
                     (byte) dialogue.style(), answer, NO_SELECTION));
             return;
@@ -485,7 +485,7 @@ public class Agent implements Runnable {
         // How the agent is placed is worked out here, on its own thread, and handed over as
         // text. Worked out inside the reading task it walked the agent's beliefs while this
         // thread was adding to them, and the exception it threw ended the agent.
-        String situation = situation();
+        String situation = situation(dialogue.npcId());
         pendingDialogue = new PendingDialogue((byte) dialogue.style(), dialogue.npcId(),
                 System.currentTimeMillis(),
                 CompletableFuture.supplyAsync(() -> dialogueReader.read(dialogue, situation),
@@ -535,9 +535,7 @@ public class Agent implements Runnable {
         // Whoever read it, a yes to a question is a yes, and if it ends somewhere with no way
         // out this is who gets the blame. Only the reflex path used to record it, so an offer
         // the model accepted stranded the agent with nobody to hold responsible.
-        if (reply.action() == NPC_YES_OR_NEXT && isAQuestion(pending.style()) && pending.npcId() > 0) {
-            wentAlongWith = pending.npcId();
-        }
+        noteAnswer(pending.npcId(), pending.style(), reply.action());
 
         log.debug("{} answers the NPC: {}", mind.name(), reply.why());
         connection.session().send(ClientPackets.npcTalkMore(
@@ -586,6 +584,32 @@ public class Agent implements Runnable {
     }
 
     /**
+     * Records how a question was answered, whoever answered it.
+     *
+     * A yes is who gets the blame if it ends somewhere with no way out; a no is counted, so
+     * the same offer refused out of habit can be recognised as habit.
+     */
+    private void noteAnswer(int npcId, int style, byte answer) {
+        if (!isAQuestion(style) || npcId <= 0) {
+            return;
+        }
+        if (answer == NPC_YES_OR_NEXT) {
+            wentAlongWith = npcId;
+            refusals.accepted(npcId);
+        } else {
+            refusals.declined(npcId, perceiver.currentTick(), mind.lastNoveltyTick());
+        }
+    }
+
+    /**
+     * Whether there is any reason left to turn this one's offer down: nowhere left to walk
+     * to, or turning it down has become a habit that is teaching the agent nothing.
+     */
+    private boolean nothingKeepsMeHere(int npcId) {
+        return nowhereLeftToGo() || refusals.outgrown(npcId, mind.lastNoveltyTick());
+    }
+
+    /**
      * Whether the agent can still reach anywhere it has not opened.
      *
      * Read from its own beliefs through the same graph that plans its journeys, so "nowhere
@@ -617,14 +641,23 @@ public class Agent implements Runnable {
      * is what the agent wanted, and nothing anywhere saying what it wanted. The same
      * condition the reflex uses to decide the same question, so the two cannot drift.
      */
-    private String situation() {
+    private String situation(int npcId) {
         StringBuilder placed = new StringBuilder("you are level ").append(world.level());
         mesosHeld().ifPresent(mesos -> placed.append(", carrying ").append(mesos).append(" mesos"));
-        placed.append(nowhereLeftToGo()
-                ? ". You have opened every door you know of and there is nowhere left to "
-                  + "walk to that you have not already seen."
-                : ". There is still somewhere you have not been, or somebody here you have "
-                  + "not spoken to.");
+        if (refusals.outgrown(npcId, mind.lastNoveltyTick())) {
+            // Said in so many words, because "somewhere you have not been" was true on Maple
+            // Island forever and the model, told it, declined the ferry every time it was asked.
+            placed.append(". You have turned this one's offer down ").append(refusals.timesDeclined(npcId))
+                    .append(" times, and you have found out nothing new since the first time:"
+                            + " staying where you are has stopped teaching you anything, and this"
+                            + " offer is the way on.");
+        } else {
+            placed.append(nowhereLeftToGo()
+                    ? ". You have opened every door you know of and there is nowhere left to "
+                      + "walk to that you have not already seen."
+                    : ". There is still somewhere you have not been, or somebody here you have "
+                      + "not spoken to.");
+        }
         // Whether it has a calling yet, and what sort of character it is. Without these an
         // offer to become something read like any other offer with no way back, and the
         // prompt says to turn those down - so a character could meet the person who would
