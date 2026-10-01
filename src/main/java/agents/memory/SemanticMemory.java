@@ -30,6 +30,10 @@ public class SemanticMemory {
     private static final Set<String> FUNCTIONAL_PREDICATES = Set.of(
             "named", "level", "in_map", "hp", "maxhp", "mp", "maxmp", "exp", "meso", "job",
             "state",
+            // A character has one of each. These were left out, so every point spent kept the
+            // old value alive beside the new one: an agent at DEX 120 held 116 beliefs about
+            // its DEX, one for every number it had passed through.
+            "str", "dex", "int", "luk", "fame", "availableap", "availablesp",
             // What drinking something did, which the latest try overrules: one that seemed
             // to do nothing while a monster was hitting harder than it healed must not stay
             // believed useless alongside the time it plainly worked.
@@ -75,13 +79,15 @@ public class SemanticMemory {
 
         Belief contradicted = null;
         if (FUNCTIONAL_PREDICATES.contains(predicate)) {
-            Optional<Belief> conflicting = liveBeliefs().stream()
+            // Every one, not just the first: a mind saved before a predicate was made
+            // single-valued carries several, and they should all give way to the new one.
+            List<Belief> conflicting = liveBeliefs().stream()
                     .filter(b -> b.subject().equals(subject) && b.predicate().equals(predicate))
-                    .findFirst();
-            if (conflicting.isPresent()) {
-                contradicted = conflicting.get();
-                replace(contradicted, contradicted.invalidatedAt(tick, created.id()));
+                    .toList();
+            for (Belief old : conflicting) {
+                replace(old, old.invalidatedAt(tick, created.id()));
             }
+            contradicted = conflicting.isEmpty() ? null : conflicting.get(0);
         }
 
         beliefs.add(created);

@@ -122,4 +122,14 @@ class SemanticMemoryTest {
                 .filter(b -> b.subject().equals("item:2000000") && b.predicate().equals("restores_hp"))
                 .count());
     }
+
+    /** An agent at DEX 120 held 116 beliefs about its DEX. A character has one. */
+    @Test
+    void aCharacterHasOneOfEachStat() {
+        memory.assertTriple("self", "dex", "5", 1, 10, Provenance.FIRST_HAND);
+        memory.assertTriple("self", "dex", "6", 2, 20, Provenance.FIRST_HAND);
+
+        assertEquals(List.of("6"), memory.liveBeliefs().stream()
+                .filter(b -> b.predicate().equals("dex")).map(b -> b.object()).toList());
+    }
 }
