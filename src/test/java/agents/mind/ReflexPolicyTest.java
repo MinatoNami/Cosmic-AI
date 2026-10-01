@@ -1255,4 +1255,17 @@ class ReflexPolicyTest {
         assertEquals("east00", wanderer.pickDoor(JUNCTION_DOORS, mind, hub, "player:1").name(),
                 "the unopened door beyond west00 would draw it back to the map it keeps bouncing to");
     }
+
+    /** Silence found once, in a conversation that had jammed, should not be believed for ever. */
+    @Test
+    void findingSomebodySilentWearsOff() {
+        mind.take(new Observation.MapEntered(1, 10000, 0));
+        mind.saw("npc:1061100", "does_not_answer", "true", 1);
+        assertTrue(ReflexPolicy.doesNotAnswer(mind).contains("npc:1061100"));
+
+        mind.take(new Observation.MapEntered(1 + ReflexPolicy.SILENCE_LASTS, 10000, 0));
+
+        assertFalse(ReflexPolicy.doesNotAnswer(mind).contains("npc:1061100"),
+                "an hour on, it is worth saying hello again");
+    }
 }

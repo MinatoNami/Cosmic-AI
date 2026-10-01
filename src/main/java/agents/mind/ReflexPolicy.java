@@ -1021,14 +1021,27 @@ public class ReflexPolicy implements Policy {
 
     /** Everyone this agent has found does not answer when spoken to. */
     static Set<String> doesNotAnswer(Mind mind) {
+        long now = mind.episodic().byId(mind.episodic().latestId())
+                .map(agents.memory.Episode::tick).orElse(0L);
         Set<String> who = new HashSet<>();
         for (Belief belief : mind.semantic().liveBeliefs()) {
-            if (belief.predicate().equals("does_not_answer")) {
+            if (belief.predicate().equals("does_not_answer") && now - belief.lastSeen() < SILENCE_LASTS) {
                 who.add(belief.subject());
             }
         }
         return who;
     }
+
+    /**
+     * How long finding somebody silent counts for, since it was last found so.
+     *
+     * For ever, it was wrong for ever: a shop menu left open with no choice made held every
+     * conversation shut, so for 550 greetings in a row nobody answered anybody, and 27 NPCs -
+     * John, Mr. Oh and others who talk perfectly well - were written down as silent and passed
+     * to the next generation. Now the agent tries again after a while. Somebody truly silent
+     * is found so again, which renews it; somebody who answers simply stops counting.
+     */
+    static final long SILENCE_LASTS = 6_000;
 
     /**
      * Settles each greeting that has had long enough to be answered.
