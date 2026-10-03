@@ -34,6 +34,7 @@ import net.netty.InvalidPacketHeaderException;
 import net.packet.InPacket;
 import net.packet.Packet;
 import net.packet.logging.LoggingUtil;
+import net.packet.logging.DemonstrationRecorder;
 import net.packet.logging.MonitoredChrLogger;
 import net.server.Server;
 import net.server.channel.Channel;
@@ -218,8 +219,11 @@ public class Client extends ChannelInboundHandlerAdapter {
 
         if (handler != null && handler.validateState(this)) {
             try {
-                MonitoredChrLogger.logPacketIfMonitored(this, opcode, packet.getBytes());
+                byte[] body = packet.getBytes();
+                MonitoredChrLogger.logPacketIfMonitored(this, opcode, body);
+                DemonstrationRecorder.Before demonstrated = DemonstrationRecorder.before(this, opcode, body);
                 handler.handlePacket(packet, this);
+                DemonstrationRecorder.after(this, demonstrated);
             } catch (final Throwable t) {
                 final String chrInfo = player != null ? player.getName() + " on map " + player.getMapId() : "?";
                 log.warn("Error in packet handler {}. Chr {}, account {}. Packet: {}", handler.getClass().getSimpleName(),

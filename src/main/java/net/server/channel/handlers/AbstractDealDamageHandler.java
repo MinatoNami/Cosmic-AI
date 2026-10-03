@@ -81,6 +81,7 @@ import constants.skills.WhiteKnight;
 import constants.skills.WindArcher;
 import net.AbstractPacketHandler;
 import net.packet.InPacket;
+import net.packet.logging.DemonstrationRecorder;
 import net.server.PlayerBuffValueHolder;
 import scripting.AbstractPlayerInteraction;
 import server.StatEffect;
@@ -902,6 +903,7 @@ public abstract class AbstractDealDamageHandler extends AbstractPacketHandler {
             p.skip(4);
             ret.position.setLocation(p.readShort(), p.readShort());
         }
+        DemonstrationRecorder.noteAttack(chr, ret);
         return ret;
     }
 

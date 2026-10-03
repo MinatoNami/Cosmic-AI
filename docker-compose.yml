@@ -19,6 +19,8 @@ services:
       - ./config.yaml:/opt/server/config.yaml
       - ./scripts:/opt/server/scripts
       - ./wz:/opt/server/wz
+      # Recordings of people playing, for the agents to learn from (DEMONSTRATION_CHARACTERS).
+      - ./agents-data/demonstrations:/opt/server/agents-data/demonstrations
     env_file:
       - ./.env
 
