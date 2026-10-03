@@ -60,18 +60,49 @@ public class Daemon {
 
         String autostart = setting("AGENTS_AUTOSTART", "");
         if (!autostart.isBlank()) {
-            log.info("Autostarting {} agent(s), policy {}", autostart, setting("AGENTS_POLICY", "reflex"));
-            try {
-                population.start(Integer.parseInt(autostart), setting("AGENTS_POLICY", "reflex"));
-            } catch (RuntimeException e) {
-                log.error("Autostart failed, the daemon is still up and you can start them by hand", e);
-            }
+            autostart(population, Integer.parseInt(autostart), setting("AGENTS_POLICY", "reflex"));
         }
 
         // Nothing else to do on this thread: the API serves on its own, and the agents are
         // each on theirs.
         new CountDownLatch(1).await();
     }
+
+    /**
+     * Starts the agents, and keeps trying until the game server lets them in.
+     *
+     * A deploy restarts the server and this daemon together, and the server takes the better
+     * part of a minute to load its data and open its ports. One attempt, made the moment this
+     * came up, found nobody to log in to - and the agents stayed stopped until somebody
+     * noticed, which twice in one morning was a quarter of an hour.
+     */
+    private static void autostart(Population population, int count, String policy) {
+        for (int attempt = 1; attempt <= AUTOSTART_ATTEMPTS; attempt++) {
+            if (population.isRunning()) {
+                return;     // somebody started them by hand meanwhile
+            }
+            log.info("Autostarting {} agent(s), policy {} (attempt {})", count, policy, attempt);
+            try {
+                if (!population.start(count, policy).isEmpty()) {
+                    return;
+                }
+                population.stop();      // nobody got in; clear the way for the next try
+            } catch (RuntimeException e) {
+                log.warn("Autostart attempt {} failed: {}", attempt, e.getMessage());
+            }
+            try {
+                Thread.sleep(AUTOSTART_WAIT_MILLIS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return;
+            }
+        }
+        log.error("Gave up autostarting after {} attempts; start them by hand", AUTOSTART_ATTEMPTS);
+    }
+
+    /** Ten minutes of trying, which is far longer than a server takes to come up. */
+    private static final int AUTOSTART_ATTEMPTS = 40;
+    private static final long AUTOSTART_WAIT_MILLIS = 15_000;
 
     private static String setting(String key, String fallback) {
         String value = System.getenv(key);

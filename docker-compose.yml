@@ -43,6 +43,11 @@ services:
       AGENTS_UI: /opt/server/viz
       # The local model lives on somebody's laptop, not in this network. Set it in .env.
       LMSTUDIO_URL: "${LMSTUDIO_URL:-}"
+      # Agents start themselves whenever this container comes up, retrying until the game
+      # server is ready, so a deploy does not leave them stopped. Set AGENTS_AUTOSTART to
+      # nothing in .env to come up with none running.
+      AGENTS_AUTOSTART: "${AGENTS_AUTOSTART-3}"
+      AGENTS_POLICY: "${AGENTS_POLICY:-local}"
       # Left to itself the JVM takes a quarter of the machine, 4GB here, and three agents'
       # minds filled it: the daemon spent its time collecting garbage and took 28s to answer
       # a status request. Minds are now bounded, so this is headroom, not a fix.
