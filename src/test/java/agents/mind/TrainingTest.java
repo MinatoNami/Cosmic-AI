@@ -1,5 +1,7 @@
 package agents.mind;
 
+import agents.memory.Belief;
+
 import agents.percept.Observation;
 import agents.protocol.ClientPackets;
 import agents.world.SkillBook;
@@ -119,5 +121,43 @@ class TrainingTest {
         world.update(new Observation.SkillChanged(2, 1000, 2, 0));
 
         assertTrue(training(Disposition.FIGHTER).step(world).isEmpty(), "two points at level three, both spent");
+    }
+
+    private static Belief taught(String subject, String predicate, String object, double confidence) {
+        return new Belief(0, subject, predicate, object, confidence, Belief.Provenance.HEARSAY,
+                List.of(0L), 0, 0, null, null);
+    }
+
+    /** Somebody played a warrior with as much DEX as STR; the valuation alone would not. */
+    @Test
+    void pointsGoWherePeopleOfTheJobPutThem() {
+        List<Belief> shown = List.of(
+                taught("job:100", "ap_share_str", "50", 0.5),
+                taught("job:100", "ap_share_dex", "50", 0.5));
+        Training training = new Training(Disposition.FIGHTER, job -> List.of(), () -> shown);
+        WorldModel world = character(100, 20, Map.of("AVAILABLEAP", 10, "STR", 40, "DEX", 20));
+
+        assertTrue(is(training.step(world), ClientPackets.distributeAp(Training.DEX)),
+                "DEX 20 against STR 40 is the biggest gap from half and half");
+    }
+
+    @Test
+    void sharesShownForAnotherJobAreNotThisOnes() {
+        List<Belief> shown = List.of(taught("job:200", "ap_share_int", "100", 0.5));
+        Training training = new Training(Disposition.FIGHTER, job -> List.of(), () -> shown);
+        WorldModel world = character(100, 20, Map.of("AVAILABLEAP", 10, "STR", 40, "DEX", 20));
+
+        assertTrue(is(training.step(world), ClientPackets.distributeAp(Training.STR)));
+    }
+
+    @Test
+    void skillsPeopleChoseComeFirst() {
+        List<Belief> shown = List.of(taught("job:100", "puts_sp_into", "skill:1000000", 0.5));
+        Training training = new Training(Disposition.FIGHTER,
+                job -> job == 100 ? WARRIOR : List.of(), () -> shown);
+        WorldModel world = character(100, 12, Map.of("AVAILABLESP", 3));
+
+        assertTrue(is(training.step(world), ClientPackets.distributeSp(1000000)),
+                "the HP-recovery skill people chose, ahead of the damage skill the valuation prefers");
     }
 }

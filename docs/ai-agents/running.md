@@ -146,3 +146,34 @@ watching, since agents that all know the same things have nothing to tell each o
 
 Watch for `hearsay` in a trace, or in the replay page: an amber node is something the agent
 was told rather than saw.
+
+## 8. Learning from people
+
+The server can record people playing, so the agents learn from somebody who knows the game
+as well as from each other. In the server's `.env`:
+
+```bash
+DEMONSTRATION_CHARACTERS=*              # every human player; or Magician,Other; or empty for none
+DEMONSTRATION_BOT_ACCOUNTS=agent*,asker,watcher   # never recorded under * (the default)
+```
+
+Each login becomes `agents-data/demonstrations/<character>/<UTC time>.jsonl`: one line per
+thing the person did, with what it changed (`effect`) and what the server showed them while
+it happened (`saw`, in the agents' own observation types), plus the map each time they walk
+into a new one, deaths, and how the session ended.
+
+Condensing (`POST /api/condense`, agents stopped) reads every recording into
+`agents-data/demonstrated.mind` and folds it into the inheritance, so the next generation is
+born knowing it - as hearsay, promoted when they see it for themselves. To read the recordings
+without condensing:
+
+```bash
+java -cp "target/classes:$(cat target/cp.txt)" agents.memory.Demonstrations agents-data/demonstrations agents-data/demonstrated.mind
+```
+
+What comes out: the same world knowledge agents form themselves (`leads_to`, `has_door`,
+`present_in`, `talks_in`, `runs_shop`, `sells`, `drops`, `gives_exp`, `hurts_you`,
+`killed_you_at_level`, `restores_hp`/`mp`), and how people play: `job:N ap_share_<stat>`
+(where a job's ability points go), `job:N puts_sp_into skill:M`, `map:N hunted_at_level L`
+and `item:N drunk_at_hp_percent P`. Agents spend ability and skill points the way people of
+their job did when there is evidence for it.

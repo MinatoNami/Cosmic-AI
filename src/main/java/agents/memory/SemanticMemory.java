@@ -38,6 +38,10 @@ public class SemanticMemory {
             // to do nothing while a monster was hitting harder than it healed must not stay
             // believed useless alongside the time it plainly worked.
             "restores_hp", "restores_mp",
+            // The share of a job's ability points people put into each stat: one number,
+            // which the latest recordings revise rather than add to.
+            "ap_share_str", "ap_share_dex", "ap_share_int", "ap_share_luk",
+            "ap_share_maxhp", "ap_share_maxmp",
             // Whether somebody is waiting for the agent to do what they asked: it is one
             // thing at a time, and "nothing" must replace whatever it was, not sit beside it.
             "waiting_on");

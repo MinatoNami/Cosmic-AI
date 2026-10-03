@@ -17,6 +17,7 @@ import agents.trace.Trace;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import agents.memory.Demonstrations;
 import agents.memory.Inheritance;
 
 import java.io.IOException;
@@ -62,6 +63,8 @@ public class Population {
     private final int port;
     /** What one generation leaves the next, beside the agents' own saved minds. */
     public static final String INHERITANCE = "inherited.mind";
+    /** Kept beside the minds rather than among them, so that nothing mistakes it for an agent's. */
+    public static final String DEMONSTRATED = "demonstrated.mind";
 
     private final Path minds;
     private final Path traces;
@@ -353,6 +356,17 @@ public class Population {
         Path standing = minds.resolve(INHERITANCE);
         if (Files.isRegularFile(standing)) {
             sources.add(standing);
+        }
+        // What people showed by playing goes in last, so that a share of ability points
+        // read from today's recordings replaces the one the standing inheritance carried.
+        // Rewritten from the recordings every time rather than kept, because the recordings
+        // are the record and this is only a reading of them.
+        Path recorded = minds.getParent().resolve("demonstrations");
+        if (!Demonstrations.recordings(recorded).isEmpty()) {
+            Path demonstrated = minds.getParent().resolve(DEMONSTRATED);
+            Demonstrations.Read read = Demonstrations.write(recorded, demonstrated);
+            log.info("Read {} recorded sessions into {} beliefs", read.sessions(), read.beliefs());
+            sources.add(demonstrated);
         }
         return Inheritance.merge(sources, standing, "Inherited");
     }

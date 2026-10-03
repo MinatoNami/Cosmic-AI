@@ -57,7 +57,18 @@ public final class Inheritance {
             "restores_hp",   // what an item did when it was drunk
             "restores_mp",
             "does_not_answer", // who never says a word, however often greeted
-            "strands_you");  // who sends you somewhere there is no leaving
+            "strands_you",   // who sends you somewhere there is no leaving
+            // Every bit as true of the world, and the first things a recording of somebody
+            // playing can teach: what a monster is worth, and whether it fights back.
+            "gives_exp",
+            "hurts_you",
+            // How people play, from recordings of them doing it (see Demonstrations). About
+            // the people rather than the world, but just as true for the next generation.
+            "ap_share_str", "ap_share_dex", "ap_share_int", "ap_share_luk",
+            "ap_share_maxhp", "ap_share_maxmp",
+            "puts_sp_into",  // which skills a job spends its points on
+            "hunted_at_level", // the level people hunt a map at
+            "drunk_at_hp_percent"); // how low health gets before somebody drinks
 
     private Inheritance() {
     }

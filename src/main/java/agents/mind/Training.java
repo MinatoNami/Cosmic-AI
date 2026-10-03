@@ -1,5 +1,6 @@
 package agents.mind;
 
+import agents.memory.Belief;
 import agents.protocol.ClientPackets;
 import agents.world.SkillBook;
 import agents.world.WorldModel;
@@ -12,6 +13,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.IntFunction;
+import java.util.function.Supplier;
 
 /**
  * Spends ability points and skill points, one at a time.
@@ -25,6 +27,12 @@ import java.util.function.IntFunction;
  * player is told, and damage skills come before the rest. What it is applied to is the
  * agent's own: the points the server says it has, the job it has taken, and the skills its
  * skill window lists.
+ *
+ * <p>Where people have been watched playing the same job (see {@code agents.memory
+ * .Demonstrations}), what they did wins over the valuation: ability points go towards the
+ * shares of each stat that people gave that job, and skills people put points into are taken
+ * first. That is the one place where the agent is told how to play rather than what the world
+ * is, and it is told by the only people who know - the ones who play.
  *
  * <p>A point the server declines - a skill already at its limit after a restart, a
  * prerequisite not met - is set aside rather than asked for again every step.
@@ -51,6 +59,8 @@ public final class Training {
 
     private final Disposition disposition;
     private final IntFunction<List<SkillBook.Skill>> books;
+    /** What the agent believes, consulted only when there is a point to spend. */
+    private final Supplier<List<Belief>> beliefs;
     private int cooldown;
 
     private Integer skillPending;
@@ -64,13 +74,23 @@ public final class Training {
     private int steps;
 
     public Training(Disposition disposition) {
-        this(disposition, SkillBook::forJob);
+        this(disposition, SkillBook::forJob, List::of);
+    }
+
+    public Training(Disposition disposition, Supplier<List<Belief>> beliefs) {
+        this(disposition, SkillBook::forJob, beliefs);
     }
 
     /** For tests, which cannot load Skill.wz. */
     Training(Disposition disposition, IntFunction<List<SkillBook.Skill>> books) {
+        this(disposition, books, List::of);
+    }
+
+    Training(Disposition disposition, IntFunction<List<SkillBook.Skill>> books,
+             Supplier<List<Belief>> beliefs) {
         this.disposition = disposition;
         this.books = books;
+        this.beliefs = beliefs;
     }
 
     /** The one point worth spending now, if any. */
@@ -126,14 +146,94 @@ public final class Training {
     }
 
     /**
-     * The stat this point goes into: the one the job lives on, except while the one backing
-     * it up is short of half the character's level.
+     * The stat this point goes into.
+     *
+     * Where people have been watched playing this job, the one furthest short of the share
+     * they gave it. Otherwise the one the job lives on, except while the one backing it up is
+     * short of half the character's level.
      */
     int statToRaise(WorldModel world) {
+        Map<Integer, Integer> shown = sharesShownFor(world.job());
+        if (!shown.isEmpty()) {
+            return furthestShort(world, shown);
+        }
         int[] pair = stats(world.job());
         int secondary = world.stat(name(pair[1]));
         int wanted = 4 + world.level() / 2;
         return secondary >= 0 && secondary < wanted ? pair[1] : pair[0];
+    }
+
+    /**
+     * The share of points people gave each of the four main stats, renormalised over just
+     * those four: points into health and mana are a different decision, and not one this
+     * makes.
+     */
+    private Map<Integer, Integer> sharesShownFor(int job) {
+        String subject = "job:" + job;
+        Map<Integer, Integer> shares = new HashMap<>();
+        for (Belief belief : beliefs.get()) {
+            if (!belief.subject().equals(subject) || !belief.predicate().startsWith("ap_share_")) {
+                continue;
+            }
+            Integer stat = switch (belief.predicate()) {
+                case "ap_share_str" -> STR;
+                case "ap_share_dex" -> DEX;
+                case "ap_share_int" -> INT;
+                case "ap_share_luk" -> LUK;
+                default -> null;
+            };
+            if (stat != null) {
+                try {
+                    shares.put(stat, Integer.parseInt(belief.object()));
+                } catch (NumberFormatException notAShare) {
+                    // Not something this wrote; ignore it rather than guess.
+                }
+            }
+        }
+        shares.values().removeIf(share -> share <= 0);
+        return shares;
+    }
+
+    /**
+     * Aims at the proportions rather than replaying the order: whatever the agent's stats are
+     * now, the next point goes where it would close the biggest gap between what it has and
+     * what people of its job had, in the same total.
+     */
+    private int furthestShort(WorldModel world, Map<Integer, Integer> shares) {
+        int sharesTotal = shares.values().stream().mapToInt(i -> i).sum();
+        int statTotal = 1;
+        for (int stat : new int[]{STR, DEX, INT, LUK}) {
+            statTotal += Math.max(0, world.stat(name(stat)));
+        }
+        int best = -1;
+        double bestGap = Double.NEGATIVE_INFINITY;
+        for (Map.Entry<Integer, Integer> share : shares.entrySet()) {
+            double wanted = statTotal * share.getValue() / (double) sharesTotal;
+            double gap = wanted - Math.max(0, world.stat(name(share.getKey())));
+            if (gap > bestGap) {
+                bestGap = gap;
+                best = share.getKey();
+            }
+        }
+        return best;
+    }
+
+    /** Skills people of this job were seen putting points into, most corroborated first. */
+    private List<Integer> skillsShownFor(int job) {
+        String subject = "job:" + job;
+        return beliefs.get().stream()
+                .filter(b -> b.subject().equals(subject) && b.predicate().equals("puts_sp_into")
+                        && b.object().startsWith("skill:"))
+                .sorted(Comparator.comparingDouble(Belief::confidence).reversed())
+                .map(b -> {
+                    try {
+                        return Integer.parseInt(b.object().substring("skill:".length()));
+                    } catch (NumberFormatException notASkill) {
+                        return null;
+                    }
+                })
+                .filter(java.util.Objects::nonNull)
+                .toList();
     }
 
     /** Main stat and backing stat for a job, or for a beginner, for the kind of agent it is. */
@@ -184,8 +284,14 @@ public final class Training {
         }
         List<SkillBook.Skill> order = new ArrayList<>(book);
         // Damage first, because a point in a skill that hits harder is one the agent feels at
-        // once; otherwise as the window lists them, which keeps prerequisites early.
+        // once; otherwise as the window lists them, which keeps prerequisites early. Ahead of
+        // both, whatever people playing this job chose; a stable sort keeps the rest in order.
+        List<Integer> shown = skillsShownFor(world.job());
         order.sort(Comparator.comparing((SkillBook.Skill s) -> !s.dealsDamage()));
+        order.sort(Comparator.comparingInt((SkillBook.Skill s) -> {
+            int at = shown.indexOf(s.id());
+            return at < 0 ? Integer.MAX_VALUE : at;
+        }));
         for (SkillBook.Skill skill : order) {
             int level = world.skillLevel(skill.id());
             Integer declined = declinedAt.get(skill.id());
