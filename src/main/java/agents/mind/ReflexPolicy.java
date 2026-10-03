@@ -1664,9 +1664,10 @@ public class ReflexPolicy implements Policy {
         });
         Set<String> avoid = new HashSet<>(strandedBy(mind));
         avoid.addAll(doesNotAnswer(mind));
+        int level = levelOf(mind);
         Places.Facts facts = new Places.Facts(here, visitsTo(mind), errandMap,
                 worthHearingAgain(known), avoid, justBeen, shopMaps, sentMap, sentWhy,
-                deathsNearLevel(mind, levelOf(mind)));
+                deathsNearLevel(mind, level), level, huntedAt(mind));
         return Places.worthGoing(known, facts, weights(seekingACalling(mind)));
     }
 
@@ -1773,6 +1774,31 @@ public class ReflexPolicy implements Policy {
             }
         }
         return deaths;
+    }
+
+    /**
+     * The level people were seen hunting each map at, from recordings of them playing: where
+     * several sessions disagree, the average, weighted by how often each was seen.
+     */
+    private static Map<String, Integer> huntedAt(Mind mind) {
+        Map<String, double[]> sums = new HashMap<>();
+        for (Belief belief : mind.semantic().liveBeliefs()) {
+            if (!belief.predicate().equals("hunted_at_level")) {
+                continue;
+            }
+            try {
+                int at = Integer.parseInt(belief.object());
+                int seen = belief.supportedBy().size();
+                double[] sum = sums.computeIfAbsent(belief.subject(), map -> new double[2]);
+                sum[0] += at * seen;
+                sum[1] += seen;
+            } catch (NumberFormatException ignored) {
+                // not a level
+            }
+        }
+        Map<String, Integer> levels = new HashMap<>();
+        sums.forEach((map, sum) -> levels.put(map, (int) Math.round(sum[0] / sum[1])));
+        return levels;
     }
 
     private static int levelOf(Mind mind) {

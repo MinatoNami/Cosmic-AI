@@ -104,6 +104,17 @@ class DemonstrationsTest {
     }
 
     @Test
+    void whatAnNpcAskedForIsReadAsAnAgentWouldReadIt() throws IOException {
+        SemanticMemory semantic = read(
+                "{\"act\":\"npc_talk\",\"state\":{\"map\":102000000},\"saw\":[{\"type\":\"DialogueShown\","
+                        + "\"npcId\":1022000,\"text\":\"Bring me #b30 #t4031013##k from #p1072000# around #m102020300#.\","
+                        + "\"style\":0}]}");
+
+        assertTrue(holds(semantic, "npc:1022000", "wants_first", "30 item:4031013"));
+        assertTrue(holds(semantic, "npc:1072000", "present_in", "map:102020300"));
+    }
+
+    @Test
     void potionsHurtsAndDeaths() throws IOException {
         SemanticMemory semantic = read(
                 "{\"act\":\"take_damage\",\"detail\":{\"damage\":12,\"mob\":100101},\"state\":{\"map\":40000}}",

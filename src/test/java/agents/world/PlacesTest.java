@@ -154,4 +154,45 @@ class PlacesTest {
         assertEquals("map:3", places.get(0).map());
         assertEquals("south00", places.get(0).firstDoor(), "the long way, around map:2");
     }
+
+    private List<Places.Place> rankAtLevel(int level, Map<String, Integer> huntedAt) {
+        return Places.worthGoing(KnownWorld.rememberedBy(memory.liveBeliefs()),
+                new Places.Facts("map:1", visits, null, Set.of(), Set.of(), Map.of(), Set.of(), null, null,
+                        Map.of(), level, huntedAt), WEIGHTS);
+    }
+
+    /** Both maps have snails in them; only one is where people train at this level. */
+    @Test
+    void whereWatchedPeopleHuntAtThisLevelIsTheBetterGround() {
+        believe("monster:100100", "present_in", "map:2");
+        believe("monster:100100", "present_in", "map:3");
+        // A way on from map:3, so it is not a dead end already seen all of.
+        door(3, "north00", 4);
+        door(4, "south00", 3);
+        visits.put("map:4", 3);
+
+        List<Places.Place> places = rankAtLevel(8, Map.of("map:3", 9));
+
+        assertEquals("map:3", places.get(0).map(), "worth the extra door: " + places);
+        assertTrue(places.get(0).reasons().contains("people hunt there at about your level"));
+    }
+
+    @Test
+    void somewherePeopleOnlyHuntMuchLaterIsNotAHuntingGroundYet() {
+        believe("monster:100100", "present_in", "map:2");
+
+        List<Places.Place> places = rankAtLevel(3, Map.of("map:2", 20));
+
+        assertTrue(places.isEmpty(), "level 3 has no business where people hunt at 20: " + places);
+    }
+
+    @Test
+    void withNobodyWatchedNothingChanges() {
+        believe("monster:100100", "present_in", "map:2");
+
+        assertEquals(rankAtLevel(8, Map.of()).stream().map(Places.Place::value).toList(),
+                Places.worthGoing(KnownWorld.rememberedBy(memory.liveBeliefs()),
+                        new Places.Facts("map:1", visits, null, Set.of(), Set.of(), Map.of(), Set.of()), WEIGHTS)
+                        .stream().map(Places.Place::value).toList());
+    }
 }

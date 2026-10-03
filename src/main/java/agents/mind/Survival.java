@@ -24,6 +24,10 @@ import java.util.Optional;
  * warp you to town, scrolls that upgrade equipment - is left alone, because an agent that
  * learnt by reading every scroll it found would spend its life being sent home.
  *
+ * <p>When to drink is the one thing it takes from people rather than working out: where
+ * recordings show how low people let their health get before reaching for a potion, it drinks
+ * at that point instead of at half. Learning it by dying is possible but expensive.
+ *
  * <p>This runs every step, before the policy, because being about to die is not something to
  * wait fifteen seconds on a model about.
  */
@@ -49,6 +53,16 @@ public final class Survival {
     private Trial trial;
     private int cooldown;
 
+    /** How often the threshold people drink at is read again from what the agent believes. */
+    static final int RETHINK_THRESHOLD_EVERY = 200;
+
+    /** However people play, never wait until nearly dead, nor drink at a scratch. */
+    static final double HP_LOW_FLOOR = 0.2;
+    static final double HP_LOW_CEILING = 0.8;
+
+    private double hpLow = HP_LOW;
+    private int stepsSinceThreshold = RETHINK_THRESHOLD_EVERY;
+
     /**
      * What to drink this step, if anything. Also judges whatever was tried last.
      *
@@ -63,7 +77,11 @@ public final class Survival {
         if (world.isDead()) {
             return Optional.empty();
         }
-        String need = need(world);
+        if (++stepsSinceThreshold >= RETHINK_THRESHOLD_EVERY) {
+            hpLow = hpLowShownIn(mind.semantic().liveBeliefs());
+            stepsSinceThreshold = 0;
+        }
+        String need = need(world, hpLow);
         if (need == null) {
             return Optional.empty();
         }
@@ -90,9 +108,40 @@ public final class Survival {
         return Optional.of(itemId);
     }
 
+    /**
+     * The share of health people were seen drinking at, from {@code drunk_at_hp_percent}
+     * beliefs, each counted as often as it was seen. Recorded to the tenth below, so the
+     * middle of that tenth is the better guess. Half when nobody has been watched.
+     */
+    static double hpLowShownIn(List<agents.memory.Belief> beliefs) {
+        double sum = 0;
+        int seen = 0;
+        for (agents.memory.Belief belief : beliefs) {
+            if (!belief.predicate().equals("drunk_at_hp_percent")) {
+                continue;
+            }
+            try {
+                int percent = Integer.parseInt(belief.object());
+                int times = belief.supportedBy().size();
+                sum += (percent + 5) / 100.0 * times;
+                seen += times;
+            } catch (NumberFormatException ignored) {
+                // not a percentage
+            }
+        }
+        if (seen == 0) {
+            return HP_LOW;
+        }
+        return Math.max(HP_LOW_FLOOR, Math.min(HP_LOW_CEILING, sum / seen));
+    }
+
     /** What the agent is short of, or null. Health first: running out of it is dying. */
     static String need(WorldModel world) {
-        if (world.hp() >= 0 && world.maxHp() > 0 && world.hp() < world.maxHp() * HP_LOW) {
+        return need(world, HP_LOW);
+    }
+
+    static String need(WorldModel world, double hpLow) {
+        if (world.hp() >= 0 && world.maxHp() > 0 && world.hp() < world.maxHp() * hpLow) {
             return "hp";
         }
         int mp = world.stat("MP");

@@ -144,4 +144,30 @@ class SurvivalTest {
 
         assertTrue(step().isEmpty());
     }
+
+    private static agents.memory.Belief drankAt(String percent, int times) {
+        java.util.List<Long> evidence = new java.util.ArrayList<>();
+        for (long i = 0; i < times; i++) {
+            evidence.add(i);
+        }
+        return new agents.memory.Belief(0, "item:2000000", "drunk_at_hp_percent", percent, 0.5,
+                agents.memory.Belief.Provenance.HEARSAY, evidence, 0, 0, null, null);
+    }
+
+    @Test
+    void drinksWhenPeopleWereSeenDrinking() {
+        double threshold = Survival.hpLowShownIn(java.util.List.of(drankAt("30", 3), drankAt("50", 1)));
+
+        assertEquals(0.40, threshold, 1e-9, "three times at 30-39% and once at 50-59%");
+    }
+
+    @Test
+    void withNobodyWatchedItDrinksAtHalf() {
+        assertEquals(Survival.HP_LOW, Survival.hpLowShownIn(java.util.List.of()), 1e-9);
+    }
+
+    @Test
+    void neverWaitsUntilNearlyDeadHoweverPeoplePlay() {
+        assertEquals(Survival.HP_LOW_FLOOR, Survival.hpLowShownIn(java.util.List.of(drankAt("0", 5))), 1e-9);
+    }
 }

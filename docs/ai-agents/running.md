@@ -175,5 +175,11 @@ What comes out: the same world knowledge agents form themselves (`leads_to`, `ha
 `present_in`, `talks_in`, `runs_shop`, `sells`, `drops`, `gives_exp`, `hurts_you`,
 `killed_you_at_level`, `restores_hp`/`mp`), and how people play: `job:N ap_share_<stat>`
 (where a job's ability points go), `job:N puts_sp_into skill:M`, `map:N hunted_at_level L`
-and `item:N drunk_at_hp_percent P`. Agents spend ability and skill points the way people of
-their job did when there is evidence for it.
+and `item:N drunk_at_hp_percent P`. NPC dialogue a person was shown is read for what the
+NPC wants brought (`wants_first`) the same way an agent reads it when spoken to.
+
+Where there is evidence, agents play the way people did: ability points towards the shares
+people of their job gave each stat, skill points into the skills people chose first, hunting
+where people hunt at about their level (and not where people only hunt much later), and
+drinking at the health people drank at instead of at half. Without evidence, each falls back
+to the agent's own rule.

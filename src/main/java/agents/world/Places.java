@@ -63,11 +63,22 @@ public final class Places {
      * @param shopMaps     where somebody who buys and sells stands, when the agent has
      *                     reason to see one - a full bag, or nothing left that heals - and
      *                     empty otherwise
+     * @param level        the agent's level, or 0 when it does not know it
+     * @param huntedAt     the level people were seen hunting each map at, from recordings of
+     *                     them playing - empty when nobody has been watched
      */
     public record Facts(String here, Map<String, Integer> visits, String errandMap,
                         Set<String> hearAgain, Set<String> avoid, Map<String, Double> justBeenFor,
                         Set<String> shopMaps, String sentTo, String sentWhy,
-                        Map<String, Integer> deaths) {
+                        Map<String, Integer> deaths, int level, Map<String, Integer> huntedAt) {
+
+        public Facts(String here, Map<String, Integer> visits, String errandMap,
+                     Set<String> hearAgain, Set<String> avoid, Map<String, Double> justBeenFor,
+                     Set<String> shopMaps, String sentTo, String sentWhy,
+                     Map<String, Integer> deaths) {
+            this(here, visits, errandMap, hearAgain, avoid, justBeenFor, shopMaps, sentTo, sentWhy,
+                    deaths, 0, Map.of());
+        }
 
         public Facts(String here, Map<String, Integer> visits, String errandMap,
                      Set<String> hearAgain, Set<String> avoid, Map<String, Double> justBeenFor,
@@ -136,9 +147,27 @@ public final class Places {
                 value += w.shop();
                 reasons.add("somebody who buys and sells, and you need to");
             }
-            if (known.huntingIn(map)) {
-                value += w.hunting();
-                reasons.add("something living you have seen there");
+            Integer peopleHuntAt = facts.level() > 0 ? facts.huntedAt().get(map) : null;
+            if (peopleHuntAt != null && peopleHuntAt - facts.level() > TOO_STRONG_BY) {
+                // Somewhere people only hunt once they are much stronger is not a hunting
+                // ground yet, whatever lives there: it is the next place to die.
+                value -= w.hunting();
+                reasons.add("people hunt there from level " + peopleHuntAt);
+            } else if (known.huntingIn(map) || peopleHuntAt != null) {
+                double hunting = w.hunting();
+                if (peopleHuntAt != null && facts.level() - peopleHuntAt > OUTGROWN_BY) {
+                    hunting /= 2;
+                    reasons.add("people outgrow it by your level");
+                } else if (peopleHuntAt != null) {
+                    // People train there at about this level: the one thing about a hunting
+                    // ground that seeing a snail in it cannot tell you.
+                    hunting *= 2;
+                    reasons.add("people hunt there at about your level");
+                }
+                value += hunting;
+                if (known.huntingIn(map)) {
+                    reasons.add("something living you have seen there");
+                }
             }
             int visits = facts.visits().getOrDefault(map, 0);
             if (visits == 0) {
@@ -205,6 +234,12 @@ public final class Places {
     }
 
     public static final int KILLING_GROUND = 2;
+
+    /** Levels below where people hunt a map at which it is too soon to go. */
+    static final int TOO_STRONG_BY = 5;
+
+    /** Levels above where people hunt a map at which it is worth less than it was. */
+    static final int OUTGROWN_BY = 10;
 
     private static Set<String> withoutAvoided(Set<String> people, Set<String> avoid) {
         if (avoid.isEmpty()) {

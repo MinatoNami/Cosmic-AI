@@ -1,5 +1,6 @@
 package agents.memory;
 
+import agents.mind.Instructions;
 import agents.world.KnownWorld;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -27,7 +28,7 @@ import java.util.stream.Stream;
  * <p><strong>The world, in the agents' own words.</strong> Which door leads where, who stands in
  * which map and what roams it, who keeps a shop and what is on the shelf, what a monster drops,
  * how much experience it is worth and whether it hurts, where people died and at what level,
- * what a potion did. Each in exactly the form an agent writes it when it finds the same thing
+ * what a potion did, what an NPC asked to be brought. Each in exactly the form an agent writes it when it finds the same thing
  * out for itself, so everything that already reasons about doors and shops reasons about these
  * without being told they came from somewhere else.
  *
@@ -344,9 +345,15 @@ public final class Demonstrations {
             private void shown(JsonNode seen) {
                 switch (seen.path("type").asText()) {
                     case "DialogueShown" -> {
-                        if (seen.has("npcId") && map > 0) {
-                            assertTriple("npc:" + seen.get("npcId").asInt(), "talks_in", KnownWorld.mapRef(map), episode);
+                        int npcId = seen.path("npcId").asInt();
+                        if (npcId <= 0) {
+                            return;
                         }
+                        String speaker = "npc:" + npcId;
+                        if (map > 0) {
+                            assertTriple(speaker, "talks_in", KnownWorld.mapRef(map), episode);
+                        }
+                        whatWasSaid(speaker, npcId, seen.path("text").asText());
                     }
                     case "ShopOpened" -> {
                         String npc = "npc:" + seen.path("npcId").asInt();
@@ -363,6 +370,29 @@ public final class Demonstrations {
                     }
                     default -> {
                     }
+                }
+            }
+
+            /**
+             * What an NPC's words name, read exactly as an agent reads them when it is the one
+             * being spoken to ({@code Agent.rememberWhatWasSaid}): what they want brought, where
+             * and to whom they send you, and where somebody they mention can be found.
+             */
+            private void whatWasSaid(String speaker, int npcId, String text) {
+                Instructions.Heard heard = Instructions.read(text);
+                for (Instructions.ItemAsked item : heard.items()) {
+                    assertTriple(speaker, "wants_first", item.quantity() + " item:" + item.itemId(), episode);
+                }
+                for (int to : heard.maps()) {
+                    assertTriple(speaker, "sends_you_to", "map:" + to, episode);
+                }
+                for (int npc : heard.npcs()) {
+                    if (npc != npcId) {
+                        assertTriple(speaker, "sends_you_to", "npc:" + npc, episode);
+                    }
+                }
+                if (heard.npcs().size() == 1 && heard.maps().size() == 1 && heard.npcs().get(0) != npcId) {
+                    assertTriple("npc:" + heard.npcs().get(0), "present_in", "map:" + heard.maps().get(0), episode);
                 }
             }
 
