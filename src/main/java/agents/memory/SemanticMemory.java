@@ -37,7 +37,10 @@ public class SemanticMemory {
             // What drinking something did, which the latest try overrules: one that seemed
             // to do nothing while a monster was hitting harder than it healed must not stay
             // believed useless alongside the time it plainly worked.
-            "restores_hp", "restores_mp");
+            "restores_hp", "restores_mp",
+            // Whether somebody is waiting for the agent to do what they asked: it is one
+            // thing at a time, and "nothing" must replace whatever it was, not sit beside it.
+            "waiting_on");
 
     /**
      * Copy-on-write, because a mind is read from more threads than the one that writes it:

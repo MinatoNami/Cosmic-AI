@@ -61,6 +61,20 @@ public class Agent implements Runnable {
     private final IntentExecutor executor;
     private final Voice voice;
     private final DialogueReader dialogueReader;
+    private final agents.mind.InstructionReader instructionReader;
+    private final agents.mind.Requests requests = new agents.mind.Requests();
+
+    /** The conversation going on now, gathered so it can be read as a whole once it ends. */
+    private int talkingWith = -1;
+    private final List<String> beingTold = new java.util.ArrayList<>();
+    private java.util.Map<Integer, Integer> bagsWhenItBegan = java.util.Map.of();
+    private final List<Integer> questsTakenOn = new java.util.ArrayList<>();
+    private int lastLineAt;
+
+    /** A finished conversation out with the model, and who it was with. */
+    private CompletableFuture<List<agents.mind.InstructionReader.Step>> instructions;
+    private int instructionsFrom;
+    private long instructionsAskedAt;
 
     /**
      * Where the thinking about an NPC's words happens, so it does not happen on the tick.
@@ -198,6 +212,150 @@ public class Agent implements Runnable {
     }
 
     /**
+     * Keeps what an NPC is saying until they have finished saying it.
+     *
+     * One line at a time is how a dialogue window is answered, and no way to understand what
+     * is being asked: Roger hands over the apple in one line and says what to do with it in
+     * the next. So the lines are kept, with what the bags held when the conversation began,
+     * and read together once the NPC falls quiet.
+     */
+    private void listen(Observation.DialogueShown dialogue) {
+        if (dialogue.npcId() <= 0) {
+            return;
+        }
+        if (dialogue.npcId() != talkingWith) {
+            talkingWith = dialogue.npcId();
+            beingTold.clear();
+            questsTakenOn.clear();
+            bagsWhenItBegan = bagCounts();
+        }
+        beingTold.add(dialogue.text());
+        lastLineAt = steps;
+    }
+
+    /** Steps of silence after which a conversation is over. */
+    private static final int QUIET_FOR = 4;
+
+    /**
+     * Once the NPC has stopped talking, asks the model what the conversation wanted done.
+     *
+     * Only conversations that gave the agent something - a quest, an item, or a person or
+     * place to go to - are worth reading; "hello, nice weather" asks for nothing. While it is
+     * being read the NPC is marked as waiting on the agent, so the reflex that hands quests in
+     * does not walk up and offer it before the agent has done what was asked.
+     */
+    private void readWhatWasAskedOnceTheyStop() {
+        if (talkingWith <= 0 || steps - lastLineAt < QUIET_FOR || pendingDialogue != null) {
+            return;
+        }
+        int npc = talkingWith;
+        List<String> lines = List.copyOf(beingTold);
+        java.util.Map<Integer, Integer> received = new java.util.HashMap<>();
+        java.util.Map<Integer, Integer> now = bagCounts();
+        now.forEach((item, count) -> {
+            int more = count - bagsWhenItBegan.getOrDefault(item, 0);
+            if (more > 0) {
+                received.put(item, more);
+            }
+        });
+        List<Integer> quests = List.copyOf(questsTakenOn);
+        talkingWith = -1;
+        beingTold.clear();
+        questsTakenOn.clear();
+
+        boolean named = lines.stream().anyMatch(line -> !agents.mind.Instructions.read(line).isEmpty());
+        if (instructionReader == null || instructions != null
+                || (received.isEmpty() && quests.isEmpty() && !named)) {
+            return;
+        }
+        java.util.Map<Integer, Integer> usable = new java.util.HashMap<>();
+        for (agents.percept.Item item : world.inventory().carried(agents.percept.Item.USE)) {
+            usable.merge(item.itemId(), item.quantity(), Integer::sum);
+        }
+        Set<Integer> healing = new HashSet<>();
+        for (Belief belief : mind.semantic().liveBeliefs()) {
+            if (belief.predicate().equals("restores_hp") && belief.object().equals("true")
+                    && belief.subject().startsWith("item:")) {
+                try {
+                    healing.add(Integer.parseInt(belief.subject().substring(5)));
+                } catch (NumberFormatException ignored) {
+                    // not an item ref after all
+                }
+            }
+        }
+        agents.mind.InstructionReader.Conversation conversation = new agents.mind.InstructionReader.Conversation(
+                npc, lines, received, usable, healing, quests, world.hp(), world.maxHp());
+        mind.infer("npc:" + npc, "waiting_on", "what you were told", perceiver.currentTick());
+        instructionsFrom = npc;
+        instructionsAskedAt = System.currentTimeMillis();
+        instructions = CompletableFuture.supplyAsync(() -> instructionReader.read(conversation), reading);
+    }
+
+    /**
+     * Turns what the model read into things to do, each into the form the rest of the agent
+     * already acts on: somebody to find and somewhere to go are what the NPC "sends you to",
+     * things to bring are what it "wants first", and things to use are done straight away.
+     */
+    private void takeUpWhatWasAsked() {
+        if (instructions == null) {
+            return;
+        }
+        boolean outOfPatience = System.currentTimeMillis() - instructionsAskedAt > DIALOGUE_PATIENCE_MILLIS;
+        if (!instructions.isDone() && !outOfPatience) {
+            return;
+        }
+        List<agents.mind.InstructionReader.Step> asked = List.of();
+        if (instructions.isDone()) {
+            try {
+                asked = instructions.getNow(List.of());
+            } catch (RuntimeException failed) {
+                log.debug("{} could not read what npc:{} wanted", mind.name(), instructionsFrom, failed);
+            }
+        } else {
+            instructions.cancel(true);
+        }
+        instructions = null;
+        String who = "npc:" + instructionsFrom;
+        long tick = perceiver.currentTick();
+        for (agents.mind.InstructionReader.Step step : asked) {
+            log.info("{} understood {} wants it to {}", mind.name(), who, step.describe());
+            mind.hear(who, "asked_you_to", step.describe(), tick);
+            switch (step.kind()) {
+                case USE_ITEM -> requests.use(instructionsFrom, step.id(), step.count());
+                case TALK_TO -> mind.hear(who, "sends_you_to", "npc:" + step.id(), tick);
+                case GO_TO_MAP -> mind.hear(who, "sends_you_to", "map:" + step.id(), tick);
+                case BRING_ITEM -> mind.hear(who, "wants_first", step.count() + " item:" + step.id(), tick);
+            }
+        }
+        mind.infer(who, "waiting_on", requests.waitingOn(instructionsFrom) ? "you to use something" : "nothing",
+                tick);
+    }
+
+    /** One use a step at most of whatever an NPC asked the agent to use. */
+    private void doWhatWasAsked() {
+        agents.mind.Requests.Step step = requests.next(world.inventory());
+        step.use().ifPresent(itemId -> {
+            log.info("{} uses item:{} as it was asked to", mind.name(), itemId);
+            use(itemId);
+        });
+        for (int npc : step.finishedWith()) {
+            mind.infer("npc:" + npc, "waiting_on", "nothing", perceiver.currentTick());
+        }
+    }
+
+    /** Every item in the bags that are not worn, by id. */
+    private java.util.Map<Integer, Integer> bagCounts() {
+        java.util.Map<Integer, Integer> counts = new java.util.HashMap<>();
+        for (int bag : new int[] {agents.percept.Item.EQUIP, agents.percept.Item.USE,
+                agents.percept.Item.SETUP, agents.percept.Item.ETC}) {
+            for (agents.percept.Item item : world.inventory().carried(bag)) {
+                counts.merge(item.itemId(), item.quantity(), Integer::sum);
+            }
+        }
+        return counts;
+    }
+
+    /**
      * Notices the job changing, and remembers who it was talking to when it did.
      *
      * That is the one who trained it, and the one to go back to when it has grown: the first
@@ -229,12 +387,20 @@ public class Agent implements Runnable {
         this.voice = new Voice(new Random(mind.name().hashCode()));
         this.touch = new Touch(new Random(mind.name().hashCode() * 31L));
         this.dialogueReader = policy.oracle().map(DialogueReader::new).orElse(null);
+        this.instructionReader = policy.oracle().map(agents.mind.InstructionReader::new).orElse(null);
     }
 
     @Override
     public void run() {
         String name = mind.name();
         log.info("{} is awake, policy {}", name, policy.name());
+        // What it was in the middle of doing for somebody did not survive the restart; nobody
+        // should go on waiting for it.
+        for (Belief belief : mind.semantic().liveBeliefs()) {
+            if (belief.predicate().equals("waiting_on") && !belief.object().equals("nothing")) {
+                mind.infer(belief.subject(), "waiting_on", "nothing", perceiver.currentTick());
+            }
+        }
 
         try {
             while (running && connection.session().isConnected()) {
@@ -265,6 +431,10 @@ public class Agent implements Runnable {
             mind.take(observation);
             acknowledgeArrival(observation);
             answerNpc(observation);
+            if (observation instanceof Observation.QuestStateChanged quest && quest.state() == 1
+                    && talkingWith > 0) {
+                questsTakenOn.add(quest.questId());
+            }
             converse(observation);
             if (observation instanceof Observation.ShopOpened shop) {
                 shopkeeping.opened(shop, world, mind);
@@ -279,6 +449,8 @@ public class Agent implements Runnable {
         }
 
         answerWhenRead();
+        readWhatWasAskedOnceTheyStop();
+        takeUpWhatWasAsked();
         voice.next(System.currentTimeMillis()).ifPresent(this::say);
 
         feelForContact();
@@ -305,6 +477,7 @@ public class Agent implements Runnable {
             return;
         }
         deadFor = 0;
+        doWhatWasAsked();
 
         // At a shop counter the agent does its business there and nothing else, one
         // transaction a step, as a player standing at one does.
@@ -388,15 +561,17 @@ public class Agent implements Runnable {
      * which is the double-click a player falls back on.
      */
     private void drink(int itemId) {
+        log.info("{} drinks item:{} at {}/{} hp", mind.name(), itemId, world.hp(), world.maxHp());
+        use(itemId);
+    }
+
+    private void use(int itemId) {
         keyboard.bind(itemId).ifPresent(connection.session()::send);
         Optional<net.packet.Packet> use = keyboard.keyFor(itemId)
                 .flatMap(key -> keyboard.press(key, world.inventory()))
                 .or(() -> world.inventory().firstOf(itemId)
                         .map(item -> ClientPackets.useItem(item.slot(), item.itemId())));
-        use.ifPresent(packet -> {
-            log.info("{} drinks item:{} at {}/{} hp", mind.name(), itemId, world.hp(), world.maxHp());
-            connection.session().send(packet);
-        });
+        use.ifPresent(connection.session()::send);
     }
 
     /** What the agent's equipment soaks up when something hits it. */
@@ -523,6 +698,7 @@ public class Agent implements Runnable {
         }
         greetedWithoutAnswer = 0;
         lastSpokeWith = dialogue.npcId();
+        listen(dialogue);
         rememberWhatWasSaid(dialogue);
         // Somebody who has stranded this agent before gets a no, whoever would otherwise have
         // answered. This check used to sit on the reflex path only, so once the model was

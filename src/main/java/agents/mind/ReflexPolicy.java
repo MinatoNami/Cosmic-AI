@@ -450,6 +450,7 @@ public class ReflexPolicy implements Policy {
         listenForAnswers(mind, tick);
 
         Set<Integer> unfinished = startedQuests(mind);
+        waitingOnUs = waitingOn(mind);
 
         // Stopped finding anything out. A quest buys more patience, not an exemption.
         stale = decisionsSinceProgress
@@ -1357,7 +1358,11 @@ public class ReflexPolicy implements Policy {
         if (started.isEmpty()) {
             return Optional.empty();
         }
+        Set<String> waiting = waitingOnUs;
         return world.visibleNpcs().stream()
+                // Somebody waiting for the agent to do what they asked is not somebody to
+                // offer the quest to yet: Roger asks for his apple to be eaten first.
+                .filter(npc -> !waiting.contains("npc:" + npc.typeId()))
                 .flatMap(npc -> QuestBoard.endedBy(npc.typeId()).stream()
                         .filter(started::contains)
                         .filter(this::offWorriedCooldown)
@@ -1375,6 +1380,19 @@ public class ReflexPolicy implements Policy {
      * ledger - the agent acts on what it believes, and "quest:N state 1" is a belief it
      * formed by watching the quest start.
      */
+    /** NPCs waiting for the agent to finish doing what they asked. */
+    private Set<String> waitingOnUs = Set.of();
+
+    static Set<String> waitingOn(Mind mind) {
+        Set<String> waiting = new HashSet<>();
+        for (Belief belief : mind.semantic().liveBeliefs()) {
+            if (belief.predicate().equals("waiting_on") && !belief.object().equals("nothing")) {
+                waiting.add(belief.subject());
+            }
+        }
+        return waiting;
+    }
+
     private static Set<Integer> startedQuests(Mind mind) {
         Set<Integer> started = new HashSet<>();
         for (Belief belief : mind.semantic().liveBeliefs()) {

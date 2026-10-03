@@ -104,6 +104,22 @@ class ReflexPolicyTest {
         assertEquals(2100, handIn.npcId());
     }
 
+    /** Roger is waiting for his apple to be eaten; the quest is offered back once it has been. */
+    @Test
+    void doesNotHandInWhileTheNpcIsWaitingOnIt() {
+        mind.take(new Observation.QuestStateChanged(2, 1021, 1));
+        mind.infer("npc:2000", "waiting_on", "you to use something", 2);
+        world.update(new Observation.NpcAppeared(3, 7003, 2000, new Point(20, 0)));
+        Policy talker = new ReflexPolicy(new Random(1), Disposition.TALKER);
+
+        assertFalse(talker.decide(mind, world, 3).intent() instanceof Intent.CompleteQuest);
+
+        mind.infer("npc:2000", "waiting_on", "nothing", 4);
+        Intent.CompleteQuest handIn = assertInstanceOf(Intent.CompleteQuest.class,
+                talker.decide(mind, world, 5).intent());
+        assertEquals(1021, handIn.questId());
+    }
+
     @Test
     void doesNotHandInToAnNpcWhoCannotTakeIt() {
         mind.take(new Observation.QuestStateChanged(2, 1031, 1));
