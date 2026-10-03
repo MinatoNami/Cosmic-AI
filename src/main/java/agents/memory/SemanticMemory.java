@@ -128,9 +128,25 @@ public class SemanticMemory {
         return Math.min(0.99, 1 - doubt);
     }
 
-    /** FIRST_HAND beats INFERRED beats HEARSAY. */
-    private static Provenance stronger(Provenance a, Provenance b) {
-        return a.ordinal() <= b.ordinal() ? a : b;
+    /**
+     * FIRST_HAND beats INFERRED beats HEARSAY.
+     *
+     * Ranked explicitly: the enum is declared FIRST_HAND, HEARSAY, INFERRED, and comparing
+     * by declaration order made hearsay the stronger. An agent that worked something out for
+     * itself, about something it had inherited being told, went on holding it as hearsay - and
+     * the map trusts its own conclusions over hearsay, so its own "st00 leads nowhere" lost to
+     * a wrong "leads to Sleepywood" for hours.
+     */
+    static Provenance stronger(Provenance a, Provenance b) {
+        return rank(a) <= rank(b) ? a : b;
+    }
+
+    private static int rank(Provenance provenance) {
+        return switch (provenance) {
+            case FIRST_HAND -> 0;
+            case INFERRED -> 1;
+            case HEARSAY -> 2;
+        };
     }
 
     private void replace(Belief old, Belief updated) {

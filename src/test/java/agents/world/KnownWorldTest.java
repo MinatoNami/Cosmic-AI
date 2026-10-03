@@ -457,4 +457,20 @@ class KnownWorldTest {
         assertEquals(Optional.of(KnownWorld.NOWHERE),
                 KnownWorld.rememberedBy(memory.liveBeliefs()).destinationOf("portal:209000000/st00"));
     }
+
+    /**
+     * What it was told, then worked out for itself, is its own conclusion. Inherited "st00
+     * leads nowhere", confirmed by its own failures, stayed hearsay and lost to a wrong
+     * conclusion of its own that the door led to Sleepywood.
+     */
+    @Test
+    void confirmingWhatItWasToldMakesItItsOwn() {
+        agents.memory.SemanticMemory memory = new agents.memory.SemanticMemory();
+        memory.assertTriple("portal:209000000/st00", "leads_to", KnownWorld.NOWHERE, 0, 0, agents.memory.Belief.Provenance.HEARSAY);
+        memory.assertTriple("portal:209000000/st00", "leads_to", "map:105040300", 1, 10, agents.memory.Belief.Provenance.INFERRED);
+        memory.assertTriple("portal:209000000/st00", "leads_to", KnownWorld.NOWHERE, 2, 50, agents.memory.Belief.Provenance.INFERRED);
+
+        assertEquals(Optional.of(KnownWorld.NOWHERE),
+                KnownWorld.rememberedBy(memory.liveBeliefs()).destinationOf("portal:209000000/st00"));
+    }
 }
