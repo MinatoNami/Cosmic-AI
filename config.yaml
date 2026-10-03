@@ -214,7 +214,8 @@ server:
     USE_DEBUG_SHOW_RCVD_PACKET: false   #Prints on the cmd all received packet ids.
     USE_DEBUG_SHOW_RCVD_MVLIFE: false   #Prints on the cmd all received move life content.
     USE_DEBUG_SHOW_PACKET: false
-    DEMONSTRATION_CHARACTERS: "${DEMONSTRATION_CHARACTERS:}"   #Set in .env. Comma-separated character names whose play is recorded, action by action, for the AI agents to learn from.
+    DEMONSTRATION_CHARACTERS: "${DEMONSTRATION_CHARACTERS:}"   #Set in .env. Comma-separated character names whose play is recorded, action by action, for the AI agents to learn from, or * for every human player.
+    DEMONSTRATION_BOT_ACCOUNTS: "${DEMONSTRATION_BOT_ACCOUNTS:agent*,asker,watcher}"   #Accounts the AI agents use, never recorded under *. A trailing * matches a prefix.
     DEMONSTRATION_DIR: "agents-data/demonstrations"   #Where those recordings go, one folder per character and one file per login.
     USE_SUPPLY_RATE_COUPONS: true       #Allows rate coupons to be sold through the Cash Shop.
     USE_IP_VALIDATION: false             #Enables IP checking when logging in.

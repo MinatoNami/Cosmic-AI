@@ -54,7 +54,8 @@ import java.util.stream.Collectors;
  * <p>Server-side rather than a watching client, because a watcher only sees what the map is
  * told: it cannot see AP spent, a potion drunk out of sight, or which door was taken once the
  * player has gone through it. The server sees all of it, and only for the characters listed in
- * {@code DEMONSTRATION_CHARACTERS} - nobody else is recorded.
+ * {@code DEMONSTRATION_CHARACTERS}, or every human player when that is {@code *} - nobody
+ * else is recorded.
  *
  * <p>One file per login, under {@code DEMONSTRATION_DIR/<name>/}, opened with a full picture of
  * the character so that every later line can be read as a change against it.
@@ -101,12 +102,12 @@ public final class DemonstrationRecorder {
     }
 
     /**
-     * Called before the handler. Returns null for anyone not being recorded, which is
-     * everyone but the listed characters, so the cost to the rest of the server is one lookup.
+     * Called before the handler. Returns null for anyone not being recorded, so the cost to
+     * the rest of the server is one lookup.
      */
     public static Before before(Client c, short opcodeValue, byte[] body) {
         Character chr = c.getPlayer();
-        if (chr == null || !isRecorded(chr.getName())) {
+        if (chr == null || !isRecorded(chr.getName(), c.getAccountName())) {
             return null;
         }
         RecvOpcode opcode = byValue.get(opcodeValue);
@@ -173,7 +174,9 @@ public final class DemonstrationRecorder {
 
     /** Hooked into the attack parser, which is the only place the targets are known by name. */
     public static void noteAttack(Character chr, AttackInfo attack) {
-        if (chr == null || !isRecorded(chr.getName())) {
+        // Anyone with an open session passed the check in before(); asking again here would
+        // need the client, which the attack parser does not have to hand.
+        if (chr == null || !sessions.containsKey(chr.getId())) {
             return;
         }
         List<Map<String, Object>> targets = new ArrayList<>();
@@ -463,25 +466,53 @@ public final class DemonstrationRecorder {
     }
 
     /**
-     * Re-read whenever the configured string changes, so the list can be edited in a running
+     * Whether this character is one of the ones being recorded.
+     *
+     * {@code DEMONSTRATION_CHARACTERS} is either a list of names or {@code *}, which means every
+     * person who plays - every character whose account is not one of the agents', as listed in
+     * {@code DEMONSTRATION_BOT_ACCOUNTS}. Recording the agents too would feed their own
+     * behaviour back to them as though somebody had shown it to them.
+     *
+     * <p>Both settings are re-read whenever they change, so they can be edited in a running
      * server without the parse running on every packet.
      */
-    private static boolean isRecorded(String name) {
+    private static boolean isRecorded(String name, String account) {
         String configured = YamlConfig.config.server.DEMONSTRATION_CHARACTERS;
         if (configured == null || configured.isBlank()) {
             return false;
         }
-        Recorded names = recorded;
-        if (names == null || !configured.equals(names.from())) {
-            names = new Recorded(configured, Arrays.stream(configured.split(","))
-                    .map(String::trim).filter(s -> !s.isEmpty()).map(String::toLowerCase)
-                    .collect(Collectors.toUnmodifiableSet()));
-            recorded = names;
+        String bots = YamlConfig.config.server.DEMONSTRATION_BOT_ACCOUNTS;
+        Recorded rules = recorded;
+        if (rules == null || !configured.equals(rules.from()) || !Objects.equals(bots, rules.botsFrom())) {
+            rules = new Recorded(configured, list(configured), bots, list(bots));
+            recorded = rules;
         }
-        return names.names().contains(name.toLowerCase());
+        if (rules.names().contains("*")) {
+            return account != null && !isBot(account.toLowerCase(), rules.bots());
+        }
+        return rules.names().contains(name.toLowerCase());
     }
 
-    private record Recorded(String from, Set<String> names) {
+    /** Exact account names, or a prefix ending in {@code *}: "agent*" is agent0, agent1, ... */
+    private static boolean isBot(String account, Set<String> bots) {
+        for (String bot : bots) {
+            if (bot.endsWith("*") ? account.startsWith(bot.substring(0, bot.length() - 1)) : account.equals(bot)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static Set<String> list(String configured) {
+        if (configured == null) {
+            return Set.of();
+        }
+        return Arrays.stream(configured.split(","))
+                .map(String::trim).filter(s -> !s.isEmpty()).map(String::toLowerCase)
+                .collect(Collectors.toUnmodifiableSet());
+    }
+
+    private record Recorded(String from, Set<String> names, String botsFrom, Set<String> bots) {
     }
 
     private static String name(RecvOpcode opcode) {

@@ -43,6 +43,7 @@ class DemonstrationRecorderTest {
     Path dir;
 
     private String characters;
+    private String bots;
     private String directory;
     private Client client;
     private Character chr;
@@ -51,6 +52,8 @@ class DemonstrationRecorderTest {
     @BeforeEach
     void setUp() {
         characters = YamlConfig.config.server.DEMONSTRATION_CHARACTERS;
+        bots = YamlConfig.config.server.DEMONSTRATION_BOT_ACCOUNTS;
+        YamlConfig.config.server.DEMONSTRATION_BOT_ACCOUNTS = "agent*,asker,watcher";
         directory = YamlConfig.config.server.DEMONSTRATION_DIR;
         YamlConfig.config.server.DEMONSTRATION_CHARACTERS = "Magician, Someone";
         YamlConfig.config.server.DEMONSTRATION_DIR = dir.toString();
@@ -61,6 +64,7 @@ class DemonstrationRecorderTest {
         chr = mock(Character.class);
         map = mock(MapleMap.class);
         when(client.getPlayer()).thenReturn(chr);
+        when(client.getAccountName()).thenReturn("admin");
         when(chr.getName()).thenReturn("Magician");
         when(chr.getId()).thenReturn(id);
         when(chr.getJob()).thenReturn(Job.BEGINNER);
@@ -76,6 +80,7 @@ class DemonstrationRecorderTest {
     @AfterEach
     void tearDown() {
         YamlConfig.config.server.DEMONSTRATION_CHARACTERS = characters;
+        YamlConfig.config.server.DEMONSTRATION_BOT_ACCOUNTS = bots;
         YamlConfig.config.server.DEMONSTRATION_DIR = directory;
     }
 
@@ -87,6 +92,28 @@ class DemonstrationRecorderTest {
             p.writeInt(0);
             p.writeInt(256);
         })));
+    }
+
+    @Test
+    void everyoneMeansEveryPersonButNotTheAgents() {
+        YamlConfig.config.server.DEMONSTRATION_CHARACTERS = "*";
+        when(chr.getName()).thenReturn("Stranger");
+
+        assertNotNull(DemonstrationRecorder.before(client, op(RecvOpcode.DISTRIBUTE_AP), body(p -> {
+            p.writeInt(0);
+            p.writeInt(256);
+        })), "a person on any account is recorded");
+
+        when(client.getAccountName()).thenReturn("agent3");
+        when(chr.getName()).thenReturn("Agent3");
+        assertNull(DemonstrationRecorder.before(client, op(RecvOpcode.DISTRIBUTE_AP), body(p -> {
+            p.writeInt(0);
+            p.writeInt(256);
+        })), "an agent is not");
+
+        when(client.getAccountName()).thenReturn("watcher");
+        assertNull(DemonstrationRecorder.before(client, op(RecvOpcode.DISTRIBUTE_AP), new byte[8]),
+                "nor is the watcher");
     }
 
     @Test
