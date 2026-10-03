@@ -111,6 +111,10 @@ public class InstructionReader {
             are carrying. An item handed to you in this conversation is usually the one the \
             NPC is talking about.
 
+            Mesos are money, not an item: a price is not something to bring or use, and paying \
+            is not a step. Never use or bring something just because you are carrying it - \
+            only what the NPC handed you or named.
+
             Only list steps the NPC actually asked for, in the order to do them. Going back to \
             the NPC afterwards happens on its own; do not list it. If nothing was asked, \
             answer with no steps. Answer only with JSON: {"steps":[{"do":..,"id":..,"count":..,"place":..}]}""";
@@ -213,6 +217,7 @@ public class InstructionReader {
     static List<Step> checked(List<Step> steps, Conversation c) {
         Set<Integer> people = new java.util.HashSet<>();
         Set<Integer> places = new java.util.HashSet<>();
+        Set<Integer> things = new java.util.HashSet<>();
         for (String line : c.lines()) {
             Matcher named = NAMED.matcher(line);
             while (named.find()) {
@@ -221,16 +226,28 @@ public class InstructionReader {
                     people.add(id);
                 } else if (named.group(1).equals("m")) {
                     places.add(id);
+                } else {
+                    things.add(id);
                 }
             }
         }
+        // Something to use has to be something this NPC handed over or named. Being merely
+        // carried was enough once, and the model read a ship's captain as asking for thirty
+        // red potions to be drunk; the agent drank all thirty. And no more uses than were
+        // handed over, when that is where it came from.
         List<Step> kept = new ArrayList<>();
-        for (Step step : steps) {
+        for (Step original : steps) {
+            Step step = original;
+            if (step.kind() == Kind.USE_ITEM && !things.contains(step.id()) && c.received().containsKey(step.id())) {
+                step = new Step(Kind.USE_ITEM, step.id(), Math.min(step.count(), c.received().get(step.id())));
+            }
             boolean real = switch (step.kind()) {
-                case USE_ITEM -> c.carried().containsKey(step.id()) || c.received().containsKey(step.id());
+                case USE_ITEM -> (things.contains(step.id()) && c.carried().containsKey(step.id()))
+                        || c.received().containsKey(step.id());
                 case TALK_TO -> people.contains(step.id()) && step.id() != c.npcId();
                 case GO_TO_MAP -> places.contains(step.id());
-                case BRING_ITEM -> true;    // something to find, so not something it has yet
+                // Named, or it is a guess: "150 mesos" came back as 150 red potions.
+                case BRING_ITEM -> things.contains(step.id());
                 case HEAD_FOR -> saidInWords(step.place(), c.lines());
             };
             if (real) {

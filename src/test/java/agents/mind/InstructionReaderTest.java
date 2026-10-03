@@ -55,8 +55,8 @@ class InstructionReaderTest {
                                 {"do":"GO_TO_MAP","id":100000000,"count":1},
                                 {"do":"USE_ITEM","id":2010007,"count":3}]}""")).read(roger());
 
-        assertEquals(List.of(new InstructionReader.Step(InstructionReader.Kind.USE_ITEM, 2010007, 3)), steps,
-                "nothing named 1012100 or 100000000 was said, and 2010999 is not in the bag");
+        assertEquals(List.of(new InstructionReader.Step(InstructionReader.Kind.USE_ITEM, 2010007, 1)), steps,
+                "nothing named 1012100 or 100000000 was said, 2010999 is not in the bag, and one apple was handed over");
     }
 
     @Test
@@ -97,5 +97,26 @@ class InstructionReaderTest {
 
         assertEquals(List.of(new InstructionReader.Step(InstructionReader.Kind.HEAD_FOR, 0, 1,
                 "Perion, Victoria Island")), steps, "Ellinia was never mentioned");
+    }
+
+    /** A captain who mentioned nothing of the kind was read as asking for thirty potions to be drunk. */
+    @Test
+    void doesNotUseOrBringWhatTheNpcNeverNamedOrGave() {
+        InstructionReader.Conversation shanks = new InstructionReader.Conversation(22000,
+                List.of("Take this ship and you'll head off to a bigger continent. For #e150 mesos#n, I'll take you."),
+                Map.of(), Map.of(2000000, 30), Set.of(2000000), List.of(), 162, 162);
+        List<InstructionReader.Step> steps = new InstructionReader(new Answers("""
+                {"steps":[{"do":"USE_ITEM","id":2000000,"count":30},
+                          {"do":"BRING_ITEM","id":2000000,"count":150}]}""")).read(shanks);
+
+        assertTrue(steps.isEmpty(), "nothing was handed over or named: " + steps);
+    }
+
+    @Test
+    void usesNoMoreThanItWasHanded() {
+        List<InstructionReader.Step> steps = new InstructionReader(
+                new Answers("{\"steps\":[{\"do\":\"USE_ITEM\",\"id\":2010007,\"count\":5}]}")).read(roger());
+
+        assertEquals(List.of(new InstructionReader.Step(InstructionReader.Kind.USE_ITEM, 2010007, 1)), steps);
     }
 }
