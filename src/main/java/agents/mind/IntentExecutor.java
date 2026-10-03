@@ -96,7 +96,7 @@ public class IntentExecutor {
                 moveTo(attack.position(), world);
                 if (within(attack.position(), ATTACK_REACH, world)) {
                     session.send(ClientPackets.meleeAttack(attack.objectId(), attack.position(),
-                            CLAIMED_DAMAGE, attack.position().x >= world.selfPosition().x));
+                            claimedDamage(world), attack.position().x >= world.selfPosition().x));
                 }
             }
             case Intent.PickUp pickUp -> {
@@ -329,6 +329,94 @@ public class IntentExecutor {
         world.movedTo(next);
         return true;
     }
+
+    /**
+     * What one swing does, worked out as the client works it out: the weapon's multiplier on
+     * the stat its kind lives on, plus the backing stat, times weapon attack - and somewhere
+     * between half that and all of it, as a real swing lands.
+     *
+     * It claimed one point, every swing, for fear of the server's damage check. A level-34
+     * agent with a mace hit monsters with hundreds of health for one, so it never killed
+     * anything; watching it, you saw it walk up to monsters and nothing happen. The server
+     * checks claims against this same calculation and only warns at half as much again, so a
+     * claim inside it is simply a hit.
+     */
+    int claimedDamage(WorldModel world) {
+        Optional<agents.percept.Item> weapon = world.inventory().wornAt(WEAPON_SLOT);
+        if (weapon.isEmpty()) {
+            return CLAIMED_DAMAGE;              // bare hands: the server allows one
+        }
+        int kind = (weapon.get().itemId() / 10000) % 100;
+        boolean thief = (world.job() % 1000) / 100 == 4;
+        double multiplier;
+        String main = "STR";
+        String backing = "DEX";
+        switch (kind) {
+            case 30 -> multiplier = 4.0;                        // one-handed sword
+            case 31, 32 -> multiplier = 4.4;                    // one-handed axe, mace
+            case 33 -> {                                        // dagger
+                multiplier = thief ? 3.6 : 4.0;
+                if (thief) {
+                    main = "LUK";
+                    backing = "DEX+STR";
+                }
+            }
+            case 37, 38 -> multiplier = 3.6;                    // wand, staff, swung
+            case 40 -> multiplier = 4.6;                        // two-handed sword
+            case 41, 42 -> multiplier = 4.8;                    // two-handed axe, mace
+            case 43, 44 -> multiplier = 5.0;                    // spear, polearm
+            case 45 -> { multiplier = 3.4; main = "DEX"; backing = "STR"; }    // bow
+            case 46, 49 -> { multiplier = 3.6; main = "DEX"; backing = "STR"; } // crossbow, gun
+            case 47 -> { multiplier = 3.6; main = "LUK"; backing = "DEX+STR"; } // claw
+            case 48 -> multiplier = 4.8;                        // knuckle
+            default -> {
+                return CLAIMED_DAMAGE;
+            }
+        }
+        int watk = 0;
+        for (agents.percept.Item worn : world.inventory().worn()) {
+            if (worn.stats() != null) {
+                watk += worn.stats().watk();
+            }
+        }
+        int mainStat = Math.max(0, world.stat(main));
+        int backingStat = 0;
+        for (String stat : backing.split("\\+")) {
+            backingStat += Math.max(0, world.stat(stat));
+        }
+        int max = (int) Math.ceil((multiplier * mainStat + backingStat) / 100.0 * watk);
+        if (max <= 1) {
+            return CLAIMED_DAMAGE;
+        }
+        return max / 2 + swing.nextInt(max - max / 2 + 1);
+    }
+
+    private static final short WEAPON_SLOT = -11;
+    private final java.util.Random swing = new java.util.Random();
+
+    /**
+     * Thrown back by a monster's touch, as a hit character is: a short hop away from it along
+     * the floor. Without it a touched agent walked straight on through the monster, and to
+     * anyone watching it looked as though nothing had happened.
+     */
+    public void knockedBack(Point monster, WorldModel world) {
+        Point from = world.selfPosition();
+        int map = world.mapId();
+        int away = from.x >= monster.x ? 1 : -1;
+        int west = Navigator.floorEnd(map, from, -1).orElse(from.x);
+        int east = Navigator.floorEnd(map, from, 1).orElse(from.x);
+        int x = Math.max(west, Math.min(east, from.x + away * KNOCKBACK_PIXELS));
+        Point landing = new Point(x, Navigator.heightAlongFloor(map, from, x).orElse(from.y));
+        Point apex = new Point((from.x + x) / 2, Math.min(from.y, landing.y) - 20);
+        byte thrown = away > 0 ? STANCE_JUMP_RIGHT : STANCE_JUMP_LEFT;
+        session.send(ClientPackets.move(from, List.of(
+                new ClientPackets.Fragment(apex, (short) 0, thrown, (short) 150),
+                new ClientPackets.Fragment(landing, foothold(map, landing),
+                        away > 0 ? STANCE_STAND_LEFT : STANCE_STAND_RIGHT, (short) 150))));
+        world.movedTo(landing);
+    }
+
+    private static final int KNOCKBACK_PIXELS = 60;
 
     private static short foothold(int map, Point at) {
         return (short) MapGeometry.footholdUnder(map, at.x, at.y);

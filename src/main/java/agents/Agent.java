@@ -375,6 +375,8 @@ public class Agent implements Runnable {
         touch.check(world, defence(), System.currentTimeMillis()).ifPresent(contact -> {
             connection.session().send(ClientPackets.touchedByMonster(contact.damage(),
                     contact.monsterId(), contact.objectId(), contact.facingLeft()));
+            world.byObjectId(contact.objectId())
+                    .ifPresent(monster -> executor.knockedBack(monster.position(), world));
             mind.take(perceiver.felt(tick -> new Observation.TouchedBy(tick,
                     contact.objectId(), contact.monsterId(), contact.damage())));
         });

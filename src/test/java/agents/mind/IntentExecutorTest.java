@@ -185,4 +185,59 @@ class IntentExecutorTest {
         assertTrue(MapGeometry.usablePortalsIn(100000202).stream().noneMatch(p -> p.name().equals("h001")),
                 "h001 goes to out00 in the same map; trying it as a way out taught the agent it led nowhere");
     }
+
+    private WorldModel armedWith(int weaponId, int watk, int job, java.util.Map<String, Integer> stats) {
+        WorldModel world = standingAt(SOUTHPERRY, new Point(300, 527));
+        var weapon = new agents.percept.Item(1, -11, weaponId, 1,
+                new agents.percept.Item.EquipStats(0, 0, 0, 0, 0, 0, watk, 0, 0, 0, 0, 0, 0, 0, 7));
+        world.update(new Observation.InventoryShown(1, 0, java.util.Map.of(1, 24, 2, 24, 3, 24, 4, 24, 5, 24),
+                List.of(weapon)));
+        java.util.Map<String, Integer> all = new java.util.HashMap<>(stats);
+        all.put("JOB", job);
+        world.update(new Observation.StatsChanged(1, all));
+        return world;
+    }
+
+    /**
+     * Agent2, level 34 with a mace, claimed one damage a swing and never killed anything. The
+     * claim is now the client's own sum: (4.4 x STR + DEX) / 100 x attack, at least half of it.
+     */
+    @Test
+    void swingsForWhatItsWeaponAndStatsAreWorth() {
+        WorldModel world = armedWith(1322005, 19, 0, java.util.Map.of("STR", 150, "DEX", 20, "LUK", 4));
+        int max = (int) Math.ceil((4.4 * 150 + 20) / 100.0 * 19);
+
+        for (int i = 0; i < 200; i++) {
+            int claimed = executor.claimedDamage(world);
+            assertTrue(claimed >= max / 2 && claimed <= max, "claimed " + claimed + " of at most " + max);
+        }
+    }
+
+    /** A thief's dagger lives on luck, as the server reckons it. */
+    @Test
+    void aThiefsDaggerSwingsOnLuck() {
+        WorldModel world = armedWith(1332063, 30, 400, java.util.Map.of("STR", 4, "DEX", 25, "LUK", 120));
+        int max = (int) Math.ceil((3.6 * 120 + 25 + 4) / 100.0 * 30);
+
+        assertTrue(executor.claimedDamage(world) <= max);
+        assertTrue(executor.claimedDamage(world) >= max / 2);
+    }
+
+    @Test
+    void bareHandsStillDoOne() {
+        WorldModel world = standingAt(SOUTHPERRY, new Point(300, 527));
+
+        assertEquals(1, executor.claimedDamage(world));
+    }
+
+    /** Touched by a monster, it is thrown back from it along the floor, not walked on through. */
+    @Test
+    void aTouchThrowsItBackFromTheMonster() {
+        WorldModel world = standingAt(SOUTHPERRY, new Point(300, 527));
+
+        executor.knockedBack(new Point(330, 527), world);
+
+        assertTrue(world.selfPosition().x < 300, "thrown towards the monster: " + world.selfPosition());
+        assertTrue(onAFloor(SOUTHPERRY, world.selfPosition()), "landed in mid-air at " + world.selfPosition());
+    }
 }
