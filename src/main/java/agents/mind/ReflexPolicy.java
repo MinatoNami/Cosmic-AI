@@ -2145,6 +2145,13 @@ public class ReflexPolicy implements Policy {
     private static final Pattern ITEMS_ASKED = Pattern.compile("(\\d+) item:(\\d+)");
 
     static boolean canPay(String asked, int level, int mesos) {
+        // Only a condition it can check is one it can meet. Taking an unreadable one for met
+        // sent agents back, every few minutes, to anybody the model had noted as wanting
+        // "class selection options" or "No specific requirement stated" - Agent1 walked to
+        // Southperry thirteen times in an hour - and never once got anything for it.
+        if (!isConcrete(asked)) {
+            return false;
+        }
         Matcher wantsLevel = LEVEL_ASKED.matcher(asked);
         if (wantsLevel.find() && level < Integer.parseInt(wantsLevel.group(1))) {
             return false;
@@ -2152,6 +2159,12 @@ public class ReflexPolicy implements Policy {
         Matcher wantsMesos = MESOS_ASKED.matcher(asked);
         return !wantsMesos.find()
                 || mesos >= Integer.parseInt(wantsMesos.group(1).replace(",", ""));
+    }
+
+    /** A level, a sum of mesos or a number of an item: something the agent can count. */
+    public static boolean isConcrete(String asked) {
+        return LEVEL_ASKED.matcher(asked).find() || MESOS_ASKED.matcher(asked).find()
+                || ITEMS_ASKED.matcher(asked).find();
     }
 
     private static final Pattern LEVEL_ASKED =

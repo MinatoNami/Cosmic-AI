@@ -83,4 +83,19 @@ class InstructionReaderTest {
         assertTrue(told.contains("You were given, during this conversation: item:2010007 x1 (restores HP)"), told);
         assertTrue(told.contains("You have 25 of 50 HP"), told);
     }
+
+    /** Robin points a would-be warrior at Perion in plain words, with no id to walk to. */
+    @Test
+    void remembersWhereItWasPointedInWords() {
+        InstructionReader.Conversation robin = new InstructionReader.Conversation(2003, List.of(
+                "You want to become a #bWarrior#k? Hmmm, then I suggest you head over to Victoria Island. "
+                        + "Head over to a warrior-town called #rPerion#k and see #bDances with Balrog#k."),
+                Map.of(), Map.of(), Set.of(), List.of(), 166, 166);
+        List<InstructionReader.Step> steps = new InstructionReader(new Answers("""
+                {"steps":[{"do":"HEAD_FOR","id":0,"count":1,"place":"Perion, Victoria Island"},
+                          {"do":"HEAD_FOR","id":0,"count":1,"place":"Ellinia"}]}""")).read(robin);
+
+        assertEquals(List.of(new InstructionReader.Step(InstructionReader.Kind.HEAD_FOR, 0, 1,
+                "Perion, Victoria Island")), steps, "Ellinia was never mentioned");
+    }
 }

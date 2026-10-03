@@ -99,4 +99,18 @@ class AgentAnswersTest {
         assertFalse(Agent.businessHereFirst(2101, Map.of(1000, "2", 1031, "2", 1001, "2"), heenaAndSera),
                 "all done: being sent on is the way on");
     }
+
+    /**
+     * Shanks offers a quest nobody on Maple Island could start, and quest 1039 stays under way
+     * because nobody could finish it. Both kept every agent turning the ferry down.
+     */
+    @Test
+    void whatWasTriedAndRefusedIsNoReasonToStay() {
+        Set<Integer> heenaAndSera = Set.of(2101, 2100);
+
+        assertFalse(Agent.businessHereFirst(2101, Map.of(1031, "1"), Set.of(1000), Set.of(1031), heenaAndSera),
+                "1000 was asked for and never started; 1031 was offered back and not taken");
+        assertTrue(Agent.businessHereFirst(2101, Map.of(1031, "1"), Set.of(1000), Set.of(), heenaAndSera),
+                "1031 has not been offered back yet");
+    }
 }

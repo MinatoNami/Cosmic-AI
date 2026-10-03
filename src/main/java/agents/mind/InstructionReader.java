@@ -42,12 +42,24 @@ public class InstructionReader {
         /** Go somewhere. */
         GO_TO_MAP,
         /** Come back with {@code count} of something. */
-        BRING_ITEM
+        BRING_ITEM,
+        /**
+         * Head for somewhere named only in words - "Victoria Island", "Perion" - which the
+         * agent has no id for. It cannot walk there by name, but it can remember being told,
+         * and weigh the next offer of passage against it.
+         */
+        HEAD_FOR
     }
 
-    public record Step(Kind kind, int id, int count) {
+    public record Step(Kind kind, int id, int count, String place) {
+
+        public Step(Kind kind, int id, int count) {
+            this(kind, id, count, null);
+        }
+
         public String describe() {
             return switch (kind) {
+                case HEAD_FOR -> "head for " + place;
                 case USE_ITEM -> "use item:" + id + (count > 1 ? " x" + count : "");
                 case TALK_TO -> "talk to npc:" + id;
                 case GO_TO_MAP -> "go to map:" + id;
@@ -74,9 +86,10 @@ public class InstructionReader {
              "properties":{"steps":{"type":"array","maxItems":4,"items":{
                "type":"object","additionalProperties":false,"required":["do","id","count"],
                "properties":{
-                 "do":{"type":"string","enum":["USE_ITEM","TALK_TO","GO_TO_MAP","BRING_ITEM"]},
+                 "do":{"type":"string","enum":["USE_ITEM","TALK_TO","GO_TO_MAP","BRING_ITEM","HEAD_FOR"]},
                  "id":{"type":"integer"},
-                 "count":{"type":"integer","minimum":1,"maximum":200}}}}}}""";
+                 "count":{"type":"integer","minimum":1,"maximum":200},
+                 "place":{"type":"string","maxLength":60}}}}}}""";
 
     private static final String SYSTEM = """
             You are playing a character in a 2D fantasy MMO. An NPC has just finished talking \
@@ -88,6 +101,10 @@ public class InstructionReader {
               TALK_TO    id=<npc id named in the conversation>
               GO_TO_MAP  id=<map id named in the conversation>
               BRING_ITEM id=<item id>  count=<how many>
+              HEAD_FOR   place=<a place named only in words, as the NPC said it>  id=0
+
+            Use HEAD_FOR only when the NPC tells you to go somewhere in particular and gives \
+            no #m id for it - "head over to Victoria Island and see the trainer in Perion".
 
             In the NPC's words, #p123# is a person, #m123# a place and #t123# an item, by id. \
             Things are also named in plain words; match those to what you were just given or \
@@ -96,7 +113,7 @@ public class InstructionReader {
 
             Only list steps the NPC actually asked for, in the order to do them. Going back to \
             the NPC afterwards happens on its own; do not list it. If nothing was asked, \
-            answer with no steps. Answer only with JSON: {"steps":[{"do":..,"id":..,"count":..}]}""";
+            answer with no steps. Answer only with JSON: {"steps":[{"do":..,"id":..,"count":..,"place":..}]}""";
 
     private final Oracle oracle;
 
@@ -161,7 +178,12 @@ public class InstructionReader {
                 }
                 int id = step.path("id").asInt(0);
                 int count = Math.max(1, Math.min(200, step.path("count").asInt(1)));
-                if (id > 0) {
+                String place = step.path("place").asText("").strip();
+                if (kind == Kind.HEAD_FOR) {
+                    if (!place.isEmpty()) {
+                        steps.add(new Step(kind, 0, 1, place.length() > 60 ? place.substring(0, 60) : place));
+                    }
+                } else if (id > 0) {
                     steps.add(new Step(kind, id, count));
                 }
             }
@@ -172,6 +194,17 @@ public class InstructionReader {
     }
 
     private static final Pattern NAMED = Pattern.compile("#([pmt])(\\d+)#");
+
+    /** Whether the place was actually mentioned, so a model cannot send the agent somewhere imagined. */
+    static boolean saidInWords(String place, List<String> lines) {
+        String said = String.join(" ", lines).replaceAll("#[a-z]", "").toLowerCase();
+        for (String word : place.toLowerCase().split("[^a-z]+")) {
+            if (word.length() >= 4 && said.contains(word)) {
+                return true;
+            }
+        }
+        return false;
+    }
 
     /**
      * Keeps only steps about things the agent can see: an item it is carrying, or a person or
@@ -198,6 +231,7 @@ public class InstructionReader {
                 case TALK_TO -> people.contains(step.id()) && step.id() != c.npcId();
                 case GO_TO_MAP -> places.contains(step.id());
                 case BRING_ITEM -> true;    // something to find, so not something it has yet
+                case HEAD_FOR -> saidInWords(step.place(), c.lines());
             };
             if (real) {
                 kept.add(step);

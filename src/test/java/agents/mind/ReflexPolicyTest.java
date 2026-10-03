@@ -379,13 +379,16 @@ class ReflexPolicyTest {
     }
 
     /**
-     * Taking silence for consent, on purpose: the condition is free text from a model
-     * reading an NPC, and an unreadable one should send the agent back to ask rather than
-     * write the NPC off. One wasted conversation is cheaper than a missed way out.
+     * Silence used to be taken for consent: an unreadable condition sent the agent back to
+     * ask. With a cooldown between asks that became a round trip every few minutes, for ever -
+     * Agent1 went back to Southperry thirteen times in an hour for conditions like "class
+     * selection options". Only something it can count is something it can meet.
      */
     @Test
-    void goesAndAsksAgainWhenItCannotTellWhatWasAskedFor() {
-        assertTrue(ReflexPolicy.canPay("prove yourself worthy first", 1, 0));
+    void doesNotGoBackForAConditionItCannotCheck() {
+        assertFalse(ReflexPolicy.canPay("prove yourself worthy first", 1, 0));
+        assertFalse(ReflexPolicy.canPay("No specific requirement stated", 30, 99999));
+        assertTrue(ReflexPolicy.canPay("be level 6", 6, 0));
     }
 
     /**

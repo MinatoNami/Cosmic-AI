@@ -233,6 +233,29 @@ public class Agent implements Runnable {
         lastLineAt = steps;
     }
 
+    /**
+     * Writes down that it has asked for a quest, or offered one back.
+     *
+     * Kept in memory rather than in a field, so it outlives a restart: something asked for
+     * and refused, or offered back and not accepted, is not still "something to do here". A
+     * quest no agent could start - a level or a job it did not have - and a hunting quest
+     * nobody could finish had all three turning the ferry down every time it was offered.
+     */
+    private void rememberAsking(Intent intent) {
+        long tick = perceiver.currentTick();
+        if (intent instanceof Intent.StartQuest quest) {
+            mind.infer("quest:" + quest.questId(), "asked_for", "true", tick);
+        } else if (intent instanceof Intent.CompleteQuest quest) {
+            mind.infer("quest:" + quest.questId(), "offered_back", "true", tick);
+        }
+    }
+
+    /** Enough words that there may be something in them worth doing. */
+    private static final int SAYS_SOMETHING = 160;
+
+    /** Speeches already read, so the same words are not sent to the model twice. */
+    private final Set<Integer> alreadyRead = new HashSet<>();
+
     /** Steps of silence after which a conversation is over. */
     private static final int QUIET_FOR = 4;
 
@@ -264,10 +287,17 @@ public class Agent implements Runnable {
         questsTakenOn.clear();
 
         boolean named = lines.stream().anyMatch(line -> !agents.mind.Instructions.read(line).isEmpty());
+        // Directions come in plain words too: Robin tells a would-be warrior to go to Victoria
+        // Island and find the trainer in Perion, with no tag anywhere. So anything that runs
+        // to a few sentences is read - but each speech once, or an NPC who repeats himself,
+        // as Robin does every time his list is answered, is read every time.
+        int speech = String.join("\n", lines).hashCode();
+        boolean saysSomething = String.join(" ", lines).length() >= SAYS_SOMETHING && !alreadyRead.contains(speech);
         if (instructionReader == null || instructions != null
-                || (received.isEmpty() && quests.isEmpty() && !named)) {
+                || (received.isEmpty() && quests.isEmpty() && !named && !saysSomething)) {
             return;
         }
+        alreadyRead.add(speech);
         java.util.Map<Integer, Integer> usable = new java.util.HashMap<>();
         for (agents.percept.Item item : world.inventory().carried(agents.percept.Item.USE)) {
             usable.merge(item.itemId(), item.quantity(), Integer::sum);
@@ -325,6 +355,7 @@ public class Agent implements Runnable {
                 case TALK_TO -> mind.hear(who, "sends_you_to", "npc:" + step.id(), tick);
                 case GO_TO_MAP -> mind.hear(who, "sends_you_to", "map:" + step.id(), tick);
                 case BRING_ITEM -> mind.hear(who, "wants_first", step.count() + " item:" + step.id(), tick);
+                case HEAD_FOR -> mind.hear(who, "points_you_to", step.place(), tick);
             }
         }
         mind.infer(who, "waiting_on", requests.waitingOn(instructionsFrom) ? "you to use something" : "nothing",
@@ -510,6 +541,7 @@ public class Agent implements Runnable {
                 decision.fellBackBecause(), world.selfPosition());
 
         executor.execute(decision.intent(), world);
+        rememberAsking(decision.intent());
         noticeTheSilence(decision.intent());
 
         // Some maps cannot be left. Map 1020100 is an empty tutorial staging room: one
@@ -624,18 +656,28 @@ public class Agent implements Runnable {
             return false;   // asked enough times; whatever it was waiting for is not coming
         }
         java.util.Map<Integer, String> states = new java.util.HashMap<>();
+        Set<Integer> asked = new HashSet<>();
+        Set<Integer> offeredBack = new HashSet<>();
         for (Belief belief : mind.semantic().liveBeliefs()) {
-            if (belief.predicate().equals("state") && belief.subject().startsWith("quest:")) {
-                try {
-                    states.put(Integer.parseInt(belief.subject().substring(6)), belief.object());
-                } catch (NumberFormatException ignored) {
-                    // not a quest ref after all
-                }
+            if (!belief.subject().startsWith("quest:")) {
+                continue;
+            }
+            int quest;
+            try {
+                quest = Integer.parseInt(belief.subject().substring(6));
+            } catch (NumberFormatException ignored) {
+                continue;       // not a quest ref after all
+            }
+            switch (belief.predicate()) {
+                case "state" -> states.put(quest, belief.object());
+                case "asked_for" -> asked.add(quest);
+                case "offered_back" -> offeredBack.add(quest);
+                default -> { }
             }
         }
         Set<Integer> inSight = new HashSet<>();
         world.visibleNpcs().forEach(npc -> inSight.add(npc.typeId()));
-        return businessHereFirst(npcId, states, inSight);
+        return businessHereFirst(npcId, states, asked, offeredBack, inSight);
     }
 
     /**
@@ -644,14 +686,25 @@ public class Agent implements Runnable {
      */
     static boolean businessHereFirst(int npcId, java.util.Map<Integer, String> questStates,
                                      Set<Integer> npcsInSight) {
+        return businessHereFirst(npcId, questStates, Set.of(), Set.of(), npcsInSight);
+    }
+
+    /**
+     * As above, leaving out what has already been tried: a quest asked for and never started
+     * cannot be started yet, and one offered back and not taken is not finished yet. Neither
+     * is a reason to stay.
+     */
+    static boolean businessHereFirst(int npcId, java.util.Map<Integer, String> questStates,
+                                     Set<Integer> askedFor, Set<Integer> offeredBack,
+                                     Set<Integer> npcsInSight) {
         for (int quest : agents.world.QuestBoard.offeredBy(npcId)) {
-            if (!questStates.containsKey(quest)) {
+            if (!questStates.containsKey(quest) && !askedFor.contains(quest)) {
                 return true;
             }
         }
         for (int npc : npcsInSight) {
             for (int quest : agents.world.QuestBoard.endedBy(npc)) {
-                if ("1".equals(questStates.get(quest))) {
+                if ("1".equals(questStates.get(quest)) && !offeredBack.contains(quest)) {
                     return true;
                 }
             }
@@ -770,7 +823,11 @@ public class Agent implements Runnable {
         // as hearsay about that NPC, because being told something is not the same as knowing
         // it - and it puts the errand in the belief graph, where the agent can act on it and
         // a person can read it, rather than evaporating when the dialogue window closes.
-        if (reply.needs() != null && pending.npcId() > 0) {
+        // Only something countable, though. The model also wrote down "class selection
+        // options" and "No specific requirement stated" as conditions, and a condition
+        // nobody can check is one the agent kept walking back to meet.
+        if (reply.needs() != null && pending.npcId() > 0
+                && agents.mind.ReflexPolicy.isConcrete(reply.needs())) {
             mind.hear("npc:" + pending.npcId(), "wants_first", reply.needs(),
                     perceiver.currentTick());
             log.info("{} was told npc:{} wants {}", mind.name(), pending.npcId(), reply.needs());
@@ -958,6 +1015,13 @@ public class Agent implements Runnable {
             placed.append(" You have already taken up a calling; you cannot take up another.");
         }
         placed.append(" By temperament you are someone who ").append(temperament()).append('.');
+        // Where it has been told to go, in the words it was told. Without this, an offer of
+        // passage to the very place Robin pointed it at read like any other offer.
+        for (Belief belief : mind.semantic().liveBeliefs()) {
+            if (belief.predicate().equals("points_you_to")) {
+                placed.append(" You were told to head for ").append(belief.object()).append('.');
+            }
+        }
         // What it is still carrying for somebody, in the same markup the NPC used, so the
         // reader can match "collect 30 #t4031013#" against how many it has - and not take the
         // option to leave a test it is halfway through.
