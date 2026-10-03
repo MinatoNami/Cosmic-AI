@@ -2,7 +2,12 @@ package agents;
 
 import org.junit.jupiter.api.Test;
 
+import java.util.Map;
+import java.util.Set;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * What an agent answers when nobody read the question.
@@ -77,5 +82,21 @@ class AgentAnswersTest {
                 "somewhere left to go, including somebody here still unmet");
         assertEquals(YES_OR_NEXT, Agent.withoutReading(1, true),
                 "genuinely nothing left: no unopened door, nobody here unmet");
+    }
+
+    /**
+     * Heena asks "are you done with your training?" before she has offered anything, and a yes
+     * sends the agent off the island's first map with her quests and Sera's never taken.
+     */
+    @Test
+    void staysWhileThereIsStillSomethingToDoHere() {
+        Set<Integer> heenaAndSera = Set.of(2101, 2100);
+
+        assertTrue(Agent.businessHereFirst(2101, Map.of(), heenaAndSera),
+                "she has quests on offer it has never taken");
+        assertTrue(Agent.businessHereFirst(2101, Map.of(1000, "1", 1031, "1"), heenaAndSera),
+                "taken, but Sera, in sight, is still waiting to finish them");
+        assertFalse(Agent.businessHereFirst(2101, Map.of(1000, "2", 1031, "2", 1001, "2"), heenaAndSera),
+                "all done: being sent on is the way on");
     }
 }

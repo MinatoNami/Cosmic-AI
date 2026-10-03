@@ -444,6 +444,54 @@ public class Agent implements Runnable {
                 .anyMatch(b -> b.subject().equals(who) && b.predicate().equals("strands_you"));
     }
 
+    private boolean businessHereFirst(int npcId) {
+        if (stayedFor.merge(npcId, 1, Integer::sum) > STAY_FOR_AT_MOST) {
+            return false;   // asked enough times; whatever it was waiting for is not coming
+        }
+        java.util.Map<Integer, String> states = new java.util.HashMap<>();
+        for (Belief belief : mind.semantic().liveBeliefs()) {
+            if (belief.predicate().equals("state") && belief.subject().startsWith("quest:")) {
+                try {
+                    states.put(Integer.parseInt(belief.subject().substring(6)), belief.object());
+                } catch (NumberFormatException ignored) {
+                    // not a quest ref after all
+                }
+            }
+        }
+        Set<Integer> inSight = new HashSet<>();
+        world.visibleNpcs().forEach(npc -> inSight.add(npc.typeId()));
+        return businessHereFirst(npcId, states, inSight);
+    }
+
+    /**
+     * Something the one asking offers that was never taken, or a quest under way that somebody
+     * in sight finishes. Either is a reason not to be sent anywhere yet.
+     */
+    static boolean businessHereFirst(int npcId, java.util.Map<Integer, String> questStates,
+                                     Set<Integer> npcsInSight) {
+        for (int quest : agents.world.QuestBoard.offeredBy(npcId)) {
+            if (!questStates.containsKey(quest)) {
+                return true;
+            }
+        }
+        for (int npc : npcsInSight) {
+            for (int quest : agents.world.QuestBoard.endedBy(npc)) {
+                if ("1".equals(questStates.get(quest))) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    /**
+     * How many times one NPC's offer is turned down for this. Some offered quests can never
+     * be started - a level too low, a job not had - and those would otherwise keep an agent
+     * refusing the one way on for good.
+     */
+    private static final int STAY_FOR_AT_MOST = 4;
+    private final java.util.Map<Integer, Integer> stayedFor = new java.util.HashMap<>();
+
     /**
      * Whether this agent is somewhere with no way out and has been for long enough to be
      * sure it is not simply mid-transition.
@@ -481,6 +529,16 @@ public class Agent implements Runnable {
         // reading dialogue it was asked afresh every time, said yes every time, and two agents
         // were rescued from the same rooms fifty-two times in half an hour.
         if (strandedMeBefore(dialogue.npcId())) {
+            reply(dialogue.style(), NPC_NO, NO_SELECTION);
+            return;
+        }
+        // Nor does an offer to be sent away get a yes while there is still something to do
+        // here. Heena's first words in Mushroom Town are "are you done with your training? I
+        // will send you out", and her quests are only offered after she has been heard; so
+        // every agent that heard her said yes, and left the island's first two quests behind.
+        if (isAQuestion(dialogue.style()) && businessHereFirst(dialogue.npcId())) {
+            log.info("{} turns down npc:{} - there is still something to do here",
+                    mind.name(), dialogue.npcId());
             reply(dialogue.style(), NPC_NO, NO_SELECTION);
             return;
         }
