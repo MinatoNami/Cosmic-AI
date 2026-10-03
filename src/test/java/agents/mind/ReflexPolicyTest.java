@@ -16,6 +16,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Random;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -131,6 +132,30 @@ class ReflexPolicyTest {
 
         Intent.StartQuest asked = assertInstanceOf(Intent.StartQuest.class, intent);
         assertEquals(2101, asked.npcId());
+    }
+
+    /**
+     * Mushroom Town is known by heart from birth, so it is stale the moment an agent arrives.
+     * A wanderer walked out of it past Heena without asking her for anything. A quest on offer
+     * in sight is not a map worn out.
+     */
+    @Test
+    void aWandererDoesNotLeaveWhileSomebodyHereHasAQuestToGive() {
+        world.movedTo(new Point(1300, 125));
+        mind.take(new Observation.DialogueShown(2, 2101, "Are you done with your training?", 1));
+        world.update(new Observation.NpcAppeared(3, 7002, 2101, new Point(130, 305)));
+        Policy wanderer = new ReflexPolicy(new Random(1), Disposition.WANDERER);
+        Set<Point> doors = new java.util.HashSet<>();
+        world.portals().forEach(door -> doors.add(door.position()));
+
+        for (int tick = 4; tick < 150; tick++) {
+            Intent intent = wanderer.decide(mind, world, tick).intent();
+            assertFalse(intent instanceof Intent.EnterPortal, "left at decision " + tick);
+            if (intent instanceof Intent.MoveTo move) {
+                assertFalse(doors.contains(move.destination()),
+                        "set off for a door at decision " + tick + " with Heena's quest not asked for");
+            }
+        }
     }
 
     @Test

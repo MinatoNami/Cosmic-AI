@@ -959,6 +959,36 @@ public class ReflexPolicy implements Policy {
      * while Shanks, three platforms up and the only reason to be in that map, went
      * unconsidered because the selection had already been spent.
      */
+    /**
+     * Somebody in sight with a quest not yet asked about, or who finishes a quest under way
+     * that has not yet been offered to them. Each is tried once, so this runs out; and in case
+     * something keeps it from running out, it holds the agent for so long and no longer.
+     */
+    private boolean somethingToDoHere(WorldModel world, Mind mind) {
+        if (decisionsHere > BUSINESS_HOLDS) {
+            return false;
+        }
+        Set<String> stranders = strandedBy(mind);
+        Set<Integer> started = startedQuests(mind);
+        for (WorldModel.Entity npc : world.visibleNpcs()) {
+            if (stranders.contains("npc:" + npc.typeId())) {
+                continue;
+            }
+            if (hasSomethingToOffer(npc)) {
+                return true;
+            }
+            for (int quest : QuestBoard.endedBy(npc.typeId())) {
+                if (started.contains(quest) && !lastHandIn.containsKey(quest)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    /** Decisions in one map that quests in it can keep an agent from leaving. */
+    private static final int BUSINESS_HOLDS = 300;
+
     private boolean hasSomethingToOffer(WorldModel.Entity npc) {
         return QuestBoard.offeredBy(npc.typeId()).stream()
                 .anyMatch(quest -> !questsTried.contains(quest));
@@ -1199,15 +1229,23 @@ public class ReflexPolicy implements Policy {
         // out. Everything else here is a measure of boredom; this is the agent knowing where
         // it is going and what is waiting when it arrives.
         double wornOut = Math.min(1.0, (double) decisionsHere / disposition.patience());
-        double score = (0.3 + disposition.wanderlust()) * wornOut
+        double boredom = (0.3 + disposition.wanderlust()) * wornOut
                 + (stale ? 1.0 : 0)
-                + (errandMap != null ? ERRAND : 0)
                 + urgeFor("door")
                 + (alreadyOnTheWay ? COMMITTED : 0)
                 // The model looked at every place the agent could go and picked one. That is a
                 // decision about the next few minutes, and letting the nearest snail outvote it
                 // made the model's choices lean rather than decide.
-                + (destinationFromModel && destination != null ? COMMITTED : 0)
+                + (destinationFromModel && destination != null ? COMMITTED : 0);
+        // A quest to ask for or hand in, with the person right here, is not a map worn out,
+        // however well the agent knows it. Mushroom Town is known by heart from birth, so it
+        // was stale on arrival: a wanderer walked out past Heena without asking her for
+        // anything, and another left carrying her quest with Sera, who finishes it, in sight.
+        if (somethingToDoHere(world, mind)) {
+            boredom = 0;
+        }
+        double score = boredom
+                + (errandMap != null ? ERRAND : 0)
                 // A map that has killed it twice at about this level is a map to get out of.
                 + (deathsHere >= 2 ? LEAVE_A_KILLING_GROUND : 0);
 
