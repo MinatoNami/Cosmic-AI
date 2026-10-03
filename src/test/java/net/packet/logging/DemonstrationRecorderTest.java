@@ -3,6 +3,7 @@ package net.packet.logging;
 import client.Character;
 import client.Client;
 import client.Job;
+import client.Stat;
 import client.inventory.Inventory;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -10,6 +11,7 @@ import config.YamlConfig;
 import net.opcodes.RecvOpcode;
 import net.packet.ByteBufOutPacket;
 import net.packet.OutPacket;
+import net.opcodes.SendOpcode;
 import net.server.channel.handlers.AbstractDealDamageHandler.AttackInfo;
 import net.server.channel.handlers.AbstractDealDamageHandler.AttackTarget;
 import org.junit.jupiter.api.AfterEach;
@@ -18,6 +20,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import server.life.Monster;
 import server.maps.MapleMap;
+import server.maps.Portal;
+import tools.PacketCreator;
+import tools.Pair;
 
 import java.awt.Point;
 import java.io.IOException;
@@ -194,6 +199,129 @@ class DemonstrationRecorderTest {
     @Test
     void noiseIsNotRecorded() {
         assertNull(DemonstrationRecorder.before(client, op(RecvOpcode.HEAL_OVER_TIME), new byte[0]));
+    }
+
+    @Test
+    void aTypedReplyToAnNpcIsReadAsText() throws IOException {
+        var before = DemonstrationRecorder.before(client, op(RecvOpcode.NPC_TALK_MORE), body(p -> {
+            p.writeByte(2);
+            p.writeByte(1);
+            p.writeString("maple");
+        }));
+        DemonstrationRecorder.after(client, before);
+
+        JsonNode reply = lines().get(1);
+        assertEquals("maple", reply.get("detail").get("text").asText());
+        assertNull(reply.get("detail").get("selection"));
+    }
+
+    @Test
+    void whatAnNpcSaysInAnswerGoesWithTheAnswer() throws IOException {
+        var before = DemonstrationRecorder.before(client, op(RecvOpcode.NPC_TALK), body(p -> p.writeInt(1000)));
+        DemonstrationRecorder.sent(client, PacketCreator.getNPCTalk(2000, (byte) 0, "Bring me 10 snail shells.", "00 01", (byte) 0));
+        DemonstrationRecorder.after(client, before);
+
+        JsonNode talk = lines().get(1);
+        JsonNode said = talk.get("saw").get(0);
+        assertEquals("DialogueShown", said.get("type").asText());
+        assertEquals(2000, said.get("npcId").asInt());
+        assertEquals("Bring me 10 snail shells.", said.get("text").asText());
+    }
+
+    @Test
+    void somethingShownOutsideAnyActionIsALineOfItsOwn() throws IOException {
+        DemonstrationRecorder.after(client, DemonstrationRecorder.before(client, op(RecvOpcode.CHANGE_CHANNEL), new byte[0]));
+        DemonstrationRecorder.sent(client, PacketCreator.serverNotice(5, "The ship is arriving."));
+
+        JsonNode notice = lines().get(2);
+        assertEquals("saw", notice.get("act").asText());
+        assertEquals("NoticeShown", notice.get("detail").get("type").asText());
+    }
+
+    @Test
+    void aDropSaysWhichMonsterItCameFrom() throws IOException {
+        Monster snail = mock(Monster.class);
+        when(snail.getId()).thenReturn(100100);
+        when(snail.isAlive()).thenReturn(true);
+        when(map.getMonsterByOid(7)).thenReturn(snail);
+        var before = DemonstrationRecorder.before(client, op(RecvOpcode.CLOSE_RANGE_ATTACK), new byte[0]);
+        AttackInfo attack = new AttackInfo();
+        attack.targets = Map.of(7, new AttackTarget((short) 0, List.of(12)));
+        DemonstrationRecorder.noteAttack(chr, attack);
+        DemonstrationRecorder.after(client, before);
+
+        // Laid out as PacketCreator.dropItemFromMapObject writes it.
+        OutPacket drop = OutPacket.create(SendOpcode.DROP_ITEM_FROM_MAPOBJECT);
+        drop.writeByte(1);
+        drop.writeInt(55);
+        drop.writeBool(false);
+        drop.writeInt(4000019);
+        drop.writeInt(0);
+        drop.writeByte(0);
+        drop.writePos(new Point(10, 20));
+        drop.writeInt(7);
+        DemonstrationRecorder.sent(client, drop);
+
+        JsonNode dropped = lines().get(2).get("detail");
+        assertEquals("DropAppeared", dropped.get("type").asText());
+        assertEquals(4000019, dropped.get("item").asInt());
+        assertEquals(100100, dropped.get("fromMob").asInt());
+        assertEquals("[10,20]", dropped.get("position").toString());
+    }
+
+    @Test
+    void dyingIsRecordedOnceWithWhatLastHurtYou() throws IOException {
+        var hit = DemonstrationRecorder.before(client, op(RecvOpcode.TAKE_DAMAGE), body(p -> {
+            p.writeInt(0);
+            p.writeByte(-1);
+            p.writeByte(0);
+            p.writeInt(50);
+            p.writeInt(100100);
+            p.writeInt(7);
+        }));
+        DemonstrationRecorder.after(client, hit);
+        DemonstrationRecorder.sent(client, PacketCreator.updatePlayerStats(List.of(new Pair<>(Stat.HP, 0)), false, chr));
+        DemonstrationRecorder.sent(client, PacketCreator.updatePlayerStats(List.of(new Pair<>(Stat.HP, 0)), false, chr));
+
+        List<JsonNode> lines = lines();
+        assertEquals("mob_contact", lines.get(1).get("detail").get("from").asText());
+        JsonNode died = lines.get(2);
+        assertEquals("died", died.get("act").asText());
+        assertEquals(100100, died.get("detail").get("lastHurtBy").asInt());
+        assertEquals(3, lines.size(), "dying once is one death");
+    }
+
+    @Test
+    void walkingIntoAMapRecordsItsDoorsAndWhoIsThere() throws IOException {
+        Portal door = mock(Portal.class);
+        when(door.getName()).thenReturn("east00");
+        when(door.getTargetMapId()).thenReturn(20000);
+        when(door.getPosition()).thenReturn(new Point(500, 0));
+        Monster snail = mock(Monster.class);
+        when(snail.getId()).thenReturn(100100);
+        when(snail.isAlive()).thenReturn(true);
+        when(map.getPortals()).thenReturn(List.of(door));
+        when(map.getMapObjects()).thenReturn(List.of(snail, snail));
+
+        var before = DemonstrationRecorder.before(client, op(RecvOpcode.CHANGE_MAP), new byte[0]);
+        when(chr.getMapId()).thenReturn(20000);
+        DemonstrationRecorder.after(client, before);
+
+        JsonNode arrived = lines().get(1).get("arrived");
+        assertEquals(20000, arrived.get("map").asInt());
+        assertEquals("east00", arrived.get("portals").get(0).get("name").asText());
+        assertEquals(2, arrived.get("monsters").get("100100").asInt());
+    }
+
+    @Test
+    void leavingClosesTheSession() throws IOException {
+        DemonstrationRecorder.after(client, DemonstrationRecorder.before(client, op(RecvOpcode.CHANGE_CHANNEL), new byte[0]));
+        DemonstrationRecorder.left(client, chr, "logged_out");
+        DemonstrationRecorder.sent(client, PacketCreator.serverNotice(5, "nobody is listening"));
+
+        List<JsonNode> lines = lines();
+        assertEquals("session_end", lines.get(lines.size() - 1).get("act").asText());
+        assertEquals("logged_out", lines.get(lines.size() - 1).get("detail").get("how").asText());
     }
 
     private static short op(RecvOpcode opcode) {

@@ -2602,11 +2602,9 @@ public class MapleMap {
         return null;
     }
 
-    /*
     public Collection<Portal> getPortals() {
         return Collections.unmodifiableCollection(portals.values());
     }
-    */
 
     public void addPlayerPuppet(Character player) {
         for (Monster mm : this.getAllMonsters()) {
