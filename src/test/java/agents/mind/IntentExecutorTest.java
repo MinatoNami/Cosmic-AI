@@ -240,4 +240,26 @@ class IntentExecutorTest {
         assertTrue(world.selfPosition().x < 300, "thrown towards the monster: " + world.selfPosition());
         assertTrue(onAFloor(SOUTHPERRY, world.selfPosition()), "landed in mid-air at " + world.selfPosition());
     }
+
+    /**
+     * Heena stands on a ledge above Mushroom Town with no way up to it. A player clicks her
+     * from below; an agent that insisted on walking up first paced underneath and never spoke.
+     */
+    @Test
+    void speaksToSomebodyOnALedgeFromBelow() {
+        WorldModel world = standingAt(10000, new Point(-41, 469));
+        Point heena = new Point(130, 305);
+
+        executor.execute(new Intent.TalkTo(1000000002, 2101, heena), world);
+
+        assertEquals(1, sent.size(), "said nothing to her: " + sent);
+        assertTrue(IntentExecutor.canSpeakTo(10000, new Point(-41, 469), heena, 60));
+    }
+
+    /** Somebody the agent can walk up to is walked up to, not hailed from across the map. */
+    @Test
+    void walksUpToSomebodyItCanReach() {
+        assertTrue(!IntentExecutor.canSpeakTo(10000, new Point(-41, 469), new Point(833, 125), 60),
+                "Sera can be reached, so it should go to her");
+    }
 }

@@ -762,7 +762,7 @@ public class ReflexPolicy implements Policy {
             double distance = host.position().distance(self);
             double score = 0.8 + NEGLECT_MATTERS * neglect("errand") + urgeFor("errand")
                     + commitmentTo("errand", host.position());
-            if (distance >= NPC_RANGE) {
+            if (!IntentExecutor.canSpeakTo(world.mapId(), self, host.position(), NPC_RANGE)) {
                 Point where = host.position();
                 choices.add(new Choice("errand", new Intent.MoveTo(host.position()),
                         "go back to the one I owe something", score,
@@ -820,7 +820,7 @@ public class ReflexPolicy implements Policy {
         double score = SHOP_URGENCY + NEGLECT_MATTERS * neglect("shop")
                 + commitmentTo("shop", npc.position());
         String why = toSell ? "sell what I cannot carry" : "buy something that heals";
-        if (npc.position().distance(self) >= NPC_RANGE) {
+        if (!IntentExecutor.canSpeakTo(world.mapId(), self, npc.position(), NPC_RANGE)) {
             Point where = npc.position();
             choices.add(new Choice("shop", new Intent.MoveTo(where),
                     "go and " + why, score, () -> settingOff("shop", where)));
@@ -1103,7 +1103,7 @@ public class ReflexPolicy implements Policy {
             double score = appeal + NEGLECT_MATTERS * neglect("talk") + urgeFor("talk")
                     + commitmentTo("talk", npc.position());
 
-            if (distance >= NPC_RANGE) {
+            if (!IntentExecutor.canSpeakTo(world.mapId(), self, npc.position(), NPC_RANGE)) {
                 Point where = npc.position();
                 choices.add(new Choice("talk", new Intent.MoveTo(npc.position()),
                         "go and see what that one wants", score,

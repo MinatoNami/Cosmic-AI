@@ -113,6 +113,10 @@ public class IntentExecutor {
                 }
             }
             case Intent.TalkTo talk -> {
+                if (canSpeakTo(world.mapId(), world.selfPosition(), talk.position(), SPEAKING_DISTANCE)) {
+                    session.send(ClientPackets.talkToNpc(talk.objectId()));
+                    return;
+                }
                 moveTo(talk.position(), world);
                 if (within(talk.position(), SPEAKING_DISTANCE, world)) {
                     session.send(ClientPackets.talkToNpc(talk.objectId()));
@@ -120,8 +124,10 @@ public class IntentExecutor {
             }
             case Intent.StartQuest quest -> {
                 // The server refuses this unless we are standing near the NPC.
-                moveTo(quest.position(), world);
-                if (within(quest.position(), SPEAKING_DISTANCE, world)) {
+                if (!canSpeakTo(world.mapId(), world.selfPosition(), quest.position(), SPEAKING_DISTANCE)) {
+                    moveTo(quest.position(), world);
+                }
+                if (canSpeakTo(world.mapId(), world.selfPosition(), quest.position(), SPEAKING_DISTANCE)) {
                     session.send(ClientPackets.questAction(QUEST_START_SCRIPTED,
                             quest.questId(), quest.npcId()));
                     session.send(ClientPackets.questAction(QUEST_START_PLAIN,
@@ -129,8 +135,10 @@ public class IntentExecutor {
                 }
             }
             case Intent.CompleteQuest quest -> {
-                moveTo(quest.position(), world);
-                if (within(quest.position(), SPEAKING_DISTANCE, world)) {
+                if (!canSpeakTo(world.mapId(), world.selfPosition(), quest.position(), SPEAKING_DISTANCE)) {
+                    moveTo(quest.position(), world);
+                }
+                if (canSpeakTo(world.mapId(), world.selfPosition(), quest.position(), SPEAKING_DISTANCE)) {
                     session.send(ClientPackets.questAction(QUEST_END_SCRIPTED,
                             quest.questId(), quest.npcId()));
                     session.send(ClientPackets.questAction(QUEST_END_PLAIN,
@@ -150,6 +158,29 @@ public class IntentExecutor {
     static final int ATTACK_REACH = 120;
     static final int HAND_REACH = 60;
     static final int SPEAKING_DISTANCE = 150;
+
+    /**
+     * Whether somebody can be spoken to from here.
+     *
+     * Close enough is close enough. But a player speaks to an NPC by clicking on them, and
+     * the server checks no distance for a conversation and only a generous one for a quest,
+     * so somebody standing where no floor leads - Heena, on a ledge above Mushroom Town with
+     * no way up - is spoken to from below, from anywhere on the same screen. Insisting on
+     * walking up to her left every agent pacing underneath and never once hearing her.
+     */
+    public static boolean canSpeakTo(int map, Point self, Point npc, int reach) {
+        if (self.distance(npc) <= reach) {
+            return true;
+        }
+        if (Math.abs(npc.x - self.x) > ON_SCREEN_X || Math.abs(npc.y - self.y) > ON_SCREEN_Y) {
+            return false;
+        }
+        return !MapGeometry.groundIn(map).isEmpty() && Navigator.nextStep(map, self, npc).isEmpty();
+    }
+
+    /** Half the client's 800x600 window: how far off something can be and still be clicked. */
+    static final int ON_SCREEN_X = 400;
+    static final int ON_SCREEN_Y = 300;
 
     private static boolean within(Point target, int reach, WorldModel world) {
         return world.selfPosition().distance(target) <= reach;
