@@ -185,6 +185,30 @@ class ReflexPolicyTest {
         assertFalse(ReflexPolicy.movedByConversation(talkedAfter, 101), "the door came after the talking");
     }
 
+    /**
+     * Somewhere with no working door and nothing to hunt, the people are the only way on.
+     * Three agents wandered Happyville for hours, having heard everybody once, waiting out a
+     * cooldown meant for places with something else to do.
+     */
+    @Test
+    void asksAgainSoonWhenThereIsNoOtherWayOn() {
+        world.update(new Observation.MapEntered(1, 1020100, 0));
+        world.movedTo(new Point(0, 0));
+        assertTrue(agents.world.MapGeometry.usablePortalsIn(1020100).isEmpty(), "a room with no way out on foot");
+        mind.take(new Observation.DialogueShown(2, 12345, "Do you want to get out of here?", 1));
+        world.update(new Observation.NpcAppeared(3, 7009, 12345, new Point(0, 0)));
+        Policy talker = new ReflexPolicy(new Random(1), Disposition.WANDERER);
+
+        int asked = 0;
+        for (int tick = 4; tick < 400; tick++) {
+            if (talker.decide(mind, world, tick).intent() instanceof Intent.TalkTo) {
+                asked++;
+            }
+        }
+
+        assertTrue(asked >= 3, "asked only " + asked + " times in 400 decisions with nothing else to do");
+    }
+
     @Test
     void doesNotKeepOfferingTheSameQuestEveryTick() {
         mind.take(new Observation.QuestStateChanged(2, 1031, 1));

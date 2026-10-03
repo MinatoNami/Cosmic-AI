@@ -380,6 +380,31 @@ public class ReflexPolicy implements Policy {
         return disposition;
     }
 
+    /**
+     * Whether the last look found no door here worth trying, and whether that, with nothing
+     * to hunt, has gone on long enough to call the agent stranded.
+     */
+    private boolean noWayOnFoot;
+    private boolean strandedHere;
+
+    /** Decisions with no way out on foot and nothing to hunt before the agent is stranded. */
+    private static final int STRANDED_AFTER = 100;
+
+    /** How soon a stranded agent asks the same people again. */
+    private static final int STRANDED_ASK = 60;
+
+    /**
+     * How long before somebody already spoken to is worth asking again.
+     *
+     * Normally long, so as not to pester. But somewhere with no working door and nothing to
+     * hunt, the people are the only way on - Happyville is left by asking one NPC - and an
+     * agent that had heard them all once wandered there for hours, waiting out a cooldown
+     * meant for places with something else to do.
+     */
+    private int askAgainAfter() {
+        return strandedHere ? STRANDED_ASK : WORTH_ANOTHER_ASK;
+    }
+
     /** The tick the agent last walked into a door, and the tick being decided now. */
     private long lastDoorTriedAt = -1;
     private long currentTick;
@@ -402,6 +427,7 @@ public class ReflexPolicy implements Policy {
     @Override
     public Decision decide(Mind mind, WorldModel world, long tick) {
         currentTick = tick;
+        strandedHere = noWayOnFoot && world.monsterCount() == 0 && decisionsHere > STRANDED_AFTER;
         // A door that did nothing is worth knowing about. An agent found two in Amherst -
         // tuto00 and in00, a tutorial portal and a shop entrance - walked into them
         // thirty-six times in three minutes and never moved an inch. Each failure left it in
@@ -437,6 +463,7 @@ public class ReflexPolicy implements Policy {
                 destinationFromModel = false;
             }
             decisionsHere = 0;
+            noWayOnFoot = false;
             wanderingTo = null;         // somewhere in the last map means nothing here
             String arrivedIn = KnownWorld.mapRef(world.mapId());
             if (arrivedIn.equals(destination)) {
@@ -1027,7 +1054,7 @@ public class ReflexPolicy implements Policy {
             return false;
         }
         Integer greeted = greetedAt.get(npc.typeId());
-        return greeted == null || decisionsMade - greeted >= WORTH_ANOTHER_ASK;
+        return greeted == null || decisionsMade - greeted >= askAgainAfter();
     }
 
     /**
@@ -1153,7 +1180,7 @@ public class ReflexPolicy implements Policy {
             boolean cameBackFor = npc.typeId() == errandNpc;
             Integer greeted = greetedAt.get(npc.typeId());
             if (offer.isEmpty() && !cameBackFor
-                    && greeted != null && decisionsMade - greeted < WORTH_ANOTHER_ASK) {
+                    && greeted != null && decisionsMade - greeted < askAgainAfter()) {
                 return;     // nothing new to say to this one, for now
             }
             // Something on offer is worth crossing a map for; a chat is worth a wander.
@@ -1224,6 +1251,7 @@ public class ReflexPolicy implements Policy {
                     "player:" + world.characterId());
         }
         WorldModel.PortalTarget door = alreadyOnTheWay ? committedPortal : doorInMind;
+        noWayOnFoot = door == null;
         if (door == null) {
             // Every door here has been tried and none of them did anything. An agent in a room
             // with no working way out should get on with what is in the room, not keep walking
