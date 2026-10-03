@@ -1740,6 +1740,25 @@ public class Server {
         c.setGMLevel(gmLevel);
     }
 
+    /**
+     * Re-reads an account's characters from the database, dropping any the cache still holds
+     * that are no longer there. Characters deleted outside the game - the agents' generation
+     * reset deletes rows directly - otherwise keep counting against the account's slots until
+     * the server restarts, and creating a new one is refused without a word.
+     */
+    public void resyncAccountCharacters(Integer accId) {
+        lgnWLock.lock();
+        try {
+            Set<Integer> stale = accountChars.remove(accId);
+            if (stale != null) {
+                stale.forEach(worldChars::remove);
+            }
+        } finally {
+            lgnWLock.unlock();
+        }
+        loadAccountCharactersView(accId, 0, 0);
+    }
+
     private int loadAccountCharactersView(Integer accId, int gmLevel, int fromWorldid) {    // returns the maximum gmLevel found
         List<World> wlist = this.getWorlds();
         Pair<Short, List<List<Character>>> accCharacters = loadAccountCharactersViewFromDb(accId, wlist.size());

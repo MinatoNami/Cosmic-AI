@@ -39,8 +39,13 @@ public abstract class CharacterFactory {
     private static final Logger log = LoggerFactory.getLogger(CharacterFactory.class);
 
     protected synchronized static int createNewCharacter(Client c, String name, int face, int hair, int skin, int gender, CharacterFactoryRecipe recipe) {
-        if (YamlConfig.config.server.COLLECTIVE_CHARSLOT ? c.getAvailableCharacterSlots() <= 0 : c.getAvailableCharacterWorldSlots() <= 0) {
-            return -3;
+        if (noSlotLeft(c)) {
+            // The count is cached from the account's first login; characters deleted from the
+            // database since then still fill slots in it. Look again before saying no.
+            Server.getInstance().resyncAccountCharacters(c.getAccID());
+            if (noSlotLeft(c)) {
+                return -3;
+            }
         }
 
         if (!Character.canCreateChar(name)) {
@@ -103,5 +108,9 @@ public abstract class CharacterFactory {
         log.info("Account {} created chr with name {}", c.getAccountName(), name);
 
         return 0;
+    }
+
+    private static boolean noSlotLeft(Client c) {
+        return YamlConfig.config.server.COLLECTIVE_CHARSLOT ? c.getAvailableCharacterSlots() <= 0 : c.getAvailableCharacterWorldSlots() <= 0;
     }
 }
