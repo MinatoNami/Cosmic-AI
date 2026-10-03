@@ -114,32 +114,38 @@ public final class KnownWorld {
                 case "leads_to" -> {
                     String portal = belief.subject();
                     world.settled.add(portal);
-                    if (!NOWHERE.equals(belief.object())) {
-                        String map = mapOf(portal);
-                        String door = doorOf(portal);
-                        Belief best = world.bestDestination.get(portal);
-                        if (map != null && door != null && (best == null || trustMore(belief, best))) {
-                            world.bestDestination.put(portal, belief);
-                            world.exits.computeIfAbsent(map, m -> new TreeMap<>())
-                                    .put(door, belief.object());
-                        }
+                    Belief best = world.bestDestination.get(portal);
+                    if (best == null || trustMore(belief, best)) {
+                        world.bestDestination.put(portal, belief);
                     }
                 }
                 default -> {
                 }
             }
         }
+        // Only now, with every verdict on every door weighed, does a door become an exit.
+        // "Nowhere" competes like any other answer: a door blamed once for an NPC's warp and
+        // walked into fruitlessly ever since used to keep the warp's destination for good,
+        // because any real destination outranked any number of failures. Three agents stood
+        // in Happyville walking into st00 - "it leads to Sleepywood" - for hours.
+        world.bestDestination.forEach((portal, belief) -> {
+            String map = mapOf(portal);
+            String door = doorOf(portal);
+            if (map != null && door != null && !NOWHERE.equals(belief.object())) {
+                world.exits.computeIfAbsent(map, m -> new TreeMap<>()).put(door, belief.object());
+            }
+        });
         return world;
     }
 
     /**
      * Where a door leads, as far as this agent knows.
      *
-     * A real destination outranks {@link #NOWHERE} rather than whichever verdict happens to
-     * be older. {@code leads_to} is not a functional predicate - a door can hold both
-     * verdicts at once - and reading the first one written meant a door that timed out once
-     * and worked every time after was written off permanently. Having seen where it goes is
-     * evidence; having once failed to notice is not.
+     * The most trusted verdict, {@link #NOWHERE} included: the agent's own over hearsay, and
+     * the latest of its own. {@code leads_to} is not a functional predicate - a door can hold
+     * both verdicts at once. A door that timed out once and has worked since keeps its
+     * destination, because working is the later verdict; a door that worked once, or was
+     * credited with an NPC's warp, and has done nothing every time since, does not.
      */
     public Optional<String> destinationOf(String portalRef) {
         String map = mapOf(portalRef);

@@ -380,8 +380,28 @@ public class ReflexPolicy implements Policy {
         return disposition;
     }
 
+    /** The tick the agent last walked into a door, and the tick being decided now. */
+    private long lastDoorTriedAt = -1;
+    private long currentTick;
+
+    /** Episodes looked back through for a conversation since the last door. */
+    private static final int RECENT_ENOUGH = 60;
+
+    /**
+     * Whether somebody spoke to the agent after it last tried a door.
+     *
+     * If so, a map change is theirs: NPCs move people about, and the door the agent happened
+     * to be standing by did not. Blaming the door is how Happyville's st00 - a dead portal two
+     * steps from the NPC who takes you home - came to "lead to Sleepywood".
+     */
+    static boolean movedByConversation(List<agents.memory.Episode> recent, long doorTriedAt) {
+        return recent.stream().anyMatch(episode -> episode.tick() >= doorTriedAt
+                && episode.observation() instanceof agents.percept.Observation.DialogueShown);
+    }
+
     @Override
     public Decision decide(Mind mind, WorldModel world, long tick) {
+        currentTick = tick;
         // A door that did nothing is worth knowing about. An agent found two in Amherst -
         // tuto00 and in00, a tutorial portal and a shop entrance - walked into them
         // thirty-six times in three minutes and never moved an inch. Each failure left it in
@@ -396,14 +416,15 @@ public class ReflexPolicy implements Policy {
         }
 
         if (world.mapId() != lastMapId) {
-            if (!doorsAwaitingVerdict.isEmpty() && lastMapId >= 0) {
+            if (!doorsAwaitingVerdict.isEmpty() && lastMapId >= 0
+                    && !movedByConversation(mind.episodic().recent(RECENT_ENOUGH), lastDoorTriedAt)) {
                 // Whichever door was tried most recently is the one that worked; the rest were
                 // tried from a map we are no longer in and can never be judged now.
                 String worked = doorsAwaitingVerdict.entrySet().stream()
                         .max(Map.Entry.comparingByValue()).orElseThrow().getKey();
                 mind.infer(worked, "leads_to", "map:" + world.mapId(), tick);
-                doorsAwaitingVerdict.clear();
             }
+            doorsAwaitingVerdict.clear();
             cameFrom = lastMapId >= 0 ? KnownWorld.mapRef(lastMapId) : null;
             lastMapId = world.mapId();
             recentMaps.addLast(world.mapId());
@@ -1262,6 +1283,7 @@ public class ReflexPolicy implements Policy {
                         // machinery for noticing sat there working perfectly.
                         doorsAwaitingVerdict.putIfAbsent(portalRef(world.mapId(), door.name()),
                                 decisionsMade);
+                        lastDoorTriedAt = currentTick;
                         committedPortal = null;
                         doorInMind = null;      // used it; next time, choose afresh
                         arrived();

@@ -419,4 +419,42 @@ class KnownWorldTest {
         assertEquals(java.util.Optional.of("map:1010000"), known.destinationOf("portal:1020000/west00"),
                 "hearsay read later does not overrule what it saw");
     }
+
+    /**
+     * Happyville's st00 was credited with an NPC's warp to Sleepywood, and inherited as leading
+     * to Kerning City and Mushroom Shrine. It leads nowhere, and every agent walked into it for
+     * hours because any real destination outranked any number of failures.
+     */
+    @Test
+    void aDoorThatHasDoneNothingSinceIsNotBelievedToGoAnywhere() {
+        agents.memory.SemanticMemory memory = new agents.memory.SemanticMemory();
+        memory.assertTriple("portal:209000000/st00", "leads_to", "map:103000000", 0, 1, agents.memory.Belief.Provenance.HEARSAY);
+        memory.assertTriple("portal:209000000/st00", "leads_to", "map:105040300", 1, 10, agents.memory.Belief.Provenance.INFERRED);
+        memory.assertTriple("portal:209000000/st00", "leads_to", KnownWorld.NOWHERE, 2, 50, agents.memory.Belief.Provenance.INFERRED);
+
+        assertEquals(Optional.of(KnownWorld.NOWHERE),
+                KnownWorld.rememberedBy(memory.liveBeliefs()).destinationOf("portal:209000000/st00"));
+    }
+
+    /** And a door that failed once and has worked since keeps where it goes. */
+    @Test
+    void aDoorThatWorkedAfterFailingKeepsItsDestination() {
+        agents.memory.SemanticMemory memory = new agents.memory.SemanticMemory();
+        memory.assertTriple("portal:10000/east00", "leads_to", KnownWorld.NOWHERE, 0, 5, agents.memory.Belief.Provenance.INFERRED);
+        memory.assertTriple("portal:10000/east00", "leads_to", "map:20000", 1, 9, agents.memory.Belief.Provenance.INFERRED);
+
+        assertEquals(Optional.of("map:20000"),
+                KnownWorld.rememberedBy(memory.liveBeliefs()).destinationOf("portal:10000/east00"));
+    }
+
+    /** Only its own verdict of nothing overrules what it was told; hearsay of nothing does not. */
+    @Test
+    void ownExperienceOfNothingBeatsBeingToldOfSomewhere() {
+        agents.memory.SemanticMemory memory = new agents.memory.SemanticMemory();
+        memory.assertTriple("portal:209000000/st00", "leads_to", "map:103000000", 0, 90, agents.memory.Belief.Provenance.HEARSAY);
+        memory.assertTriple("portal:209000000/st00", "leads_to", KnownWorld.NOWHERE, 1, 5, agents.memory.Belief.Provenance.INFERRED);
+
+        assertEquals(Optional.of(KnownWorld.NOWHERE),
+                KnownWorld.rememberedBy(memory.liveBeliefs()).destinationOf("portal:209000000/st00"));
+    }
 }

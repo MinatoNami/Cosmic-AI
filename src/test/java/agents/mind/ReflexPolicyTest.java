@@ -174,6 +174,17 @@ class ReflexPolicyTest {
         }
     }
 
+    /** An NPC who spoke after the agent last tried a door is who moved it, not the door. */
+    @Test
+    void doesNotBlameADoorForAnNpcsWarp() {
+        List<agents.memory.Episode> talkedAfter = List.of(
+                new agents.memory.Episode(1, 100, new Observation.DialogueShown(100, 2002000,
+                        "Do you want to get out of Happyville?", 1)));
+
+        assertTrue(ReflexPolicy.movedByConversation(talkedAfter, 98));
+        assertFalse(ReflexPolicy.movedByConversation(talkedAfter, 101), "the door came after the talking");
+    }
+
     @Test
     void doesNotKeepOfferingTheSameQuestEveryTick() {
         mind.take(new Observation.QuestStateChanged(2, 1031, 1));
