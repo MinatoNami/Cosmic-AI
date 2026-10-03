@@ -1126,7 +1126,11 @@ public class ReflexPolicy implements Policy {
             // unheard. Say hello once, then take what they are offering.
             boolean neverHeardThemSpeak = !spokenTo(mind).contains("npc:" + npc.typeId())
                     && !greetedAt.containsKey(npc.typeId());
-            if (offer.isPresent() && !neverHeardThemSpeak) {
+            // Unless it came back to talk. Going back to its trainer at level 30 is going back
+            // to hear what comes next, and that is said in conversation; a trainer with a quest
+            // on offer got the quest asked about instead, every time, and the letter that
+            // starts a second job was never handed over.
+            if (offer.isPresent() && !neverHeardThemSpeak && !cameBackFor) {
                 choices.add(new Choice("talk",
                         new Intent.StartQuest(offer.get(), npc.typeId(), npc.position()),
                         "take whatever this one is offering", score,

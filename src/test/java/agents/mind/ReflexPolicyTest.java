@@ -1268,4 +1268,27 @@ class ReflexPolicyTest {
         assertFalse(ReflexPolicy.doesNotAnswer(mind).contains("npc:1061100"),
                 "an hour on, it is worth saying hello again");
     }
+
+    /**
+     * Agent0, a level-33 thief in its trainer's room, started quests with the Dark Lord again
+     * and again and never once opened a conversation, which is where the second job is offered.
+     */
+    @Test
+    void talksToItsTrainerRatherThanTakingTheirQuest() {
+        mind.take(new Observation.MapEntered(1, 103000003, 0));
+        mind.take(new Observation.DialogueShown(2, 1052001, "Go now, and live as a proud Thief.", 0));
+        mind.saw("self", "trained_by", "npc:1052001", 2);
+        mind.take(new Observation.StatsChanged(5, Map.of("LEVEL", 33, "JOB", 400)));
+        world.update(new Observation.MapEntered(6, 103000003, 0));
+        world.update(new Observation.StatsChanged(6, Map.of("LEVEL", 33, "JOB", 400)));
+        world.movedTo(new Point(0, 128));
+        world.update(new Observation.NpcAppeared(6, 5000, 1052001, new Point(20, 128)));
+        ReflexPolicy wanderer = new ReflexPolicy(new Random(1), Disposition.WANDERER);
+
+        Policy.Decision decision = wanderer.decide(mind, world, 7);
+
+        assertInstanceOf(Intent.TalkTo.class, decision.intent(),
+                "did not go to hear what comes next: " + decision.goal() + " " + decision.considered());
+        assertEquals(1052001, ((Intent.TalkTo) decision.intent()).npcId());
+    }
 }
