@@ -380,14 +380,31 @@ public class ReflexPolicy implements Policy {
         return disposition;
     }
 
-    /**
-     * Whether the last look found no door here worth trying, and whether that, with nothing
-     * to hunt, has gone on long enough to call the agent stranded.
-     */
-    private boolean noWayOnFoot;
+    /** Nowhere new on foot and nothing to hunt, for long enough to call the agent stranded. */
     private boolean strandedHere;
 
-    /** Decisions with no way out on foot and nothing to hunt before the agent is stranded. */
+    /**
+     * Whether nothing unexplored can be reached on foot from here: no door anywhere it can walk
+     * to that it has not opened. Asked now and then rather than every decision, since it walks
+     * the whole known map. Happyville has doors - into its own houses - so "no door worth
+     * trying" was never true there; "nowhere new to walk to" is.
+     */
+    private boolean nothingNewOnFoot(Mind mind, WorldModel world) {
+        if (decisionsMade - checkedOnFootAt >= RECHECK_ON_FOOT || checkedOnFootIn != world.mapId()) {
+            checkedOnFootAt = decisionsMade;
+            checkedOnFootIn = world.mapId();
+            onFootIsSpent = KnownWorld.rememberedBy(mind.semantic().liveBeliefs())
+                    .routeToNearestFrontier(KnownWorld.mapRef(world.mapId())).isEmpty();
+        }
+        return onFootIsSpent;
+    }
+
+    private int checkedOnFootAt = Integer.MIN_VALUE / 2;
+    private int checkedOnFootIn = -1;
+    private boolean onFootIsSpent;
+    private static final int RECHECK_ON_FOOT = 50;
+
+    /** Decisions with nowhere new on foot and nothing to hunt before the agent is stranded. */
     private static final int STRANDED_AFTER = 100;
 
     /** How soon a stranded agent asks the same people again. */
@@ -427,7 +444,7 @@ public class ReflexPolicy implements Policy {
     @Override
     public Decision decide(Mind mind, WorldModel world, long tick) {
         currentTick = tick;
-        strandedHere = noWayOnFoot && world.monsterCount() == 0 && decisionsHere > STRANDED_AFTER;
+        strandedHere = world.monsterCount() == 0 && decisionsHere > STRANDED_AFTER && nothingNewOnFoot(mind, world);
         // A door that did nothing is worth knowing about. An agent found two in Amherst -
         // tuto00 and in00, a tutorial portal and a shop entrance - walked into them
         // thirty-six times in three minutes and never moved an inch. Each failure left it in
@@ -463,7 +480,6 @@ public class ReflexPolicy implements Policy {
                 destinationFromModel = false;
             }
             decisionsHere = 0;
-            noWayOnFoot = false;
             wanderingTo = null;         // somewhere in the last map means nothing here
             String arrivedIn = KnownWorld.mapRef(world.mapId());
             if (arrivedIn.equals(destination)) {
@@ -987,10 +1003,20 @@ public class ReflexPolicy implements Policy {
         // never asked about by anybody.
         Comparator<WorldModel.Entity> strangersFirst = Comparator.comparingInt(
                 npc -> met.contains("npc:" + npc.typeId()) && !hasSomethingToOffer(npc) ? 1 : 0);
+        // Stranded, everybody has been heard and somebody here is the way out; ask whoever was
+        // asked longest ago, so the asking goes round the room rather than back to the nearest.
+        if (strandedHere) {
+            strangersFirst = strangersFirst.thenComparingInt(npc -> greetedAt.getOrDefault(npc.typeId(), -1));
+        }
         Set<String> stranders = strandedBy(mind);
         silentOnes = doesNotAnswer(mind);
         return world.visibleNpcs().stream()
                 .filter(npc -> !stranders.contains("npc:" + npc.typeId()))
+                // Nor somebody it has just failed to reach. Chosen anyway, the choice was
+                // thrown out afterwards with nobody in its place: a stranger on a ledge above
+                // Happyville won every time, was dropped every time, and the NPC who takes
+                // people home stood a few steps away, never once considered.
+                .filter(npc -> !outOfMind(npc.position()))
                 .filter(this::stillWorthAsking)
                 .min(strangersFirst.thenComparingDouble(
                         npc -> npc.position().distance(self)));
@@ -1251,7 +1277,6 @@ public class ReflexPolicy implements Policy {
                     "player:" + world.characterId());
         }
         WorldModel.PortalTarget door = alreadyOnTheWay ? committedPortal : doorInMind;
-        noWayOnFoot = door == null;
         if (door == null) {
             // Every door here has been tried and none of them did anything. An agent in a room
             // with no working way out should get on with what is in the room, not keep walking
