@@ -932,8 +932,12 @@ public class ReflexPolicy implements Policy {
     private Optional<WorldModel.Entity> worthTalkingTo(WorldModel world, Mind mind,
                                                        Point self) {
         Set<String> met = spokenTo(mind);
+        // Somebody with a quest not yet asked about is as worth seeing as a stranger. Heena,
+        // once heard, fell behind Sera, a stranger across the map; after Sera the doors
+        // outscored going back, and Heena's quest - the one Sera was waiting to finish - was
+        // never asked about by anybody.
         Comparator<WorldModel.Entity> strangersFirst = Comparator.comparingInt(
-                npc -> met.contains("npc:" + npc.typeId()) ? 1 : 0);
+                npc -> met.contains("npc:" + npc.typeId()) && !hasSomethingToOffer(npc) ? 1 : 0);
         Set<String> stranders = strandedBy(mind);
         silentOnes = doesNotAnswer(mind);
         return world.visibleNpcs().stream()
@@ -955,13 +959,16 @@ public class ReflexPolicy implements Policy {
      * while Shanks, three platforms up and the only reason to be in that map, went
      * unconsidered because the selection had already been spent.
      */
+    private boolean hasSomethingToOffer(WorldModel.Entity npc) {
+        return QuestBoard.offeredBy(npc.typeId()).stream()
+                .anyMatch(quest -> !questsTried.contains(quest));
+    }
+
     private boolean stillWorthAsking(WorldModel.Entity npc) {
         if (npc.typeId() == errandNpc) {
             return true;
         }
-        boolean hasSomethingToOffer = QuestBoard.offeredBy(npc.typeId()).stream()
-                .anyMatch(quest -> !questsTried.contains(quest));
-        if (hasSomethingToOffer) {
+        if (hasSomethingToOffer(npc)) {
             return true;        // taking a quest does not depend on them having anything to say
         }
         if (silentOnes.contains("npc:" + npc.typeId())) {

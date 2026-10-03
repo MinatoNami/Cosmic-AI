@@ -115,6 +115,24 @@ class ReflexPolicyTest {
         org.junit.jupiter.api.Assertions.assertFalse(intent instanceof Intent.CompleteQuest);
     }
 
+    /**
+     * Heena, once heard, still has quest 1000 to give, and Sera - a stranger across the map -
+     * is the one who finishes it. Strangers first took every agent to Sera, and nobody ever
+     * came back to ask Heena for the quest Sera was waiting on.
+     */
+    @Test
+    void asksForAQuestBeforeGoingToMeetAStranger() {
+        mind.take(new Observation.DialogueShown(2, 2101, "Are you done with your training?", 1));
+        world.update(new Observation.NpcAppeared(3, 7002, 2101, new Point(20, 0)));
+        world.update(new Observation.NpcAppeared(3, 7001, 2100, new Point(700, 0)));
+
+        Intent intent = new ReflexPolicy(new Random(1), Disposition.TALKER)
+                .decide(mind, world, 4).intent();
+
+        Intent.StartQuest asked = assertInstanceOf(Intent.StartQuest.class, intent);
+        assertEquals(2101, asked.npcId());
+    }
+
     @Test
     void doesNotKeepOfferingTheSameQuestEveryTick() {
         mind.take(new Observation.QuestStateChanged(2, 1031, 1));
@@ -550,10 +568,11 @@ class ReflexPolicyTest {
      */
     @Test
     void crossesTheMapForSomebodyItHasNeverSpokenTo() {
-        world.update(new Observation.NpcAppeared(2, 7001, 2100, new Point(20, 0)));
+        // The near one has no quest to give - one that has is worth asking before walking off.
+        world.update(new Observation.NpcAppeared(2, 7001, 12345, new Point(20, 0)));
         world.update(new Observation.NpcAppeared(3, 7002, 22000, new Point(900, -400)));
         // It has already heard what the near one has to say, first-hand.
-        mind.take(new Observation.DialogueShown(4, 2100, "hello again", 0));
+        mind.take(new Observation.DialogueShown(4, 12345, "hello again", 0));
 
         Policy talker = new ReflexPolicy(new Random(1), Disposition.TALKER);
         Intent intent = talker.decide(mind, world, 5).intent();
