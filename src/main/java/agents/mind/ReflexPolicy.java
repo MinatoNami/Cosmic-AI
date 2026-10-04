@@ -849,6 +849,8 @@ public class ReflexPolicy implements Policy {
                     "see if what I owe is done", score,
                     () -> {
                         lastHandIn.put(errand.questId(), decisionsMade);
+                        handInsAtLevel.merge(errand.questId(), new int[] {1, world.level()},
+                                (was, now) -> was[1] == now[1] ? new int[] {was[0] + 1, was[1]} : now);
                         spokeToSomeone();
                         arrived();
                     }));
@@ -1451,8 +1453,25 @@ public class ReflexPolicy implements Policy {
                 .flatMap(npc -> QuestBoard.endedBy(npc.typeId()).stream()
                         .filter(started::contains)
                         .filter(this::offWorriedCooldown)
+                        .filter(questId -> !givenUpAtThisLevel(questId, world.level()))
                         .map(questId -> new Errand(questId, npc)))
                 .min(Comparator.comparingInt(Errand::questId));
+    }
+
+    /**
+     * Times each quest has been offered back without being taken, at the level it was last
+     * offered at. Some quests are never finished by turning up - a medal that counts kills,
+     * something wanting items the agent has never seen - and offering them back on a cooldown
+     * had Agent2 walking to the same NPC hundreds of times an hour and nowhere else.
+     */
+    private final Map<Integer, int[]> handInsAtLevel = new HashMap<>();
+
+    /** Offers back at one level before a quest waits for the agent to grow. */
+    private static final int HAND_IN_TRIES = 3;
+
+    private boolean givenUpAtThisLevel(int questId, int level) {
+        int[] tried = handInsAtLevel.get(questId);
+        return tried != null && tried[1] == level && tried[0] >= HAND_IN_TRIES;
     }
 
     private boolean offWorriedCooldown(int questId) {
