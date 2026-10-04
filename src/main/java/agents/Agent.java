@@ -231,10 +231,15 @@ public class Agent implements Runnable {
             return;
         }
         if (dialogue.npcId() != talkingWith) {
+            if (talkingWith > 0) {
+                mind.infer("npc:" + talkingWith, "waiting_on", "nothing", perceiver.currentTick());
+            }
             talkingWith = dialogue.npcId();
             beingTold.clear();
             questsTakenOn.clear();
             bagsWhenItBegan = bagCounts();
+            // Not to be handed anything back until it has finished saying what it wants.
+            mind.infer("npc:" + talkingWith, "waiting_on", "what you are being told", perceiver.currentTick());
         }
         beingTold.add(dialogue.text());
         lastLineAt = steps;
@@ -263,8 +268,21 @@ public class Agent implements Runnable {
     /** Speeches already read, so the same words are not sent to the model twice. */
     private final Set<Integer> alreadyRead = new HashSet<>();
 
-    /** Steps of silence after which a conversation is over. */
-    private static final int QUIET_FOR = 4;
+    /**
+     * Steps of silence after which a conversation is over.
+     *
+     * Four was too few: a scripted NPC waits for each answer, and an answer the model is
+     * reading takes several seconds. Roger's conversation came apart into three, and the one
+     * saying "double click to consume" began after the apple had arrived - so it was read as
+     * handing over nothing, and the apple was never eaten.
+     */
+    private static final int QUIET_FOR = 20;
+
+    /** Steps before the same NPC's plain talk is worth reading again. */
+    private static final int READ_AGAIN_AFTER = 1000;
+
+    /** When each NPC's plain talk was last read. */
+    private final java.util.Map<Integer, Integer> lastReadAt = new java.util.HashMap<>();
 
     /**
      * Once the NPC has stopped talking, asks the model what the conversation wanted done.
@@ -299,12 +317,17 @@ public class Agent implements Runnable {
         // to a few sentences is read - but each speech once, or an NPC who repeats himself,
         // as Robin does every time his list is answered, is read every time.
         int speech = String.join("\n", lines).hashCode();
-        boolean saysSomething = String.join(" ", lines).length() >= SAYS_SOMETHING && !alreadyRead.contains(speech);
+        // And not the same NPC again straight away: Robin answers every option on his list with
+        // a different speech, and was read a hundred and twenty times in half an hour.
+        boolean saysSomething = String.join(" ", lines).length() >= SAYS_SOMETHING && !alreadyRead.contains(speech)
+                && steps - lastReadAt.getOrDefault(npc, Integer.MIN_VALUE / 2) >= READ_AGAIN_AFTER;
         if (instructionReader == null || instructions != null
                 || (received.isEmpty() && quests.isEmpty() && !named && !saysSomething)) {
+            mind.infer("npc:" + npc, "waiting_on", "nothing", perceiver.currentTick());
             return;
         }
         alreadyRead.add(speech);
+        lastReadAt.put(npc, steps);
         java.util.Map<Integer, Integer> usable = new java.util.HashMap<>();
         for (agents.percept.Item item : world.inventory().carried(agents.percept.Item.USE)) {
             usable.merge(item.itemId(), item.quantity(), Integer::sum);
