@@ -393,8 +393,12 @@ public class ReflexPolicy implements Policy {
         if (decisionsMade - checkedOnFootAt >= RECHECK_ON_FOOT || checkedOnFootIn != world.mapId()) {
             checkedOnFootAt = decisionsMade;
             checkedOnFootIn = world.mapId();
-            onFootIsSpent = KnownWorld.rememberedBy(mind.semantic().liveBeliefs())
-                    .routeToNearestFrontier(KnownWorld.mapRef(world.mapId())).isEmpty();
+            KnownWorld known = KnownWorld.rememberedBy(mind.semantic().liveBeliefs());
+            String here = KnownWorld.mapRef(world.mapId());
+            // Nothing unopened, and nothing to hunt anywhere it can walk to. A town with fields
+            // next door is not stranding anybody, however well it is known.
+            onFootIsSpent = known.routeToNearestFrontier(here).isEmpty()
+                    && known.reachableFrom(here, Set.of()).keySet().stream().noneMatch(known::huntingIn);
         }
         return onFootIsSpent;
     }
@@ -444,7 +448,13 @@ public class ReflexPolicy implements Policy {
     @Override
     public Decision decide(Mind mind, WorldModel world, long tick) {
         currentTick = tick;
+        boolean wasStranded = strandedHere;
         strandedHere = world.monsterCount() == 0 && decisionsHere > STRANDED_AFTER && nothingNewOnFoot(mind, world);
+        if (strandedHere && !wasStranded) {
+            // Worth remembering, and passing on: whoever offers to bring an agent here is
+            // offering it nothing.
+            mind.infer(KnownWorld.mapRef(world.mapId()), "nothing_to_do", "true", tick);
+        }
         // A door that did nothing is worth knowing about. An agent found two in Amherst -
         // tuto00 and in00, a tutorial portal and a shop entrance - walked into them
         // thirty-six times in three minutes and never moved an inch. Each failure left it in

@@ -130,6 +130,13 @@ public class Agent implements Runnable {
 
     /** The last NPC whose offer this agent accepted, so a dead end has somebody to blame. */
     private int wentAlongWith = -1;
+    private int acceptedAtStep = Integer.MIN_VALUE / 2;
+
+    /** The map this agent was last in, so arriving somewhere new can be noticed. */
+    private int lastMap = -1;
+
+    /** Steps after saying yes within which a map change is that NPC's doing. */
+    private static final int TAKEN_WITHIN = 5;
 
     /**
      * Asks for the health and mana that return on their own, as a client does every ten
@@ -557,6 +564,7 @@ public class Agent implements Runnable {
         boolean nothingHere = world.visibleNpcs().isEmpty() && world.monsterCount() == 0;
         nowhereToGo = noWayOut && nothingHere ? nowhereToGo + 1 : 0;
         noticeANewCalling();
+        noticeWhereOffersGo();
         if (nowhereToGo == 0) {
             blamedThemAlready = false;
         } else if (isTrapped() && wentAlongWith > 0 && !blamedThemAlready) {
@@ -649,6 +657,45 @@ public class Agent implements Runnable {
         String who = "npc:" + npcId;
         return mind.semantic().liveBeliefs().stream()
                 .anyMatch(b -> b.subject().equals(who) && b.predicate().equals("strands_you"));
+    }
+
+    /** Whether this NPC's offer is known to go to a map known to have nothing to do. */
+    private boolean leadsNowhereWorthGoing(int npcId) {
+        return leadsNowhereWorthGoing(npcId, mind.semantic().liveBeliefs());
+    }
+
+    static boolean leadsNowhereWorthGoing(int npcId, List<Belief> beliefs) {
+        String who = "npc:" + npcId;
+        Set<String> goesTo = new HashSet<>();
+        Set<String> pointless = new HashSet<>();
+        for (Belief belief : beliefs) {
+            if (belief.predicate().equals("takes_you_to") && belief.subject().equals(who)) {
+                goesTo.add(belief.object());
+            } else if (belief.predicate().equals("nothing_to_do")) {
+                pointless.add(belief.subject());
+            }
+        }
+        return !goesTo.isEmpty() && pointless.containsAll(goesTo);
+    }
+
+    /** Nothing to hunt here and nowhere new to walk to: any way out is a good one. */
+    private boolean strandedNow() {
+        return world.monsterCount() == 0 && nowhereLeftToGo();
+    }
+
+    /**
+     * Notices arriving somewhere, and if it was an NPC's doing, writes down where their offer
+     * goes. That is the only way to know what an offer is worth before taking it again.
+     */
+    private void noticeWhereOffersGo() {
+        int map = world.mapId();
+        if (map <= 0 || map == lastMap) {
+            return;
+        }
+        if (lastMap > 0 && wentAlongWith > 0 && steps - acceptedAtStep <= TAKEN_WITHIN) {
+            mind.saw("npc:" + wentAlongWith, "takes_you_to", "map:" + map, perceiver.currentTick());
+        }
+        lastMap = map;
     }
 
     private boolean businessHereFirst(int npcId) {
@@ -758,6 +805,15 @@ public class Agent implements Runnable {
         // reading dialogue it was asked afresh every time, said yes every time, and two agents
         // were rescued from the same rooms fifty-two times in half an hour.
         if (strandedMeBefore(dialogue.npcId())) {
+            reply(dialogue.style(), NPC_NO, NO_SELECTION);
+            return;
+        }
+        // Nor somebody whose offer goes somewhere with nothing to do - unless that is no worse
+        // than here. Rooney in Sleepywood offers HappyVille: nothing to hunt and no way out
+        // but asking, and three agents took him up on it over and over for eight hours,
+        // getting out each time and going straight back.
+        if (isAQuestion(dialogue.style()) && leadsNowhereWorthGoing(dialogue.npcId()) && !strandedNow()) {
+            log.info("{} turns down npc:{} - it goes somewhere with nothing to do", mind.name(), dialogue.npcId());
             reply(dialogue.style(), NPC_NO, NO_SELECTION);
             return;
         }
@@ -942,6 +998,7 @@ public class Agent implements Runnable {
         }
         if (answer == NPC_YES_OR_NEXT) {
             wentAlongWith = npcId;
+            acceptedAtStep = steps;
             refusals.accepted(npcId);
         } else {
             refusals.declined(npcId, perceiver.currentTick(), mind.lastNoveltyTick());

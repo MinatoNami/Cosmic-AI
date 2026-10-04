@@ -113,4 +113,20 @@ class AgentAnswersTest {
         assertTrue(Agent.businessHereFirst(2101, Map.of(1031, "1"), Set.of(1000), Set.of(), heenaAndSera),
                 "1031 has not been offered back yet");
     }
+
+    /**
+     * Rooney offers HappyVille, where there is nothing to hunt and no way out but asking. The
+     * NPC who takes people back out of it goes somewhere worth going, so is not refused.
+     */
+    @Test
+    void turnsDownAnOfferThatGoesSomewhereWithNothingToDo() {
+        agents.memory.SemanticMemory memory = new agents.memory.SemanticMemory();
+        memory.assertTriple("npc:1022101", "takes_you_to", "map:209000000", 0, 1, agents.memory.Belief.Provenance.FIRST_HAND);
+        memory.assertTriple("npc:2002000", "takes_you_to", "map:105040300", 1, 2, agents.memory.Belief.Provenance.FIRST_HAND);
+        memory.assertTriple("map:209000000", "nothing_to_do", "true", 2, 3, agents.memory.Belief.Provenance.INFERRED);
+
+        assertTrue(Agent.leadsNowhereWorthGoing(1022101, memory.liveBeliefs()), "Rooney's HappyVille");
+        assertFalse(Agent.leadsNowhereWorthGoing(2002000, memory.liveBeliefs()), "the way home");
+        assertFalse(Agent.leadsNowhereWorthGoing(22000, memory.liveBeliefs()), "never taken, so not known to be wasted");
+    }
 }

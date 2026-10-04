@@ -207,6 +207,8 @@ class ReflexPolicyTest {
         }
 
         assertTrue(asked >= 3, "asked only " + asked + " times in 400 decisions with nothing else to do");
+        assertTrue(mind.semantic().liveBeliefs().stream().anyMatch(b -> b.subject().equals("map:1020100")
+                && b.predicate().equals("nothing_to_do")), "and it remembers there was nothing to do here");
     }
 
     @Test
