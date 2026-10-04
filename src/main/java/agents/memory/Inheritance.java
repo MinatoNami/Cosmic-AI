@@ -70,7 +70,10 @@ public final class Inheritance {
             "ap_share_maxhp", "ap_share_maxmp",
             "puts_sp_into",  // which skills a job spends its points on
             "hunted_at_level", // the level people hunt a map at
-            "drunk_at_hp_percent"); // how low health gets before somebody drinks
+            "drunk_at_hp_percent", // how low health gets before somebody drinks
+            "needs_kills",   // what a quest wants hunted, and how many
+            "buffs",         // what a skill raises when it is cast
+            "lasts_seconds"); // and for how long
 
     private Inheritance() {
     }

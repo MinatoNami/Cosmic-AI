@@ -115,6 +115,19 @@ class DemonstrationsTest {
     }
 
     @Test
+    void questKillCountsAndBuffsBecomeWhatTheyAre() throws IOException {
+        SemanticMemory semantic = read(
+                "{\"act\":\"close_range_attack\",\"saw\":[{\"type\":\"QuestStateChanged\",\"questId\":1037,"
+                        + "\"state\":1,\"kills\":{\"100100\":[3,10]}}]}",
+                "{\"act\":\"special_move\",\"detail\":{\"skill\":2001003},\"effect\":{\"buffs\":{\"gained\":["
+                        + "{\"source\":2001003,\"skill\":true,\"seconds\":60,\"stats\":{\"magic_guard\":15}}]}}}");
+
+        assertTrue(holds(semantic, "quest:1037", "needs_kills", "10 monster:100100"));
+        assertTrue(holds(semantic, "skill:2001003", "buffs", "magic_guard"));
+        assertTrue(holds(semantic, "skill:2001003", "lasts_seconds", "60"));
+    }
+
+    @Test
     void potionsHurtsAndDeaths() throws IOException {
         SemanticMemory semantic = read(
                 "{\"act\":\"take_damage\",\"detail\":{\"damage\":12,\"mob\":100101},\"state\":{\"map\":40000}}",

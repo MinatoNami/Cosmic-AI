@@ -21,6 +21,7 @@
 */
 package server;
 
+import net.packet.logging.DemonstrationRecorder;
 import client.Character;
 import client.inventory.Inventory;
 import client.inventory.InventoryType;
@@ -115,6 +116,8 @@ public class Trade {
     }
 
     private void completeTrade() {
+        DemonstrationRecorder.traded(chr, partner != null ? partner.getChr() : null,
+                new ArrayList<>(items), meso, exchangeItems, exchangeMeso);
         byte result;
         boolean show = YamlConfig.config.server.USE_DEBUG;
         items.clear();

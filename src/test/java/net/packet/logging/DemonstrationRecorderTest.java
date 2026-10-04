@@ -2,7 +2,10 @@ package net.packet.logging;
 
 import client.Character;
 import client.Client;
+import client.BuffStat;
 import client.Job;
+import client.inventory.InventoryType;
+import client.inventory.Item;
 import client.Stat;
 import client.inventory.Inventory;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -322,6 +325,109 @@ class DemonstrationRecorderTest {
         List<JsonNode> lines = lines();
         assertEquals("session_end", lines.get(lines.size() - 1).get("act").asText());
         assertEquals("logged_out", lines.get(lines.size() - 1).get("detail").get("how").asText());
+    }
+
+    @Test
+    void questKillCountsSayWhichMonsterEachCountIs() {
+        // Quest 1037 wants 10 of monster 100100, per Quest.wz.
+        assertEquals(Map.of("100100", List.of(7, 10)), DemonstrationRecorder.killsFor(1037, "007"));
+        assertTrue(DemonstrationRecorder.killsFor(1037, "something else").isEmpty(),
+                "a progress string that is not one count per monster is not a kill count");
+    }
+
+    @Test
+    void aKillThatMovesAQuestOnShowsTheCount() throws IOException {
+        var before = DemonstrationRecorder.before(client, op(RecvOpcode.CLOSE_RANGE_ATTACK), new byte[0]);
+        // Laid out as PacketCreator.updateQuest writes it.
+        OutPacket update = OutPacket.create(SendOpcode.SHOW_STATUS_INFO);
+        update.writeByte(1);
+        update.writeShort(1037);
+        update.writeByte(1);
+        update.writeString("003");
+        update.skip(5);
+        DemonstrationRecorder.sent(client, update);
+        DemonstrationRecorder.after(client, before);
+
+        JsonNode quest = lines().get(1).get("saw").get(0);
+        assertEquals("QuestStateChanged", quest.get("type").asText());
+        assertEquals("[3,10]", quest.get("kills").get("100100").toString());
+    }
+
+    @Test
+    void castingABuffRecordsWhatItDoesAndForHowLong() throws IOException {
+        server.StatEffect guard = mock(server.StatEffect.class);
+        when(guard.isSkill()).thenReturn(true);
+        when(guard.getSourceId()).thenReturn(2001003);
+        when(guard.getDuration()).thenReturn(60000);
+        when(guard.getStatups()).thenReturn(List.of(new Pair<>(BuffStat.MAGIC_GUARD, 15)));
+
+        var before = DemonstrationRecorder.before(client, op(RecvOpcode.SPECIAL_MOVE), body(p -> {
+            p.writeInt(0);
+            p.writeInt(2001003);
+            p.writeByte(1);
+        }));
+        when(chr.getAllBuffs()).thenReturn(List.of(new net.server.PlayerBuffValueHolder(0, guard)));
+        DemonstrationRecorder.after(client, before);
+
+        JsonNode gained = lines().get(1).get("effect").get("buffs").get("gained").get(0);
+        assertEquals(2001003, gained.get("source").asInt());
+        assertEquals(60, gained.get("seconds").asInt());
+        assertEquals(15, gained.get("stats").get("magic_guard").asInt());
+    }
+
+    @Test
+    void partyInvitesNameWhoWasAsked() throws IOException {
+        var before = DemonstrationRecorder.before(client, op(RecvOpcode.PARTY_OPERATION), body(p -> {
+            p.writeByte(4);
+            p.writeString("Agent0");
+        }));
+        DemonstrationRecorder.after(client, before);
+
+        JsonNode invite = lines().get(1);
+        assertEquals("invite", invite.get("detail").get("party").asText());
+        assertEquals("Agent0", invite.get("detail").get("who").asText());
+        assertEquals(0, invite.get("state").get("party").asInt());
+    }
+
+    @Test
+    void puttingSomethingOnATradeTableNamesIt() throws IOException {
+        Inventory etc = mock(Inventory.class);
+        Item shells = mock(Item.class);
+        when(shells.getItemId()).thenReturn(4000019);
+        when(etc.getItem((short) 3)).thenReturn(shells);
+        when(chr.getInventory(InventoryType.ETC)).thenReturn(etc);
+
+        var before = DemonstrationRecorder.before(client, op(RecvOpcode.PLAYER_INTERACTION), body(p -> {
+            p.writeByte(0xF);
+            p.writeByte(4);
+            p.writeShort(3);
+            p.writeShort(20);
+            p.writeByte(1);
+        }));
+        DemonstrationRecorder.after(client, before);
+
+        JsonNode put = lines().get(1).get("detail");
+        assertEquals("put_item", put.get("room").asText());
+        assertEquals(4000019, put.get("item").asInt());
+        assertEquals(20, put.get("quantity").asInt());
+    }
+
+    @Test
+    void aTradeIsRecordedWhicheverSideFinishedIt() throws IOException {
+        DemonstrationRecorder.after(client, DemonstrationRecorder.before(client, op(RecvOpcode.CHANGE_CHANNEL), new byte[0]));
+        Character partner = mock(Character.class);
+        when(partner.getName()).thenReturn("Agent1");
+        Item shells = mock(Item.class);
+        when(shells.getItemId()).thenReturn(4000019);
+        when(shells.getQuantity()).thenReturn((short) 20);
+
+        DemonstrationRecorder.traded(chr, partner, List.of(shells), 0, List.of(), 500);
+
+        JsonNode trade = lines().get(2).get("detail");
+        assertEquals("TradeCompleted", trade.get("type").asText());
+        assertEquals("Agent1", trade.get("with").asText());
+        assertEquals("[[4000019,20]]", trade.get("gave").toString());
+        assertEquals(500, trade.get("gotMeso").asInt());
     }
 
     private static short op(RecvOpcode opcode) {

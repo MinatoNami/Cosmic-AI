@@ -160,7 +160,10 @@ DEMONSTRATION_BOT_ACCOUNTS=agent*,asker,watcher   # never recorded under * (the 
 Each login becomes `agents-data/demonstrations/<character>/<UTC time>.jsonl`: one line per
 thing the person did, with what it changed (`effect`) and what the server showed them while
 it happened (`saw`, in the agents' own observation types), plus the map each time they walk
-into a new one, deaths, and how the session ended.
+into a new one, deaths, and how the session ended. Quest updates carry kill counts by monster
+(`kills`), skills and items that buff record what they raised and for how long
+(`effect.buffs`), party actions and trade-table moves are decoded, completed trades are their
+own `TradeCompleted` entry whichever side confirmed last, and `state.party` is the party's size.
 
 Condensing (`POST /api/condense`, agents stopped) reads every recording into
 `agents-data/demonstrated.mind` and folds it into the inheritance, so the next generation is
@@ -173,7 +176,8 @@ java -cp "target/classes:$(cat target/cp.txt)" agents.memory.Demonstrations agen
 
 What comes out: the same world knowledge agents form themselves (`leads_to`, `has_door`,
 `present_in`, `talks_in`, `runs_shop`, `sells`, `drops`, `gives_exp`, `hurts_you`,
-`killed_you_at_level`, `restores_hp`/`mp`), and how people play: `job:N ap_share_<stat>`
+`killed_you_at_level`, `restores_hp`/`mp`, `quest:N needs_kills "10 monster:M"`,
+`skill:N buffs <stat>` and `lasts_seconds`), and how people play: `job:N ap_share_<stat>`
 (where a job's ability points go), `job:N puts_sp_into skill:M`, `map:N hunted_at_level L`
 and `item:N drunk_at_hp_percent P`. NPC dialogue a person was shown is read for what the
 NPC wants brought (`wants_first`) the same way an agent reads it when spoken to.

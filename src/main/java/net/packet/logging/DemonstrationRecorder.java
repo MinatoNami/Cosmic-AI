@@ -19,15 +19,19 @@ import net.opcodes.SendOpcode;
 import net.packet.ByteBufInPacket;
 import net.packet.InPacket;
 import net.packet.Packet;
+import net.server.PlayerBuffValueHolder;
 import net.server.channel.handlers.AbstractDealDamageHandler.AttackInfo;
 import net.server.channel.handlers.AbstractDealDamageHandler.AttackTarget;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import server.StatEffect;
 import server.life.Monster;
+import server.quest.Quest;
 import server.life.NPC;
 import server.maps.MapItem;
 import server.maps.MapObject;
 import server.maps.Portal;
+import tools.Pair;
 
 import java.awt.Point;
 import java.io.BufferedWriter;
@@ -134,6 +138,14 @@ public final class DemonstrationRecorder {
             Observation.SelfDescribed.class, Observation.MapEntered.class,
             Observation.DropAppeared.class, Observation.DropTaken.class);
 
+    /**
+     * Opcodes that can start or end a buff, around which the character's buffs are compared:
+     * a skill cast, something drunk or used, a buff cancelled by hand.
+     */
+    private static final Set<RecvOpcode> TOUCHES_BUFFS = Set.of(
+            RecvOpcode.SPECIAL_MOVE, RecvOpcode.USE_ITEM, RecvOpcode.USE_CASH_ITEM,
+            RecvOpcode.CANCEL_BUFF);
+
     /** One position a second is a path; thirty are a recording of a joystick. */
     private static final long MOVE_SAMPLE_MILLIS = 1000;
 
@@ -151,7 +163,8 @@ public final class DemonstrationRecorder {
 
     /** What the dispatcher holds onto between the two halves of one packet. */
     public record Before(Session session, RecvOpcode opcode, Map<String, Object> detail,
-                         Map<String, Object> state, Map<Integer, Integer> inventory) {
+                         Map<String, Object> state, Map<Integer, Integer> inventory,
+                         Map<Integer, Map<String, Object>> buffs) {
     }
 
     /**
@@ -178,7 +191,8 @@ public final class DemonstrationRecorder {
                 session.lastHurtBy = mob;
             }
             boolean inventory = TOUCHES_INVENTORY.contains(opcode);
-            Before before = new Before(session, opcode, detail, state(chr), inventory ? inventory(chr) : null);
+            Before before = new Before(session, opcode, detail, state(chr), inventory ? inventory(chr) : null,
+                    TOUCHES_BUFFS.contains(opcode) ? buffs(chr) : null);
             session.beginHandling();
             return before;
         } catch (Exception e) {
@@ -220,6 +234,12 @@ public final class DemonstrationRecorder {
                     Map<String, Object> items = itemDiff(before.inventory(), inventory(chr));
                     if (!items.isEmpty()) {
                         effect.put("items", items);
+                    }
+                }
+                if (before.buffs() != null) {
+                    Map<String, Object> buffs = buffDiff(before.buffs(), buffs(chr));
+                    if (!buffs.isEmpty()) {
+                        effect.put("buffs", buffs);
                     }
                 }
                 if (!effect.isEmpty()) {
@@ -272,6 +292,9 @@ public final class DemonstrationRecorder {
                 }
                 return;
             }
+            if (opcode == SendOpcode.SHOW_STATUS_INFO.getValue()) {
+                session.questProgress = questProgressIn(bytes);
+            }
             Observation observation = session.decoder.decode(session.tick++, opcode, p);
             while (observation != null) {
                 shown(session, chr, observation);
@@ -302,6 +325,13 @@ public final class DemonstrationRecorder {
             Integer mob = session.mobByOid.get(died.objectId());
             if (mob != null) {
                 typed.put("mob", mob);
+            }
+        }
+        if (observation instanceof Observation.QuestStateChanged quest && session.questProgress != null
+                && session.questProgress.getLeft() == quest.questId()) {
+            Map<String, List<Integer>> kills = killsFor(quest.questId(), session.questProgress.getRight());
+            if (!kills.isEmpty()) {
+                typed.put("kills", kills);
             }
         }
         session.shown(typed);
@@ -364,6 +394,135 @@ public final class DemonstrationRecorder {
         } finally {
             session.close();
         }
+    }
+
+    /**
+     * The quest id and progress string from a quest update, or null for any other kind of
+     * status message. Laid out as PacketCreator.updateQuest writes it.
+     */
+    private static Pair<Integer, String> questProgressIn(byte[] bytes) {
+        InPacket p = new ByteBufInPacket(Unpooled.wrappedBuffer(bytes));
+        p.readShort();
+        if (p.readByte() != 1) {
+            return null;
+        }
+        int questId = p.readShort() & 0xFFFF;
+        p.readByte();
+        return new Pair<>(questId, p.readString());
+    }
+
+    /**
+     * How far a quest's hunting has got: monster id to [killed, needed].
+     *
+     * The client is sent the counts as one string, three digits for each monster in the order
+     * the quest lists them; the quest's own data says which monster each is. Read from the
+     * packet and the quest rather than from the character, because this runs while a packet is
+     * being sent, and the server sends kill counts from inside the character's quest lock - to
+     * take that lock here would be to wait on a thread that may be waiting on this one.
+     */
+    static Map<String, List<Integer>> killsFor(int questId, String progress) {
+        Map<String, List<Integer>> kills = new TreeMap<>();
+        Quest quest = Quest.getInstance(questId);
+        List<Integer> mobs = quest.getRelevantMobs();
+        if (mobs.isEmpty() || progress.length() != mobs.size() * 3) {
+            return kills;   // not a hunting count: an info string, a medal, a timer
+        }
+        for (int i = 0; i < mobs.size(); i++) {
+            int mob = mobs.get(i);
+            int needed = quest.getMobAmountNeeded(mob);
+            try {
+                int killed = Integer.parseInt(progress.substring(i * 3, i * 3 + 3));
+                if (needed > 0) {
+                    kills.put(Integer.toString(mob), List.of(killed, needed));
+                }
+            } catch (NumberFormatException notACount) {
+                return new TreeMap<>();
+            }
+        }
+        return kills;
+    }
+
+    /** Active buffs by where they came from: what each one does, and how long it has left. */
+    private static Map<Integer, Map<String, Object>> buffs(Character chr) {
+        Map<Integer, Map<String, Object>> active = new TreeMap<>();
+        for (PlayerBuffValueHolder held : chr.getAllBuffs()) {
+            StatEffect effect = held.effect;
+            Map<String, Object> buff = new LinkedHashMap<>();
+            buff.put("skill", effect.isSkill());
+            if (effect.getDuration() > 0) {
+                buff.put("seconds", Math.max(0, (effect.getDuration() - held.usedTime) / 1000));
+            }
+            Map<String, Integer> stats = new TreeMap<>();
+            for (Pair<client.BuffStat, Integer> statup : effect.getStatups()) {
+                stats.put(statup.getLeft().name().toLowerCase(), statup.getRight());
+            }
+            buff.put("stats", stats);
+            active.put(effect.getSourceId(), buff);
+        }
+        return active;
+    }
+
+    /** Buffs that began, with what they do, and the ones that ended, by source. */
+    private static Map<String, Object> buffDiff(Map<Integer, Map<String, Object>> before,
+                                                Map<Integer, Map<String, Object>> after) {
+        Map<String, Object> changed = new LinkedHashMap<>();
+        List<Map<String, Object>> gained = new ArrayList<>();
+        after.forEach((source, buff) -> {
+            if (!before.containsKey(source)) {
+                Map<String, Object> g = new LinkedHashMap<>();
+                g.put("source", source);
+                g.putAll(buff);
+                gained.add(g);
+            }
+        });
+        List<Integer> lost = before.keySet().stream().filter(source -> !after.containsKey(source)).toList();
+        if (!gained.isEmpty()) {
+            changed.put("gained", gained);
+        }
+        if (!lost.isEmpty()) {
+            changed.put("lost", lost);
+        }
+        return changed;
+    }
+
+    /**
+     * A trade, as it completed. Called from the trade itself because each side's goods change
+     * hands in whichever thread confirmed last - which is the other person's as often as not,
+     * where nothing the recorded person sent would show it.
+     */
+    public static void traded(Character chr, Character partner, List<Item> gave, int gaveMeso,
+                              List<Item> got, int gotMeso) {
+        if (chr == null) {
+            return;
+        }
+        Session session = sessions.get(chr.getId());
+        if (session == null) {
+            return;
+        }
+        try {
+            Map<String, Object> trade = new LinkedHashMap<>();
+            trade.put("type", "TradeCompleted");
+            if (partner != null) {
+                trade.put("with", partner.getName());
+            }
+            trade.put("gave", itemsOf(gave));
+            trade.put("gaveMeso", gaveMeso);
+            trade.put("got", itemsOf(got));
+            trade.put("gotMeso", gotMeso);
+            session.shown(trade);
+        } catch (Exception e) {
+            log.warn("Could not record {} trading", chr.getName(), e);
+        }
+    }
+
+    private static List<List<Integer>> itemsOf(List<Item> items) {
+        List<List<Integer>> out = new ArrayList<>();
+        if (items != null) {
+            for (Item item : items) {
+                out.add(List.of(item.getItemId(), (int) item.getQuantity()));
+            }
+        }
+        return out;
     }
 
     /** Hooked into the attack parser, which is the only place the targets are known by name. */
@@ -554,6 +713,32 @@ public final class DemonstrationRecorder {
                 }
             }
             case GENERAL_CHAT -> d.put("text", p.readString());
+            case PARTY_OPERATION -> {
+                // As PartyOperationHandler reads it.
+                int operation = p.readByte();
+                switch (operation) {
+                    case 1 -> d.put("party", "create");
+                    case 2 -> d.put("party", "leave");
+                    case 3 -> {
+                        d.put("party", "join");
+                        d.put("partyId", p.readInt());
+                    }
+                    case 4 -> {
+                        d.put("party", "invite");
+                        d.put("who", p.readString());
+                    }
+                    case 5 -> {
+                        d.put("party", "expel");
+                        d.put("who", nameOf(chr, p.readInt()));
+                    }
+                    case 6 -> {
+                        d.put("party", "change_leader");
+                        d.put("who", nameOf(chr, p.readInt()));
+                    }
+                    default -> d.put("party", operation);
+                }
+            }
+            case PLAYER_INTERACTION -> interaction(p, chr, d);
             case WHISPER -> {
                 byte mode = p.readByte();
                 if (mode == 6) {
@@ -568,6 +753,62 @@ public final class DemonstrationRecorder {
             }
         }
         return d;
+    }
+
+    /**
+     * Trades and the other rooms two players open together, as PlayerInteractionHandler reads
+     * them. Only the parts a person decides: opening one, asking somebody in, what goes on the
+     * table, and saying yes.
+     */
+    private static void interaction(InPacket p, Character chr, Map<String, Object> d) {
+        int mode = p.readByte();
+        switch (mode) {
+            case 0 -> {
+                int type = p.readByte();
+                d.put("room", "create");
+                d.put("kind", switch (type) {
+                    case 1 -> "omok";
+                    case 2 -> "match_cards";
+                    case 3 -> "trade";
+                    case 4 -> "personal_shop";
+                    case 5 -> "hired_merchant";
+                    default -> Integer.toString(type);
+                });
+            }
+            case 2 -> {
+                d.put("room", "invite");
+                d.put("who", nameOf(chr, p.readInt()));
+            }
+            case 3 -> d.put("room", "decline");
+            case 4 -> d.put("room", "visit");
+            case 6 -> {
+                d.put("room", "chat");
+                d.put("text", p.readString());
+            }
+            case 0xA -> d.put("room", "exit");
+            case 0xF -> {
+                InventoryType type = InventoryType.getByType(p.readByte());
+                short slot = p.readShort();
+                d.put("room", "put_item");
+                Item item = type != null ? chr.getInventory(type).getItem(slot) : null;
+                if (item != null) {
+                    d.put("item", item.getItemId());
+                }
+                d.put("quantity", (int) p.readShort());
+            }
+            case 0x10 -> {
+                d.put("room", "put_meso");
+                d.put("meso", p.readInt());
+            }
+            case 0x11 -> d.put("room", "confirm");
+            default -> d.put("room", mode);
+        }
+    }
+
+    /** Somebody in the same map, by name, or their id when they are not there to ask. */
+    private static Object nameOf(Character chr, int characterId) {
+        Character other = chr.getMap() != null ? chr.getMap().getCharacterById(characterId) : null;
+        return other != null ? other.getName() : characterId;
     }
 
     private static String apStat(int mask) {
@@ -605,6 +846,7 @@ public final class DemonstrationRecorder {
         s.put("sp", chr.getRemainingSp());
         s.put("meso", chr.getMeso());
         s.put("fame", chr.getFame());
+        s.put("party", chr.getParty() != null ? chr.getParty().getMembers().size() : 0);
         return s;
     }
 
@@ -669,6 +911,7 @@ public final class DemonstrationRecorder {
         Map<String, List<Integer>> keys = new TreeMap<>();
         chr.getKeymap().forEach((key, binding) -> keys.put(Integer.toString(key), List.of(binding.getType(), binding.getAction())));
         p.put("keymap", keys);
+        p.put("buffs", buffs(chr));
         p.put("surroundings", surroundings(chr));
         return p;
     }
@@ -799,6 +1042,8 @@ public final class DemonstrationRecorder {
         private long lastMoveSample;
         private long tick;
         private int lastMap = -1;
+        /** The last quest update's id and progress, kept for the observation decoded from it. */
+        private Pair<Integer, String> questProgress;
         private volatile int lastHurtBy;
         private boolean alive = true;
         /** The thread running this person's packet handler, while one is running. */

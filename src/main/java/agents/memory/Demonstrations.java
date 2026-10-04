@@ -228,6 +228,7 @@ public final class Demonstrations {
                         }
                     }
                     case "use_item" -> potion(detail, state, effect);
+                    case "special_move" -> buffs(effect);
                     case "distribute_ap" -> {
                         String stat = detail.path("stat").asText();
                         if (STATS.contains(stat) && changed(effect, "ap") && state.has("job")) {
@@ -341,6 +342,24 @@ public final class Demonstrations {
                 }
             }
 
+            /**
+             * What a skill does when cast: each stat it raises, and how long it lasts. Items
+             * that buff are left out - "item:N buffs" says nothing about when to use one.
+             */
+            private void buffs(JsonNode effect) {
+                for (JsonNode buff : effect.path("buffs").path("gained")) {
+                    if (!buff.path("skill").asBoolean()) {
+                        continue;
+                    }
+                    String skill = "skill:" + buff.path("source").asInt();
+                    buff.path("stats").fieldNames().forEachRemaining(
+                            stat -> assertTriple(skill, "buffs", stat, episode));
+                    if (buff.has("seconds")) {
+                        assertTriple(skill, "lasts_seconds", String.valueOf(buff.get("seconds").asInt()), episode);
+                    }
+                }
+            }
+
             /** Something the server showed: what an NPC said, a shop's shelves, a drop. */
             private void shown(JsonNode seen) {
                 switch (seen.path("type").asText()) {
@@ -361,6 +380,16 @@ public final class Demonstrations {
                         for (JsonNode item : seen.path("items")) {
                             assertTriple(npc, "sells", "item:" + item.path("itemId").asInt(), episode);
                         }
+                    }
+                    case "QuestStateChanged" -> {
+                        int quest = seen.path("questId").asInt();
+                        seen.path("kills").fields().forEachRemaining(kill -> {
+                            JsonNode count = kill.getValue();
+                            if (quest > 0 && count.isArray() && count.size() == 2) {
+                                assertTriple("quest:" + quest, "needs_kills",
+                                        count.get(1).asInt() + " monster:" + kill.getKey(), episode);
+                            }
+                        });
                     }
                     case "DropAppeared" -> {
                         if (seen.has("fromMob")) {
