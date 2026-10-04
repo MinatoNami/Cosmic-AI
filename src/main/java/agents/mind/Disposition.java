@@ -39,6 +39,30 @@ public record Disposition(String name, double wanderlust, double aggression, dou
 
     private static final Disposition[] ROTATION = {WANDERER, FIGHTER, FORAGER, TALKER};
 
+    /**
+     * The callings that suit this temperament, by the names the job statues and instructors use.
+     *
+     * The same traits the model is told about: a straight fight up close is a Warrior, seeing
+     * far is a Bowman, gathering and slipping about is a Thief, learning is a Magician. Nothing
+     * strong enough to choose by, and any will do.
+     */
+    public java.util.Set<String> callingsThatSuit() {
+        java.util.Set<String> suit = new java.util.HashSet<>();
+        if (aggression >= 0.6) {
+            suit.add("warrior");
+        }
+        if (wanderlust >= 0.6) {
+            suit.add("bowman");
+        }
+        if (greed >= 0.6) {
+            suit.add("thief");
+        }
+        if (curiosity >= 0.6 || sociability >= 0.8) {
+            suit.add("magician");
+        }
+        return suit.isEmpty() ? java.util.Set.of("warrior", "bowman", "thief", "magician", "pirate") : suit;
+    }
+
     /** Hands out dispositions in turn, so a small population covers all of them. */
     public static Disposition forAgent(int index) {
         return ROTATION[Math.floorMod(index, ROTATION.length)];

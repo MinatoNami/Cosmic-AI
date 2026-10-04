@@ -194,6 +194,12 @@ public class Agent implements Runnable {
      * any other belief, and a person reading the trace can see where each errand came from.
      */
     private void rememberWhatWasSaid(Observation.DialogueShown dialogue) {
+        // "Come back at level ten" is the one condition it can always read for itself, and the
+        // model summarised it as "Warrior class requirement" - which nothing can check.
+        if (dialogue.npcId() > 0) {
+            comeBackAt(dialogue.text()).ifPresent(condition ->
+                    mind.hear("npc:" + dialogue.npcId(), "wants_first", condition, perceiver.currentTick()));
+        }
         agents.mind.Instructions.Heard heard = agents.mind.Instructions.read(dialogue.text());
         if (heard.isEmpty() || dialogue.npcId() <= 0) {
             return;
@@ -682,6 +688,27 @@ public class Agent implements Runnable {
                 .anyMatch(b -> b.subject().equals(who) && b.predicate().equals("strands_you"));
     }
 
+    /** Past this level, a calling that does not suit it is better than none. */
+    private static final int ANY_CALLING_AFTER = 15;
+
+    private static final java.util.regex.Pattern CALLING = java.util.regex.Pattern.compile(
+            "(?i)(?:be(?:come)? an?|be the)\\s*(?:#[a-z])*\\s*(warrior|bowman|magician|thief|pirate)");
+
+    /** The calling an NPC is offering, if it is offering one: "want to be a #bMagician#k?" */
+    static Optional<String> callingOffered(String said) {
+        java.util.regex.Matcher calling = CALLING.matcher(said);
+        return calling.find() ? Optional.of(calling.group(1).toLowerCase()) : Optional.empty();
+    }
+
+    /** "Train yourself further until you reach #blevel 10, DEX 25#k": a condition, in so many words. */
+    private static final java.util.regex.Pattern COME_BACK_AT = java.util.regex.Pattern.compile(
+            "(?i)(?:reach|at least|be at|until)\\s*(?:#[a-z])*\\s*(level \\d+(?:\\s*,\\s*(?:STR|DEX|INT|LUK) \\d+)*)");
+
+    static Optional<String> comeBackAt(String said) {
+        java.util.regex.Matcher at = COME_BACK_AT.matcher(said);
+        return at.find() ? Optional.of(at.group(1)) : Optional.empty();
+    }
+
     /** Whether this NPC's offer is known to go to a map known to have nothing to do. */
     private boolean leadsNowhereWorthGoing(int npcId) {
         return leadsNowhereWorthGoing(npcId, mind.semantic().liveBeliefs());
@@ -828,6 +855,17 @@ public class Agent implements Runnable {
         // reading dialogue it was asked afresh every time, said yes every time, and two agents
         // were rescued from the same rooms fifty-two times in half an hour.
         if (strandedMeBefore(dialogue.npcId())) {
+            reply(dialogue.style(), NPC_NO, NO_SELECTION);
+            return;
+        }
+        // Nor a calling that does not suit it. The job statues in Lith Harbor send a character
+        // straight to an instructor, and a fighter one level short of Warrior took the
+        // Magician's statue to Ellinia and turned the Magician down when it got there.
+        Optional<String> offered = callingOffered(dialogue.text());
+        if (isAQuestion(dialogue.style()) && world.job() == 0 && offered.isPresent()
+                && !disposition.callingsThatSuit().contains(offered.get())
+                && world.level() < ANY_CALLING_AFTER) {
+            log.info("{} turns down npc:{} - a {} is not for it", mind.name(), dialogue.npcId(), offered.get());
             reply(dialogue.style(), NPC_NO, NO_SELECTION);
             return;
         }

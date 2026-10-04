@@ -2107,7 +2107,8 @@ public class ReflexPolicy implements Policy {
                     || !belief.subject().startsWith("npc:")) {
                 continue;
             }
-            if (!canPay(belief.object(), world.level(), mesos, id -> world.inventory().count(id))) {
+            if (!canPay(belief.object(), world.level(), mesos, id -> world.inventory().count(id))
+                    || !hasTheStats(belief.object(), world::stat)) {
                 continue;
             }
             if (stranders.contains(belief.subject())) {
@@ -2283,6 +2284,24 @@ public class ReflexPolicy implements Policy {
     }
 
     private static final Pattern ITEMS_ASKED = Pattern.compile("(\\d+) item:(\\d+)");
+
+    /**
+     * Whether the agent has the stats a condition names: "level 10, DEX 25" is not met at
+     * level ten with four DEX, and going back to ask at level ten anyway is a walk back to the
+     * Bowman's statue every few minutes for a fighter that will never have the DEX.
+     */
+    static boolean hasTheStats(String asked, java.util.function.ToIntFunction<String> stat) {
+        Matcher wants = STAT_ASKED.matcher(asked);
+        while (wants.find()) {
+            int have = stat.applyAsInt(wants.group(1).toUpperCase());
+            if (have >= 0 && have < Integer.parseInt(wants.group(2))) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static final Pattern STAT_ASKED = Pattern.compile("\\b(STR|DEX|INT|LUK)\\s+(\\d+)", Pattern.CASE_INSENSITIVE);
 
     static boolean canPay(String asked, int level, int mesos) {
         // Only a condition it can check is one it can meet. Taking an unreadable one for met

@@ -228,6 +228,16 @@ class ReflexPolicyTest {
         assertEquals(3, offered, "three tries at this level, then wait to grow");
     }
 
+    /** Level ten is not enough when DEX 25 was asked for too. */
+    @Test
+    void doesNotGoBackForACallingItHasNotTheStatsFor() {
+        java.util.Map<String, Integer> fighter = java.util.Map.of("STR", 45, "DEX", 4);
+
+        assertFalse(ReflexPolicy.hasTheStats("level 10, DEX 25", s -> fighter.getOrDefault(s, -1)));
+        assertTrue(ReflexPolicy.hasTheStats("level 10, STR 35", s -> fighter.getOrDefault(s, -1)));
+        assertTrue(ReflexPolicy.hasTheStats("level 10", s -> fighter.getOrDefault(s, -1)));
+    }
+
     @Test
     void doesNotKeepOfferingTheSameQuestEveryTick() {
         mind.take(new Observation.QuestStateChanged(2, 1031, 1));

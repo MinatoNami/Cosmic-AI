@@ -129,4 +129,28 @@ class AgentAnswersTest {
         assertFalse(Agent.leadsNowhereWorthGoing(2002000, memory.liveBeliefs()), "the way home");
         assertFalse(Agent.leadsNowhereWorthGoing(22000, memory.liveBeliefs()), "never taken, so not known to be wasted");
     }
+
+    /** What the job statues and instructors offer, read from their own words. */
+    @Test
+    void readsWhichCallingIsOnOffer() {
+        assertEquals(java.util.Optional.of("magician"), Agent.callingOffered(
+                "Hey #h #, I can send you to #b#m101000003##k if you want to be a #bMagician#k. Do you want to go now?"));
+        assertEquals(java.util.Optional.of("magician"), Agent.callingOffered(
+                "Oh...! You look like someone that can definitely be a part of us... so, what do you think? Wanna be the Magician?"));
+        assertEquals(java.util.Optional.empty(), Agent.callingOffered("Do you want to get out of Happyville?"));
+    }
+
+    /** "Come back at level ten" written down as it was said, stats and all. */
+    @Test
+    void readsWhenToComeBack() {
+        assertEquals(java.util.Optional.of("level 10, DEX 25"), Agent.comeBackAt(
+                "If you want to be a #bBowman#k, train yourself further until you reach #blevel 10, DEX 25#k."));
+        assertEquals(java.util.Optional.empty(), Agent.comeBackAt("You're much stronger now. Keep training!"));
+    }
+
+    @Test
+    void aFighterIsSuitedToTheWarrior() {
+        assertEquals(Set.of("warrior"), agents.mind.Disposition.FIGHTER.callingsThatSuit());
+        assertTrue(agents.mind.Disposition.TALKER.callingsThatSuit().contains("magician"));
+    }
 }
