@@ -431,6 +431,7 @@ class KnownWorldTest {
         memory.assertTriple("portal:209000000/st00", "leads_to", "map:103000000", 0, 1, agents.memory.Belief.Provenance.HEARSAY);
         memory.assertTriple("portal:209000000/st00", "leads_to", "map:105040300", 1, 10, agents.memory.Belief.Provenance.INFERRED);
         memory.assertTriple("portal:209000000/st00", "leads_to", KnownWorld.NOWHERE, 2, 50, agents.memory.Belief.Provenance.INFERRED);
+        memory.assertTriple("portal:209000000/st00", "leads_to", KnownWorld.NOWHERE, 3, 60, agents.memory.Belief.Provenance.INFERRED);
 
         assertEquals(Optional.of(KnownWorld.NOWHERE),
                 KnownWorld.rememberedBy(memory.liveBeliefs()).destinationOf("portal:209000000/st00"));
@@ -472,5 +473,21 @@ class KnownWorldTest {
 
         assertEquals(Optional.of(KnownWorld.NOWHERE),
                 KnownWorld.rememberedBy(memory.liveBeliefs()).destinationOf("portal:209000000/st00"));
+    }
+
+    /** One failure after it worked once does not write off the Boss Rush lobby's way out. */
+    @Test
+    void oneFailureDoesNotOverruleADoorSeenToWork() {
+        agents.memory.SemanticMemory memory = new agents.memory.SemanticMemory();
+        memory.assertTriple("portal:970030000/out00", "leads_to", "map:105040300", 0, 10, agents.memory.Belief.Provenance.INFERRED);
+        memory.assertTriple("portal:970030000/out00", "leads_to", KnownWorld.NOWHERE, 1, 50, agents.memory.Belief.Provenance.INFERRED);
+
+        assertEquals(Optional.of("map:105040300"),
+                KnownWorld.rememberedBy(memory.liveBeliefs()).destinationOf("portal:970030000/out00"));
+
+        memory.assertTriple("portal:970030000/out00", "leads_to", KnownWorld.NOWHERE, 2, 60, agents.memory.Belief.Provenance.INFERRED);
+        assertEquals(Optional.of(KnownWorld.NOWHERE),
+                KnownWorld.rememberedBy(memory.liveBeliefs()).destinationOf("portal:970030000/out00"),
+                "twice is a pattern");
     }
 }

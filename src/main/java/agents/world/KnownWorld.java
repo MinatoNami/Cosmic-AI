@@ -34,6 +34,9 @@ public final class KnownWorld {
     /** Where a door goes when walking into it does nothing at all. */
     public static final String NOWHERE = "nowhere";
 
+    /** Separate times a door must do nothing before that outweighs having seen it work. */
+    private static final int NOWHERE_TAKES = 2;
+
     /** Doors that led somewhere: source map -> door name -> destination map. */
     private final Map<String, Map<String, String>> exits = new HashMap<>();
 
@@ -70,6 +73,19 @@ public final class KnownWorld {
      * second and a half.
      */
     private static boolean trustMore(Belief candidate, Belief current) {
+        // One failure is not enough to write off a door the agent has seen work: the Boss Rush
+        // lobby's exit took Agent1 home once, failed once, and that single failure - being the
+        // latest - kept it in the lobby. Nowhere has to be found twice to overrule somewhere.
+        boolean candidateNowhere = NOWHERE.equals(candidate.object());
+        boolean currentNowhere = NOWHERE.equals(current.object());
+        if (candidateNowhere != currentNowhere) {
+            Belief nowhere = candidateNowhere ? candidate : current;
+            Belief somewhere = candidateNowhere ? current : candidate;
+            boolean somewhereSeen = somewhere.provenance() != Belief.Provenance.HEARSAY;
+            if (somewhereSeen && nowhere.supportedBy().size() < NOWHERE_TAKES) {
+                return !candidateNowhere;
+            }
+        }
         boolean candidateOwn = candidate.provenance() != Belief.Provenance.HEARSAY;
         boolean currentOwn = current.provenance() != Belief.Provenance.HEARSAY;
         if (candidateOwn != currentOwn) {
