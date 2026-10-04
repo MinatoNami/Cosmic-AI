@@ -490,4 +490,35 @@ class KnownWorldTest {
                 KnownWorld.rememberedBy(memory.liveBeliefs()).destinationOf("portal:970030000/out00"),
                 "twice is a pattern");
     }
+
+    /**
+     * Inherited "Split Road's east00 goes to Southperry", "to the tutorial room" and "nowhere",
+     * all told at once. Being told it does nothing is no reason never to try it.
+     */
+    @Test
+    void beingToldADoorGoesNowhereDoesNotOutweighBeingToldWhereItGoes() {
+        agents.memory.SemanticMemory memory = new agents.memory.SemanticMemory();
+        memory.assertTriple("portal:1020000/east00", "leads_to", "map:2000000", 0, 0, agents.memory.Belief.Provenance.HEARSAY);
+        memory.assertTriple("portal:1020000/east00", "leads_to", KnownWorld.NOWHERE, 1, 0, agents.memory.Belief.Provenance.HEARSAY);
+
+        memory.assertTriple("map:1020000", "has_door", "east00", 2, 0, agents.memory.Belief.Provenance.HEARSAY);
+        memory.assertTriple("portal:1020000/east00", "leads_to", "map:1020100", 3, 0, agents.memory.Belief.Provenance.HEARSAY);
+
+        KnownWorld known = KnownWorld.rememberedBy(memory.liveBeliefs());
+        assertEquals(Optional.empty(), known.destinationOf("portal:1020000/east00"),
+                "told three different things, it does not know");
+        assertTrue(known.unopenedDoorsIn("map:1020000").contains("east00"), "so it is a door to try");
+    }
+
+    /** Once it has walked through for itself, what it saw settles it. */
+    @Test
+    void aDisputedDoorIsSettledByWalkingThrough() {
+        agents.memory.SemanticMemory memory = new agents.memory.SemanticMemory();
+        memory.assertTriple("portal:1020000/east00", "leads_to", "map:1020100", 0, 0, agents.memory.Belief.Provenance.HEARSAY);
+        memory.assertTriple("portal:1020000/east00", "leads_to", KnownWorld.NOWHERE, 1, 0, agents.memory.Belief.Provenance.HEARSAY);
+        memory.assertTriple("portal:1020000/east00", "leads_to", "map:2000000", 2, 9, agents.memory.Belief.Provenance.INFERRED);
+
+        assertEquals(Optional.of("map:2000000"),
+                KnownWorld.rememberedBy(memory.liveBeliefs()).destinationOf("portal:1020000/east00"));
+    }
 }

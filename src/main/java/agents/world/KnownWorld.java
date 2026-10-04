@@ -46,6 +46,9 @@ public final class KnownWorld {
     /** Doors it has reached a verdict on, good or bad, by portal ref. */
     private final Set<String> settled = new HashSet<>();
 
+    /** Everything it was told each door leads to. */
+    private final Map<String, Set<String>> toldOf = new HashMap<>();
+
     /** Maps something was seen living in, which is where an agent can expect a fight. */
     private final Set<String> hunting = new HashSet<>();
 
@@ -82,6 +85,14 @@ public final class KnownWorld {
             Belief nowhere = candidateNowhere ? candidate : current;
             Belief somewhere = candidateNowhere ? current : candidate;
             boolean somewhereSeen = somewhere.provenance() != Belief.Provenance.HEARSAY;
+            // Being told a door does nothing never outweighs being told where it goes: the door
+            // is worth one try of its own. A generation inherited Split Road's east00 as going
+            // to Southperry, to a tutorial room and nowhere, all at once; "nowhere" happened to
+            // be read last, so nobody ever walked through it and they levelled to nineteen on
+            // Maple Island without once seeing the ferry.
+            if (nowhere.provenance() == Belief.Provenance.HEARSAY) {
+                return !candidateNowhere;
+            }
             if (somewhereSeen && nowhere.supportedBy().size() < NOWHERE_TAKES) {
                 return !candidateNowhere;
             }
@@ -130,6 +141,9 @@ public final class KnownWorld {
                 case "leads_to" -> {
                     String portal = belief.subject();
                     world.settled.add(portal);
+                    if (belief.provenance() == Belief.Provenance.HEARSAY) {
+                        world.toldOf.computeIfAbsent(portal, p -> new HashSet<>()).add(belief.object());
+                    }
                     Belief best = world.bestDestination.get(portal);
                     if (best == null || trustMore(belief, best)) {
                         world.bestDestination.put(portal, belief);
@@ -144,6 +158,17 @@ public final class KnownWorld {
         // walked into fruitlessly ever since used to keep the warp's destination for good,
         // because any real destination outranked any number of failures. Three agents stood
         // in Happyville walking into st00 - "it leads to Sleepywood" - for hours.
+        // Told different things about a door, and never seen it for itself: it does not know
+        // where that door goes, so it is a door it has never opened. Split Road's east00 was
+        // inherited as going to Southperry, to a tutorial room and nowhere; picking one of
+        // those to believe hid the ferry from a whole generation.
+        world.toldOf.forEach((portal, told) -> {
+            Belief best = world.bestDestination.get(portal);
+            if (told.size() > 1 && best != null && best.provenance() == Belief.Provenance.HEARSAY) {
+                world.bestDestination.remove(portal);
+                world.settled.remove(portal);
+            }
+        });
         world.bestDestination.forEach((portal, belief) -> {
             String map = mapOf(portal);
             String door = doorOf(portal);
