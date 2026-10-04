@@ -112,9 +112,26 @@ public final class Places {
      * would set off for the least-visited corridor in its map.
      */
     public static List<Place> worthGoing(KnownWorld known, Facts facts, Weights w) {
+        Set<String> grounds = killingGrounds(facts);
+        List<Place> places = worthGoing(known, facts, w, grounds, false);
+        if (places.isEmpty() && !grounds.isEmpty()) {
+            // Walled in by places that killed it. Sleepywood's only ways out on foot are the
+            // dungeons either side, where predecessors died; avoiding both left nowhere worth
+            // walking to, so the only things that moved the agents were NPCs offering
+            // passage - which brought them back to Sleepywood, for eight hours. Going through
+            // is better than that. Not to them: the grounds themselves are still not offered.
+            places = worthGoing(known, facts, w, Set.of(), true).stream()
+                    .filter(place -> !grounds.contains(place.map()))
+                    .toList();
+        }
+        return places;
+    }
+
+    private static List<Place> worthGoing(KnownWorld known, Facts facts, Weights w,
+                                          Set<String> avoiding, boolean throughDanger) {
         List<Place> places = new ArrayList<>();
         for (Map.Entry<String, KnownWorld.Hop> entry
-                : known.reachableFrom(facts.here(), killingGrounds(facts)).entrySet()) {
+                : known.reachableFrom(facts.here(), avoiding).entrySet()) {
             String map = entry.getKey();
             KnownWorld.Hop hop = entry.getValue();
             if (hop.hops() == 0) {
@@ -213,6 +230,9 @@ public final class Places {
             }
             if (value <= 0) {
                 continue;       // the walk costs more than there is to find
+            }
+            if (throughDanger) {
+                reasons.add("the only way on is through somewhere that killed you");
             }
             places.add(new Place(map, hop.hops(), hop.firstDoor(), value, List.copyOf(reasons)));
         }

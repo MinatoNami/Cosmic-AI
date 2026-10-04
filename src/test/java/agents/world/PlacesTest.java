@@ -126,9 +126,13 @@ class PlacesTest {
         assertEquals("map:2, 1 door away: somebody you have never spoken to, been 3 times", line);
     }
 
-    /** Somewhere that killed it twice at about this level is not somewhere to go. */
+    /**
+     * Somewhere that killed it twice at about this level is not somewhere to go - but when it
+     * is the only way on, what lies beyond it is. Walled in at Sleepywood by the dungeons on
+     * either side, agents did nothing for eight hours but take NPCs' offers of passage.
+     */
     @Test
-    void aMapThatKeepsKillingItIsNotOffered() {
+    void aMapThatKeepsKillingItIsNotOfferedButWhatIsBeyondItIsWhenThereIsNothingElse() {
         believe("map:2", "has_door", "north00");
         believe("map:3", "has_door", "north00");
 
@@ -136,7 +140,9 @@ class PlacesTest {
                 new Places.Facts("map:1", visits, null, Set.of(), Set.of(), Map.of(), Set.of(), null, null,
                         Map.of("map:2", 2)), WEIGHTS);
 
-        assertTrue(places.isEmpty(), "map:2 killed it twice, and map:3 is only reachable through it: " + places);
+        assertEquals(1, places.size(), places.toString());
+        assertEquals("map:3", places.get(0).map(), "not map:2, which killed it twice");
+        assertTrue(places.get(0).reasons().contains("the only way on is through somewhere that killed you"));
     }
 
     /** With a way round, the far side of a killing ground is still somewhere to go. */

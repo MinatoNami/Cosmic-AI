@@ -1562,6 +1562,7 @@ public class ReflexPolicy implements Policy {
         List<WorldModel.PortalTarget> untried = new ArrayList<>();
         List<WorldModel.PortalTarget> towardsSomewhereNew = new ArrayList<>();
         List<WorldModel.PortalTarget> worthTrying = new ArrayList<>();
+        List<WorldModel.PortalTarget> intoDanger = new ArrayList<>();
         for (WorldModel.PortalTarget portal : portals) {
             Optional<String> leadsTo =
                     known.destinationOf(KnownWorld.portalRef(mapId, portal.name()));
@@ -1572,6 +1573,7 @@ public class ReflexPolicy implements Policy {
             // last resort did not: with nothing better to do, the agent took the door it had
             // died beyond twelve times, and died there twice more.
             if (leadsTo.filter(killingGrounds::contains).isPresent()) {
+                intoDanger.add(portal);
                 continue;
             }
             worthTrying.add(portal);
@@ -1590,6 +1592,12 @@ public class ReflexPolicy implements Policy {
         // The last resort is every door still worth trying, not every door there is. Falling
         // back to the full list handed the duds straight back, which is how an agent walked
         // into the same dead tutorial portal fifty-two times while believing it led nowhere.
+        if (worthTrying.isEmpty() && !intoDanger.isEmpty() && strandedHere) {
+            // Every way out on foot leads somewhere that killed it, and there is nothing here
+            // to do. Through, then, rather than wait here for somebody to offer passage.
+            whyThisDoor = "the only way on is through somewhere that killed you";
+            return onwardOf(intoDanger);
+        }
         if (worthTrying.isEmpty()) {
             return null;        // no way out of here that works; get on with what is here
         }
@@ -1735,7 +1743,9 @@ public class ReflexPolicy implements Policy {
     private Optional<WorldModel.PortalTarget> firstDoorTo(KnownWorld known, String here, String to,
                                                            List<WorldModel.PortalTarget> portals) {
         // Around the places that keep killing it, not through them.
-        KnownWorld.Hop hop = known.reachableFrom(here, killingGrounds).get(to);
+        KnownWorld.Hop around = known.reachableFrom(here, killingGrounds).get(to);
+        // Only reachable through danger, when that is all there is.
+        KnownWorld.Hop hop = around != null ? around : known.reachableFrom(here, Set.of()).get(to);
         if (hop == null || hop.firstDoor() == null) {
             return Optional.empty();
         }
