@@ -238,6 +238,36 @@ class ReflexPolicyTest {
         assertTrue(ReflexPolicy.hasTheStats("level 10", s -> fighter.getOrDefault(s, -1)));
     }
 
+    /**
+     * The Hall of Thieves has the way back and a door that leads nowhere. Having bounced, the
+     * agent struck off the way back as going back, and the dead door as dead, and wandered the
+     * room for over an hour with no door at all.
+     */
+    @Test
+    void goesBackTheWayItCameWhenEveryOtherDoorIsDead() {
+        mind.take(new Observation.MapEntered(1, 103000008, 0));
+        mind.infer("portal:103000008/out00", "leads_to", "map:103000003", 1);
+        mind.infer("portal:103000008/in00", "leads_to", "nowhere", 1);
+        mind.take(new Observation.MapEntered(2, 103000008, 0));
+        mind.infer("portal:103000008/in00", "leads_to", "nowhere", 2);
+        mind.infer("portal:103000003/in00", "leads_to", "map:103000008", 2);
+        Policy fighter = new ReflexPolicy(new Random(1), Disposition.FIGHTER);
+        long tick = 3;
+        for (int map : new int[] {103000003, 103000008, 103000003, 103000008}) {
+            world.update(new Observation.MapEntered(tick, map, 0));
+            world.movedTo(new Point(-25, 157));
+            fighter.decide(mind, world, tick++);
+        }
+
+        boolean headingOut = false;
+        for (int i = 0; i < 400 && !headingOut; i++) {
+            Intent intent = fighter.decide(mind, world, tick++).intent();
+            headingOut = intent instanceof Intent.EnterPortal
+                    || (intent instanceof Intent.MoveTo move && move.destination().equals(new Point(310, 154)));
+        }
+        assertTrue(headingOut, "the way back is better than no way at all");
+    }
+
     @Test
     void doesNotKeepOfferingTheSameQuestEveryTick() {
         mind.take(new Observation.QuestStateChanged(2, 1031, 1));

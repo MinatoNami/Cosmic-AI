@@ -1404,7 +1404,15 @@ public class ReflexPolicy implements Policy {
                 .filter(door -> !known.destinationOf(KnownWorld.portalRef(mapId, door.name()))
                         .map(cameFrom::equals).orElse(false))
                 .toList();
-        return onward.isEmpty() ? portals : onward;
+        // Only if one of the others goes anywhere. A dead door counted as a way on: the Hall
+        // of Thieves has the way back and a door that leads nowhere, so bouncing once struck
+        // off the way back, the dead door was struck off next, and all three agents wandered
+        // their rooms for over an hour with no door at all.
+        // Nor does a door into somewhere that keeps killing it, which is struck off too.
+        boolean anyLeadsOn = onward.stream().anyMatch(door -> !known
+                .destinationOf(KnownWorld.portalRef(mapId, door.name()))
+                .map(to -> KnownWorld.NOWHERE.equals(to) || killingGrounds.contains(to)).orElse(false));
+        return anyLeadsOn ? onward : portals;
     }
 
     /** The last few maps entered, to notice going back and forth. */
