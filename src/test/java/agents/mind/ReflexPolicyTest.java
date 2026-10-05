@@ -268,6 +268,34 @@ class ReflexPolicyTest {
         assertTrue(headingOut, "the way back is better than no way at all");
     }
 
+    /** Rethinking drops what it gave up on, so the way out is tried again. */
+    @Test
+    void rethinkingTriesAgainWhatItGaveUpOn() {
+        mind.take(new Observation.MapEntered(1, 103000008, 0));
+        mind.infer("portal:103000008/out00", "leads_to", "map:103000003", 1);
+        world.update(new Observation.MapEntered(2, 103000008, 0));
+        world.movedTo(new Point(-25, 157));
+        ReflexPolicy fighter = new ReflexPolicy(new Random(1), Disposition.FIGHTER);
+        Point door = new Point(310, 154);
+
+        long tick = 3;
+        boolean setOff = false;
+        boolean gaveUp = false;
+        for (int i = 0; i < 2000 && !gaveUp; i++) {     // it never moves, so it never arrives
+            Intent intent = fighter.decide(mind, world, tick++).intent();
+            boolean towardsDoor = intent instanceof Intent.MoveTo move && move.destination().equals(door);
+            setOff |= towardsDoor;
+            gaveUp = setOff && !towardsDoor;
+        }
+        assertTrue(gaveUp, "a journey that gets nowhere is given up");
+
+        fighter.rethink();
+        Intent again = fighter.decide(mind, world, tick).intent();
+        assertTrue(again instanceof Intent.MoveTo move
+                        && (move.destination().equals(door) || move.destination().equals(new Point(-328, 156))),
+                "and after rethinking it sets off for a way out again: " + again);
+    }
+
     @Test
     void doesNotKeepOfferingTheSameQuestEveryTick() {
         mind.take(new Observation.QuestStateChanged(2, 1031, 1));

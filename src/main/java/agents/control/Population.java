@@ -226,10 +226,12 @@ public class Population {
      */
     private synchronized void rescueTheTrapped() {
         for (Running stuck : List.copyOf(running)) {
-            if (!stuck.agent().isTrapped()) {
+            boolean trapped = stuck.agent().isTrapped();
+            if (!trapped && !stuck.agent().isStalled()) {
                 continue;
             }
-            log.warn("{} is in map {} with no way out - logging it back in",
+            log.warn(trapped ? "{} is in map {} with no way out - logging it back in"
+                            : "{} has made no progress in map {} for forty minutes - logging it back in",
                     stuck.name(), stuck.agent().world().mapId());
             long reachedTick = stuck.agent().tick();
             stuck.agent().stop();

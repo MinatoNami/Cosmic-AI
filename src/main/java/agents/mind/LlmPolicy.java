@@ -583,6 +583,11 @@ public class LlmPolicy implements Policy {
     }
 
     @Override
+    public void rethink() {
+        fallback.rethink();
+    }
+
+    @Override
     public String name() {
         return "llm:" + oracle.name();
     }

@@ -60,5 +60,14 @@ public interface Policy {
         return java.util.Optional.empty();
     }
 
+    /**
+     * Drops whatever short-term plans and give-ups the policy is holding, keeping everything
+     * the agent believes. Asked of it when the agent has stopped making progress: a stuck
+     * agent is usually stuck in its own working state - a door struck off, a destination it
+     * keeps failing to reach - not in anything it knows.
+     */
+    default void rethink() {
+    }
+
     String name();
 }

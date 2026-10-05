@@ -1526,6 +1526,21 @@ public class ReflexPolicy implements Policy {
     }
 
     @Override
+    public void rethink() {
+        gaveUpOn.clear();
+        doorsAwaitingVerdict.clear();
+        doorInMind = null;
+        committedPortal = null;
+        destination = null;
+        destinationFromModel = false;
+        wanderingTo = null;
+        recentMaps.clear();
+        cameFrom = null;
+        greetedAt.clear();
+        arrived();
+    }
+
+    @Override
     public String name() {
         return "reflex:" + disposition.name();
     }

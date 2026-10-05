@@ -498,6 +498,11 @@ public class Agent implements Runnable {
             mind.take(observation);
             acknowledgeArrival(observation);
             answerNpc(observation);
+            if (observation instanceof Observation.ExpGained
+                    || observation instanceof Observation.QuestStateChanged) {
+                lastProgressAt = steps;
+                rethought = false;
+            }
             if (observation instanceof Observation.QuestStateChanged quest && quest.state() == 1
                     && talkingWith > 0) {
                 questsTakenOn.add(quest.questId());
@@ -545,6 +550,7 @@ public class Agent implements Runnable {
         }
         deadFor = 0;
         doWhatWasAsked();
+        watchForStalling();
 
         // At a shop counter the agent does its business there and nothing else, one
         // transaction a step, as a player standing at one does.
@@ -708,6 +714,36 @@ public class Agent implements Runnable {
         java.util.regex.Matcher at = COME_BACK_AT.matcher(said);
         return at.find() ? Optional.of(at.group(1)) : Optional.empty();
     }
+
+    /**
+     * Notices an agent that has stopped getting anywhere, and does something about it.
+     *
+     * Every trap so far - a dead door believed live, a way back struck off, a quest offered
+     * back for ever, a room walled in by killing grounds - was found by somebody looking. They
+     * all looked the same from outside: no experience and no quests, for an hour or more. So
+     * that is what is watched. First the policy drops its short-term plans and give-ups, which
+     * is usually where it is stuck; if that does not help, the population logs it back in.
+     */
+    private void watchForStalling() {
+        int stalled = steps - lastProgressAt;
+        if (stalled >= RETHINK_AFTER && !rethought) {
+            log.warn("{} has made no progress in {} minutes in map {} - rethinking", mind.name(),
+                    stalled * TICK.toMillis() / 60_000, world.mapId());
+            policy.rethink();
+            rethought = true;
+        }
+    }
+
+    /** Whether it has gone so long without progress that it should be logged back in. */
+    public boolean isStalled() {
+        return steps - lastProgressAt >= RELOG_AFTER;
+    }
+
+    /** About twenty and forty minutes of steps. */
+    private static final int RETHINK_AFTER = 2000;
+    private static final int RELOG_AFTER = 4000;
+    private int lastProgressAt;
+    private boolean rethought;
 
     /** Whether this NPC's offer is known to go to a map known to have nothing to do. */
     private boolean leadsNowhereWorthGoing(int npcId) {
