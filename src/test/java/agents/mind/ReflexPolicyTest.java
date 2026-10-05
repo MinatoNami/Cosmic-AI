@@ -296,6 +296,14 @@ class ReflexPolicyTest {
                 "and after rethinking it sets off for a way out again: " + again);
     }
 
+    /** Thieves' Hideout's "tutorial" portal floats 46px above its floor; standing under it is at it. */
+    @Test
+    void standingUnderAFloatingPortalIsStandingAtIt() {
+        assertTrue(ReflexPolicy.atPortal(new Point(135, -95), new Point(135, -141)));
+        assertFalse(ReflexPolicy.atPortal(new Point(135, -95), new Point(135, -300)), "a floor above is not");
+        assertFalse(ReflexPolicy.atPortal(new Point(60, -95), new Point(135, -141)), "nor is across the room");
+    }
+
     @Test
     void doesNotKeepOfferingTheSameQuestEveryTick() {
         mind.take(new Observation.QuestStateChanged(2, 1031, 1));

@@ -47,6 +47,21 @@ public class ReflexPolicy implements Policy {
      */
     private static final int LIFETIMES_BEFORE_MOVING_ON = 2;
     private static final int PORTAL_RANGE = 40;
+
+    /**
+     * Standing at a portal: level with it, and below it by no more than a portal floats.
+     *
+     * Portals are drawn above the floor - Thieves' Hideout's "tutorial" sits 46px up - and
+     * measuring straight-line distance from the agent's feet meant one could never be reached.
+     * Agent1 stood under it for hours, 46px away, waiting to be within 40.
+     */
+    static boolean atPortal(java.awt.Point self, java.awt.Point portal) {
+        return Math.abs(portal.x - self.x) < PORTAL_RANGE
+                && self.y - portal.y < PORTAL_FLOATS && portal.y - self.y < PORTAL_RANGE;
+    }
+
+    /** How far above the floor under it a portal is drawn, at most. */
+    private static final int PORTAL_FLOATS = 80;
     private static final int WANDER_STEP = 80;
 
     /**
@@ -1336,7 +1351,7 @@ public class ReflexPolicy implements Policy {
                 // A map that has killed it twice at about this level is a map to get out of.
                 + (deathsHere >= 2 ? LEAVE_A_KILLING_GROUND : 0);
 
-        if (door.position().distance(self) < PORTAL_RANGE) {
+        if (atPortal(self, door.position())) {
             choices.add(new Choice("door",
                     new Intent.EnterPortal(door.name(), door.position()),
                     "see where this goes", score,
@@ -1384,7 +1399,7 @@ public class ReflexPolicy implements Policy {
     private List<WorldModel.PortalTarget> doorsWithinReach(WorldModel world, Point self, Mind mind) {
         List<WorldModel.PortalTarget> reachable = world.portals().stream()
                 .filter(door -> !outOfMind(door.position()))
-                .filter(door -> door.position().distance(self) < PORTAL_RANGE
+                .filter(door -> atPortal(self, door.position())
                         || agents.world.Navigator.nextStep(world.mapId(), self, door.position()).isPresent())
                 .toList();
         return reachable;

@@ -108,7 +108,7 @@ public class IntentExecutor {
             case Intent.Say say -> session.send(ClientPackets.chat(say.message(), false));
             case Intent.EnterPortal portal -> {
                 moveTo(portal.position(), world);
-                if (within(portal.position(), HAND_REACH, world)) {
+                if (ReflexPolicy.atPortal(world.selfPosition(), portal.position())) {
                     session.send(ClientPackets.enterPortal(portal.portalName()));
                 }
             }
