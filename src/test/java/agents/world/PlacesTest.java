@@ -145,6 +145,19 @@ class PlacesTest {
         assertTrue(places.get(0).reasons().contains("the only way on is through somewhere that killed you"));
     }
 
+    /** Not straight after dying there: whatever else there is to do comes first. */
+    @Test
+    void notThroughAKillingGroundStraightAfterDying() {
+        believe("map:2", "has_door", "north00");
+        believe("map:3", "has_door", "north00");
+
+        List<Places.Place> places = Places.worthGoing(KnownWorld.rememberedBy(memory.liveBeliefs()),
+                new Places.Facts("map:1", visits, null, Set.of(), Set.of(), Map.of(), Set.of(), null, null,
+                        Map.of("map:2", 2)), WEIGHTS, false);
+
+        assertTrue(places.isEmpty(), places.toString());
+    }
+
     /** With a way round, the far side of a killing ground is still somewhere to go. */
     @Test
     void goesAroundAKillingGroundWhenThereIsAWay() {

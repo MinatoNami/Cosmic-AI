@@ -1630,7 +1630,7 @@ public class ReflexPolicy implements Policy {
         // The last resort is every door still worth trying, not every door there is. Falling
         // back to the full list handed the duds straight back, which is how an agent walked
         // into the same dead tutorial portal fifty-two times while believing it led nowhere.
-        if (worthTrying.isEmpty() && !intoDanger.isEmpty() && strandedHere) {
+        if (worthTrying.isEmpty() && !intoDanger.isEmpty() && strandedHere && recoveredFromDying()) {
             // Every way out on foot leads somewhere that killed it, and there is nothing here
             // to do. Through, then, rather than wait here for somebody to offer passage.
             whyThisDoor = "the only way on is through somewhere that killed you";
@@ -1820,7 +1820,7 @@ public class ReflexPolicy implements Policy {
         Places.Facts facts = new Places.Facts(here, visitsTo(mind), errandMap,
                 worthHearingAgain(known), avoid, justBeen, shopMaps, sentMap, sentWhy,
                 deathsNearLevel(mind, level), level, huntedAt(mind));
-        return Places.worthGoing(known, facts, weights(seekingACalling(mind)));
+        return Places.worthGoing(known, facts, weights(seekingACalling(mind)), recoveredFromDying());
     }
 
     /**
@@ -1884,6 +1884,7 @@ public class ReflexPolicy implements Policy {
     private void rethinkAfterDying(Map<String, Integer> deaths) {
         int total = deaths.values().stream().mapToInt(Integer::intValue).sum();
         if (deathsRemembered >= 0 && total > deathsRemembered) {
+            lastDiedAt = decisionsMade;
             destination = null;
             destinationFromModel = false;
             doorInMind = null;
@@ -1892,6 +1893,20 @@ public class ReflexPolicy implements Policy {
         }
         deathsRemembered = total;
     }
+
+    /**
+     * Whether it is long enough since it last died to try going through a place that killed
+     * it. Walled in at Sleepywood, Agent2 went through the dungeon that kills it four times in
+     * a quarter of an hour; with a pause, whatever else there is to do comes first.
+     */
+    private boolean recoveredFromDying() {
+        return decisionsMade - lastDiedAt >= RECOVER_FROM_DYING;
+    }
+
+    private int lastDiedAt = Integer.MIN_VALUE / 2;
+
+    /** About fifteen minutes of decisions. */
+    private static final int RECOVER_FROM_DYING = 1500;
 
     /** How many times the map it is in has killed it at about its level. */
     private int deathsHere;

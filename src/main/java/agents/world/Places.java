@@ -112,9 +112,18 @@ public final class Places {
      * would set off for the least-visited corridor in its map.
      */
     public static List<Place> worthGoing(KnownWorld known, Facts facts, Weights w) {
+        return worthGoing(known, facts, w, true);
+    }
+
+    /**
+     * @param throughDangerIfNeeded whether places beyond a killing ground may be offered when
+     *                              nothing else is - not straight after dying in one
+     */
+    public static List<Place> worthGoing(KnownWorld known, Facts facts, Weights w,
+                                         boolean throughDangerIfNeeded) {
         Set<String> grounds = killingGrounds(facts);
         List<Place> places = worthGoing(known, facts, w, grounds, false);
-        if (places.isEmpty() && !grounds.isEmpty()) {
+        if (places.isEmpty() && !grounds.isEmpty() && throughDangerIfNeeded) {
             // Walled in by places that killed it. Sleepywood's only ways out on foot are the
             // dungeons either side, where predecessors died; avoiding both left nowhere worth
             // walking to, so the only things that moved the agents were NPCs offering
