@@ -304,6 +304,22 @@ class ReflexPolicyTest {
         assertFalse(ReflexPolicy.atPortal(new Point(60, -95), new Point(135, -141)), "nor is across the room");
     }
 
+    /**
+     * One inherited level-1 death on map 40000, agreed by four minds, is one death - not four,
+     * and not a killing ground walling off the only way out of the tutorial fields.
+     */
+    @Test
+    void anInheritedDeathCountsOnceHoweverManyMindsAgreedOnIt() {
+        mind.take(new Observation.MapEntered(1, 30000, 0));
+        for (long episode = 0; episode < 4; episode++) {
+            mind.semantic().assertTriple("map:40000", "killed_you_at_level", "1", episode, 0,
+                    agents.memory.Belief.Provenance.HEARSAY);
+        }
+        mind.semantic().assertTriple("self", "level", "2", 5, 0, agents.memory.Belief.Provenance.FIRST_HAND);
+
+        assertEquals(1, ReflexPolicy.deathsNearLevelFor(mind, 2).get("map:40000"));
+    }
+
     @Test
     void doesNotKeepOfferingTheSameQuestEveryTick() {
         mind.take(new Observation.QuestStateChanged(2, 1031, 1));

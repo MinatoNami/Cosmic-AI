@@ -1922,6 +1922,10 @@ public class ReflexPolicy implements Policy {
      * Read from what it saw of its own deaths - "map:M killed_you_at_level 18" - so a map that
      * killed it as a level-8 beginner stops counting once it is level 13.
      */
+    static Map<String, Integer> deathsNearLevelFor(Mind mind, int level) {
+        return deathsNearLevel(mind, level);
+    }
+
     private static Map<String, Integer> deathsNearLevel(Mind mind, int level) {
         Map<String, Integer> deaths = new HashMap<>();
         if (level <= 0) {
@@ -1934,7 +1938,12 @@ public class ReflexPolicy implements Policy {
             try {
                 int at = Integer.parseInt(belief.object());
                 if (level - at < DEATHS_COUNT_FOR) {
-                    deaths.merge(belief.subject(), belief.supportedBy().size(), Integer::sum);
+                    // An inherited death is one death, however many minds agreed on it when they
+                    // were condensed. Counted by its support, one level-1 death on the road out of
+                    // the tutorial counted as four, walled it off, and a generation bounced between
+                    // a field and a side street eleven hundred times until it outgrew the number.
+                    int died = belief.provenance() == Belief.Provenance.HEARSAY ? 1 : belief.supportedBy().size();
+                    deaths.merge(belief.subject(), died, Integer::sum);
                 }
             } catch (NumberFormatException ignored) {
                 // not a level
