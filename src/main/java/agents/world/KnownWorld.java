@@ -40,6 +40,22 @@ public final class KnownWorld {
     /** Doors that led somewhere: source map -> door name -> destination map. */
     private final Map<String, Map<String, String>> exits = new HashMap<>();
 
+    /**
+     * The world map, when the agents are given one: ordinary portals and where they lead, read
+     * from the game data. Null in tests, which build small worlds of their own.
+     */
+    private static volatile Atlas atlas;
+
+    public static void useAtlas(Atlas worldMap) {
+        atlas = worldMap;
+    }
+
+    /** How far a search over the whole world map goes. */
+    private static final int ATLAS_HOPS = 12;
+
+    /** Each map's exits as this agent understands them, worked out once per reading. */
+    private final Map<String, Map<String, String>> understood = new HashMap<>();
+
     /** Doors the agent remembers seeing: map -> door names. */
     private final Map<String, Set<String>> doorsSeen = new HashMap<>();
 
@@ -188,10 +204,64 @@ public final class KnownWorld {
      * destination, because working is the later verdict; a door that worked once, or was
      * credited with an NPC's warp, and has done nothing every time since, does not.
      */
+    /**
+     * Where each of a map's doors leads, from what the agent knows and the world map.
+     *
+     * Its own experience of a door comes first - a door it saw do nothing stays dead - then
+     * the world map, then what it was told. Doors the world map does not cover, the ones a
+     * script decides, are known only by trying them.
+     */
+    private Map<String, String> exitsFrom(String mapRef) {
+        Map<String, String> known = understood.get(mapRef);
+        if (known != null) {
+            return known;
+        }
+        Map<String, String> merged = new TreeMap<>();
+        Atlas worldMap = atlas;
+        int id = idOf(mapRef);
+        Map<String, String> fromAtlas = worldMap == null || id <= 0 ? Map.of() : worldMap.exitsOf(id);
+        fromAtlas.forEach((door, destination) -> {
+            Belief own = bestDestination.get(portalRef(mapRef, door));
+            if (own != null && own.provenance() != Belief.Provenance.HEARSAY) {
+                if (!NOWHERE.equals(own.object())) {
+                    merged.put(door, own.object());
+                }
+            } else {
+                merged.put(door, destination);
+            }
+        });
+        exits.getOrDefault(mapRef, Map.of()).forEach(merged::putIfAbsent);
+        understood.put(mapRef, merged);
+        return merged;
+    }
+
+    private boolean onTheWorldMap(String mapRef, String door) {
+        Atlas worldMap = atlas;
+        int id = idOf(mapRef);
+        return worldMap != null && id > 0 && worldMap.exitsOf(id).containsKey(door);
+    }
+
+    /** Somewhere it knows nothing about but its place on the world map. */
+    private boolean neverHeardOf(String mapRef) {
+        return atlas != null && !doorsSeen.containsKey(mapRef) && !exits.containsKey(mapRef)
+                && !peopleIn.containsKey(mapRef) && !hunting.contains(mapRef);
+    }
+
+    private static int idOf(String mapRef) {
+        if (mapRef == null || !mapRef.startsWith("map:")) {
+            return -1;
+        }
+        try {
+            return Integer.parseInt(mapRef.substring(4));
+        } catch (NumberFormatException notAMap) {
+            return -1;
+        }
+    }
+
     public Optional<String> destinationOf(String portalRef) {
         String map = mapOf(portalRef);
         String door = doorOf(portalRef);
-        String destination = map == null ? null : exits.getOrDefault(map, Map.of()).get(door);
+        String destination = map == null ? null : exitsFrom(map).get(door);
         if (destination != null) {
             return Optional.of(destination);
         }
@@ -202,7 +272,7 @@ public final class KnownWorld {
     public Set<String> unopenedDoorsIn(String mapRef) {
         Set<String> unopened = new HashSet<>();
         for (String door : doorsSeen.getOrDefault(mapRef, Set.of())) {
-            if (!settled.contains(portalRef(mapRef, door))) {
+            if (!settled.contains(portalRef(mapRef, door)) && !onTheWorldMap(mapRef, door)) {
                 unopened.add(door);
             }
         }
@@ -241,7 +311,7 @@ public final class KnownWorld {
      * it from here".
      */
     public Optional<Route> routeToNearestFrontier(String fromMap) {
-        return search(fromMap, map -> !unopenedDoorsIn(map).isEmpty(), "frontier");
+        return search(fromMap, map -> !unopenedDoorsIn(map).isEmpty() || neverHeardOf(map), "frontier");
     }
 
     /**
@@ -353,7 +423,10 @@ public final class KnownWorld {
         while (!queue.isEmpty()) {
             String here = queue.poll();
             Hop sofar = reached.get(here);
-            for (Map.Entry<String, String> exit : exits.getOrDefault(here, Map.of()).entrySet()) {
+            if (atlas != null && sofar.hops() >= ATLAS_HOPS) {
+                continue;
+            }
+            for (Map.Entry<String, String> exit : exitsFrom(here).entrySet()) {
                 String destination = exit.getValue();
                 if (reached.containsKey(destination) || avoiding.contains(destination)) {
                     continue;
@@ -425,7 +498,10 @@ public final class KnownWorld {
 
         while (!queue.isEmpty()) {
             String here = queue.poll();
-            for (Map.Entry<String, String> exit : exits.getOrDefault(here, Map.of()).entrySet()) {
+            if (atlas != null && hopsTo.get(here) >= ATLAS_HOPS) {
+                continue;
+            }
+            for (Map.Entry<String, String> exit : exitsFrom(here).entrySet()) {
                 String destination = exit.getValue();
                 if (hopsTo.containsKey(destination)) {
                     continue;

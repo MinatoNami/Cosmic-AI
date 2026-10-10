@@ -43,6 +43,12 @@ public class Daemon {
         Path data = Path.of(setting("AGENTS_DATA", "target/agents"));
         Path ui = Path.of(setting("AGENTS_UI", "viz"));
 
+        // The world map, as a player has one. Off with AGENTS_WORLD_MAP=off, to see what agents
+        // make of the world with nothing but their own walking to go on.
+        if (!"off".equalsIgnoreCase(setting("AGENTS_WORLD_MAP", "on"))) {
+            agents.world.KnownWorld.useAtlas(new agents.world.Atlas());
+            log.info("Agents can see the world map");
+        }
         Population population = new Population(host, gamePort, data);
         ControlApi api = new ControlApi(population, CharacterReset.fromEnvironment(), ui, apiPort);
 

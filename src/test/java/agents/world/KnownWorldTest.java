@@ -521,4 +521,47 @@ class KnownWorldTest {
         assertEquals(Optional.of("map:2000000"),
                 KnownWorld.rememberedBy(memory.liveBeliefs()).destinationOf("portal:1020000/east00"));
     }
+
+    /** With the world map, told-of contradictions about Split Road's east00 give way to it. */
+    @Test
+    void theWorldMapOutranksWhatItWasTold() {
+        agents.memory.SemanticMemory memory = new agents.memory.SemanticMemory();
+        memory.assertTriple("portal:1020000/east00", "leads_to", "map:1020100", 0, 0, agents.memory.Belief.Provenance.HEARSAY);
+        memory.assertTriple("portal:1020000/east00", "leads_to", KnownWorld.NOWHERE, 1, 0, agents.memory.Belief.Provenance.HEARSAY);
+        KnownWorld.useAtlas(new Atlas());
+        try {
+            KnownWorld known = KnownWorld.rememberedBy(memory.liveBeliefs());
+            assertEquals(Optional.of("map:2000000"), known.destinationOf("portal:1020000/east00"));
+            assertTrue(known.reachableFrom("map:1020000").containsKey("map:2000000"), "Southperry is on the way");
+        } finally {
+            KnownWorld.useAtlas(null);
+        }
+    }
+
+    /** But not what it saw for itself: a door it has watched do nothing stays dead. */
+    @Test
+    void whatItSawOutranksTheWorldMap() {
+        agents.memory.SemanticMemory memory = new agents.memory.SemanticMemory();
+        memory.assertTriple("portal:1020000/east00", "leads_to", KnownWorld.NOWHERE, 0, 5, agents.memory.Belief.Provenance.INFERRED);
+        memory.assertTriple("portal:1020000/east00", "leads_to", KnownWorld.NOWHERE, 1, 6, agents.memory.Belief.Provenance.INFERRED);
+        KnownWorld.useAtlas(new Atlas());
+        try {
+            assertEquals(Optional.of(KnownWorld.NOWHERE),
+                    KnownWorld.rememberedBy(memory.liveBeliefs()).destinationOf("portal:1020000/east00"));
+        } finally {
+            KnownWorld.useAtlas(null);
+        }
+    }
+
+    /** Sleepywood is walled in only by what the agent had learned, not by the world. */
+    @Test
+    void theWorldMapShowsTheWayOutOfSleepywood() {
+        KnownWorld.useAtlas(new Atlas());
+        try {
+            KnownWorld known = KnownWorld.rememberedBy(java.util.List.of());
+            assertTrue(known.reachableFrom("map:105040300").containsKey("map:100000000"), "Henesys");
+        } finally {
+            KnownWorld.useAtlas(null);
+        }
+    }
 }
