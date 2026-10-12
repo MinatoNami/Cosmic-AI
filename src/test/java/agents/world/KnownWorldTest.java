@@ -583,4 +583,43 @@ class KnownWorldTest {
             KnownWorld.useAtlas(null);
         }
     }
+
+    /**
+     * Swampy Land from Sleepywood: on its bottom floor, and its way on towards Henesys is up
+     * where nobody coming in from Sleepywood can reach.
+     */
+    @Test
+    void withDoorRoutingAMapIsNotCrossedFromAnEntranceThatCannotReachItsFarDoor() {
+        KnownWorld.useAtlas(new Atlas());
+        try {
+            agents.memory.SemanticMemory memory = new agents.memory.SemanticMemory();
+            memory.assertTriple("map:105040300", "has_door", "west00", 0, 1, agents.memory.Belief.Provenance.FIRST_HAND);
+            KnownWorld.useDoorRouting(false);
+            assertTrue(KnownWorld.rememberedBy(memory.liveBeliefs()).reachableFrom("map:105040300")
+                    .get("map:106010100").hops() == 2, "map by map: through Swampy Land's far door");
+            KnownWorld.useDoorRouting(true);
+            KnownWorld.Hop hop = KnownWorld.rememberedBy(memory.liveBeliefs()).reachableFrom("map:105040300")
+                    .get("map:106010100");
+            assertTrue(hop == null || hop.hops() > 2, "door by door: not that way");
+        } finally {
+            KnownWorld.useDoorRouting(false);
+            KnownWorld.useAtlas(null);
+        }
+    }
+
+    /** Wherever it stands, a route starts by a door it can walk to from there. */
+    @Test
+    void aRouteStartsByADoorItCanWalkTo() {
+        KnownWorld.useAtlas(new Atlas());
+        try {
+            KnownWorld known = KnownWorld.rememberedBy(java.util.List.of())
+                    .standingAt("map:105040000", new java.awt.Point(-300, 105));
+            assertTrue(known.reachableFrom("map:105040000").values().stream()
+                    .map(KnownWorld.Hop::firstDoor).filter(java.util.Objects::nonNull)
+                    .allMatch(door -> door.equals("under00") || door.equals("under01")),
+                    "from Swampy Land's bottom floor, only its bottom doors");
+        } finally {
+            KnownWorld.useAtlas(null);
+        }
+    }
 }

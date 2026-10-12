@@ -49,6 +49,10 @@ public class Daemon {
             agents.world.KnownWorld.useAtlas(new agents.world.Atlas());
             log.info("Agents can see the world map");
         }
+        if ("on".equalsIgnoreCase(setting("AGENTS_DOOR_ROUTING", "off"))) {
+            agents.world.KnownWorld.useDoorRouting(true);
+            log.info("Routes follow which doors can be walked to from each entrance");
+        }
         Population population = new Population(host, gamePort, data);
         ControlApi api = new ControlApi(population, CharacterReset.fromEnvironment(), ui, apiPort);
 

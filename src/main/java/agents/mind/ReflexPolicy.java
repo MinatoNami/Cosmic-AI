@@ -446,6 +446,9 @@ public class ReflexPolicy implements Policy {
         return !shopMaps.isEmpty() || errandMap != null || sentMap != null;
     }
 
+    /** Where the agent stands as of this decision, so routes start from doors it can walk to. */
+    private java.awt.Point standingAt;
+
     /** The tick the agent last walked into a door, and the tick being decided now. */
     private long lastDoorTriedAt = -1;
     private long currentTick;
@@ -468,6 +471,7 @@ public class ReflexPolicy implements Policy {
     @Override
     public Decision decide(Mind mind, WorldModel world, long tick) {
         currentTick = tick;
+        standingAt = world.selfPosition();
         boolean wasStranded = strandedHere;
         strandedHere = world.monsterCount() == 0 && decisionsHere > STRANDED_AFTER && nothingNewOnFoot(mind, world);
         if (strandedHere && !wasStranded) {
@@ -1636,7 +1640,8 @@ public class ReflexPolicy implements Policy {
         if (portals.isEmpty()) {
             return null;
         }
-        KnownWorld known = KnownWorld.rememberedBy(mind.semantic().liveBeliefs());
+        KnownWorld known = KnownWorld.rememberedBy(mind.semantic().liveBeliefs())
+                .standingAt(KnownWorld.mapRef(mapId), standingAt);
         portals = notBackIfBouncing(portals, known, mapId);
         Set<String> beenThere = mapsVisited(mind);
         Set<String> companionsAre = companionMaps(mind, mapId, selfRef);
@@ -2120,7 +2125,8 @@ public class ReflexPolicy implements Policy {
      * agent knows the way to.
      */
     public List<Places.Place> placesWorthGoing(Mind mind, WorldModel world, int limit) {
-        KnownWorld known = KnownWorld.rememberedBy(mind.semantic().liveBeliefs());
+        KnownWorld known = KnownWorld.rememberedBy(mind.semantic().liveBeliefs())
+                .standingAt(KnownWorld.mapRef(world.mapId()), world.selfPosition());
         String here = KnownWorld.mapRef(world.mapId());
         return places(known, here, mind).stream()
                 .filter(place -> world.portals().stream()

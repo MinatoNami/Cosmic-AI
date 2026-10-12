@@ -33,13 +33,19 @@ public final class Atlas {
     private static final int SCRIPTED = 999999999;
 
     private final Map<Integer, Map<String, String>> byMap = new HashMap<>();
+    private final Map<Integer, Map<String, String>> arrivals = new HashMap<>();
 
     /** Door name to the map it leads to, for one map; empty for a map the data has nothing on. */
     public synchronized Map<String, String> exitsOf(int mapId) {
-        return byMap.computeIfAbsent(mapId, Atlas::load);
+        return byMap.computeIfAbsent(mapId, id -> load(id, "tm"));
     }
 
-    private static Map<String, String> load(int mapId) {
+    /** The portal a door brings a character out at, on the far side; null if the data does not say. */
+    public synchronized String arrivalOf(int mapId, String door) {
+        return arrivals.computeIfAbsent(mapId, id -> load(id, "tn")).get(door);
+    }
+
+    private static Map<String, String> load(int mapId, String what) {
         DataProvider provider = DataProviderFactory.getDataProvider(WZFiles.MAP);
         String padded = StringUtil.getLeftPaddedStr(Integer.toString(mapId), '0', 9);
         Data map = provider.getData("Map/Map" + (mapId / 100000000) + "/" + padded + ".img");
@@ -53,7 +59,14 @@ public final class Atlas {
             if (name.isBlank() || "sp".equals(name) || to == SCRIPTED || to == mapId || to <= 0) {
                 continue;       // a spawn point, a script, or a hop within the map
             }
-            exits.putIfAbsent(name, KnownWorld.mapRef(to));
+            if ("tm".equals(what)) {
+                exits.putIfAbsent(name, KnownWorld.mapRef(to));
+            } else {
+                String arrival = DataTool.getString(portal.getChildByPath("tn"), "");
+                if (!arrival.isBlank()) {
+                    exits.putIfAbsent(name, arrival);
+                }
+            }
         }
         return Collections.unmodifiableMap(exits);
     }

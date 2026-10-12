@@ -429,26 +429,111 @@ public final class KnownWorld {
      */
     public Map<String, Hop> reachableFrom(String fromMap, Set<String> avoiding) {
         Map<String, Hop> reached = new HashMap<>();
-        Deque<String> queue = new ArrayDeque<>();
-        queue.add(fromMap);
-        reached.put(fromMap, new Hop(0, null));
+        walk(fromMap, avoiding, (map, hop) -> {
+            reached.putIfAbsent(map, hop);
+            return false;
+        });
+        return reached;
+    }
+
+    /**
+     * Where it can get to, door by door, nearest first, telling {@code visit} each map as it
+     * is reached and stopping when {@code visit} says so.
+     *
+     * Walked as "in this map, having come in at that portal" rather than "in this map", so a
+     * door it cannot reach on foot from where it came in is not a way on - see {@link Doorways}.
+     * A link learned by walking, whose far side is not known, rules nothing out.
+     */
+    private void walk(String fromMap, Set<String> avoiding, java.util.function.BiPredicate<String, Hop> visit) {
+        record Arrived(String map, String entrance) {
+        }
+        Map<Arrived, Hop> hops = new HashMap<>();
+        Deque<Arrived> queue = new ArrayDeque<>();
+        Arrived start = new Arrived(fromMap, null);
+        hops.put(start, new Hop(0, null));
+        queue.add(start);
+        if (visit.test(fromMap, hops.get(start))) {
+            return;
+        }
         while (!queue.isEmpty()) {
-            String here = queue.poll();
-            Hop sofar = reached.get(here);
+            Arrived here = queue.poll();
+            Hop sofar = hops.get(here);
             if (atlas != null && sofar.hops() >= ATLAS_HOPS) {
                 continue;
             }
-            for (Map.Entry<String, String> exit : exitsFrom(here).entrySet()) {
+            for (Map.Entry<String, String> exit : exitsFrom(here.map()).entrySet()) {
+                String door = exit.getKey();
                 String destination = exit.getValue();
-                if (reached.containsKey(destination) || avoiding.contains(destination)) {
+                if (avoiding.contains(destination) || !canWalkTo(here.map(), here.entrance(), here == start, door)) {
                     continue;
                 }
-                reached.put(destination, new Hop(sofar.hops() + 1,
-                        here.equals(fromMap) ? exit.getKey() : sofar.firstDoor()));
-                queue.add(destination);
+                Arrived next = new Arrived(destination, arrivalAt(here.map(), door, destination));
+                if (hops.containsKey(next)) {
+                    continue;
+                }
+                Hop hop = new Hop(sofar.hops() + 1, here == start ? door : sofar.firstDoor());
+                hops.put(next, hop);
+                if (visit.test(destination, hop)) {
+                    return;
+                }
+                queue.add(next);
             }
         }
-        return reached;
+    }
+
+    /** Whether, having come in at this entrance - or standing where it stands - it can walk to this door. */
+    private boolean canWalkTo(String mapRef, String entrance, boolean whereItStands, String door) {
+        int id = idOf(mapRef);
+        if (id <= 0 || !Doorways.isPlaced(id, door)) {
+            return true;
+        }
+        if (whereItStands) {
+            return doorsFromHere == null || !mapRef.equals(standingIn) || doorsFromHere.contains(door);
+        }
+        if (!doorRouting) {
+            return true;
+        }
+        return Doorways.fromEntrance(id, entrance).map(doors -> doors.contains(door)).orElse(true);
+    }
+
+    /** The portal a door brings it out at, when the world map says and agrees on where it goes. */
+    private String arrivalAt(String mapRef, String door, String destination) {
+        Atlas worldMap = atlas;
+        int id = idOf(mapRef);
+        if (worldMap == null || id <= 0 || !destination.equals(worldMap.exitsOf(id).get(door))) {
+            return null;
+        }
+        return worldMap.arrivalOf(id, door);
+    }
+
+    /**
+     * Whether routes respect which doors can be walked to from where each map is entered, and
+     * not only from where the agent stands. Off until the floor model can be trusted: across
+     * 283 maps of Victoria Island it took one entrance in four to fall short of doors a player
+     * walks to - walls and ropes it does not climb - and routing by it would leave agents
+     * believing themselves trapped where they are not.
+     */
+    private static volatile boolean doorRouting;
+
+    public static void useDoorRouting(boolean on) {
+        doorRouting = on;
+    }
+
+    /** Where the agent stands, so the first door of every route is one it can walk to. */
+    private String standingIn;
+    private Set<String> doorsFromHere;
+
+    /**
+     * Tells this reading of the world where the agent is standing. Routes then start only by
+     * doors it can walk to from there.
+     */
+    public KnownWorld standingAt(String mapRef, java.awt.Point where) {
+        int id = idOf(mapRef);
+        if (id > 0 && where != null) {
+            standingIn = mapRef;
+            doorsFromHere = Doorways.from(id, where);
+        }
+        return this;
     }
 
     /** How many doors away a map is, and the door to take first. Null door means here. */
@@ -502,33 +587,15 @@ public final class KnownWorld {
                     .map(door -> new Route(door, 0, fromMap, why));
         }
 
-        Map<String, String> firstDoorTo = new HashMap<>();
-        Map<String, Integer> hopsTo = new HashMap<>();
-        Deque<String> queue = new ArrayDeque<>();
-        queue.add(fromMap);
-        hopsTo.put(fromMap, 0);
-
-        while (!queue.isEmpty()) {
-            String here = queue.poll();
-            if (atlas != null && hopsTo.get(here) >= ATLAS_HOPS) {
-                continue;
+        Route[] found = new Route[1];
+        walk(fromMap, Set.of(), (map, hop) -> {
+            if (hop.hops() > 0 && isGoal.test(map)) {
+                found[0] = new Route(hop.firstDoor(), hop.hops(), map, why);
+                return true;
             }
-            for (Map.Entry<String, String> exit : exitsFrom(here).entrySet()) {
-                String destination = exit.getValue();
-                if (hopsTo.containsKey(destination)) {
-                    continue;
-                }
-                hopsTo.put(destination, hopsTo.get(here) + 1);
-                firstDoorTo.put(destination,
-                        here.equals(fromMap) ? exit.getKey() : firstDoorTo.get(here));
-                if (isGoal.test(destination)) {
-                    return Optional.of(new Route(firstDoorTo.get(destination),
-                            hopsTo.get(destination), destination, why));
-                }
-                queue.add(destination);
-            }
-        }
-        return Optional.empty();
+            return false;
+        });
+        return Optional.ofNullable(found[0]);
     }
 
     /**
