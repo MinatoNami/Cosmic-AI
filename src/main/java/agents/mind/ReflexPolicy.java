@@ -441,6 +441,11 @@ public class ReflexPolicy implements Policy {
         return strandedHere ? STRANDED_ASK : WORTH_ANOTHER_ASK;
     }
 
+    /** A shop it needs, an errand, or somewhere it was sent: a trip it has to make. */
+    private boolean somewhereToBe() {
+        return !shopMaps.isEmpty() || errandMap != null || sentMap != null;
+    }
+
     /** The tick the agent last walked into a door, and the tick being decided now. */
     private long lastDoorTriedAt = -1;
     private long currentTick;
@@ -1387,7 +1392,7 @@ public class ReflexPolicy implements Policy {
             boredom = 0;
         }
         double score = boredom
-                + (errandMap != null ? ERRAND : 0)
+                + (errandMap != null || !shopMaps.isEmpty() ? ERRAND : 0)
                 // A map that has killed it twice at about this level is a map to get out of.
                 + (deathsHere >= 2 ? LEAVE_A_KILLING_GROUND : 0);
 
@@ -1676,6 +1681,17 @@ public class ReflexPolicy implements Policy {
             whyThisDoor = "the only way on is through somewhere that killed you";
             return onwardOf(intoDanger);
         }
+        if (worthTrying.isEmpty() && !intoDanger.isEmpty()) {
+            // Every way out leads somewhere that killed it - but if one is the way to where it
+            // has to go, that is the door. Places offers a route through danger only for what
+            // it must do or when there is nothing else, and a Bowman with no bow in Sleepywood
+            // was offered the bow shop and then shown no door to it, and wandered.
+            String here = KnownWorld.mapRef(mapId);
+            Optional<WorldModel.PortalTarget> through = towardsDestination(known, here, intoDanger, mind, mapId);
+            if (through.isPresent()) {
+                return through.get();
+            }
+        }
         if (worthTrying.isEmpty()) {
             return null;        // no way out of here that works; get on with what is here
         }
@@ -1685,7 +1701,9 @@ public class ReflexPolicy implements Policy {
         // an equivalent door.
         // Unless the model chose where to go: it was shown this room's doors and every place
         // worth going, and picked. An unopened door here is still there on the way back.
-        if (!untried.isEmpty() && !(destinationFromModel && destination != null)) {
+        // Nor when it has somewhere it must be: a Bowman off to buy the bow it lacked kept
+        // stopping for every unopened door between it and the shop.
+        if (!untried.isEmpty() && !(destinationFromModel && destination != null) && !somewhereToBe()) {
             whyThisDoor = "untried " + untried.size() + "/" + portals.size();
             return onwardOf(untried);
         }
