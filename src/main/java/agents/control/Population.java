@@ -526,6 +526,11 @@ public class Population {
      * where the model is on somebody's laptop across the tailnet rather than on localhost,
      * and compose passes environment rather than JVM flags.
      */
+    /** Whether a model is answering at the local model's address right now. */
+    public static boolean localModelAnswers() {
+        return LmStudioOracle.discoverModel(localModelUrl()) != null;
+    }
+
     public static String localModelUrl() {
         String fromEnv = System.getenv("LMSTUDIO_URL");
         if (fromEnv != null && !fromEnv.isBlank()) {

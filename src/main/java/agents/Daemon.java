@@ -87,9 +87,21 @@ public class Daemon {
             if (population.isRunning()) {
                 return;     // somebody started them by hand meanwhile
             }
-            log.info("Autostarting {} agent(s), policy {} (attempt {})", count, policy, attempt);
+            // The local model lives on somebody's machine across the network, and is not always
+            // up. Waiting for it left the agents stopped after a reboot until somebody noticed;
+            // better to play by reflex meanwhile and take the model on when it answers.
+            String using = policy;
+            if ("local".equalsIgnoreCase(policy) && !Population.localModelAnswers()) {
+                using = "reflex";
+                log.warn("No model answering at {} - starting on reflexes until there is",
+                        Population.localModelUrl());
+            }
+            log.info("Autostarting {} agent(s), policy {} (attempt {})", count, using, attempt);
             try {
-                if (!population.start(count, policy).isEmpty()) {
+                if (!population.start(count, using).isEmpty()) {
+                    if (!using.equalsIgnoreCase(policy)) {
+                        watchForTheModel(population, count, policy);
+                    }
                     return;
                 }
                 population.stop();      // nobody got in; clear the way for the next try
@@ -105,6 +117,51 @@ public class Daemon {
         }
         log.error("Gave up autostarting after {} attempts; start them by hand", AUTOSTART_ATTEMPTS);
     }
+
+    /**
+     * Moves agents started on reflexes over to the local model once it answers.
+     *
+     * Restarting them is how: stopping writes every mind down, so they come back knowing
+     * everything they knew, with the model deciding. Left alone if anybody has stopped them
+     * or chosen a policy by hand in the meantime.
+     */
+    private static void watchForTheModel(Population population, int count, String policy) {
+        Thread watcher = new Thread(() -> {
+            while (!Thread.currentThread().isInterrupted()) {
+                try {
+                    Thread.sleep(MODEL_CHECK_MILLIS);
+                } catch (InterruptedException e) {
+                    return;
+                }
+                if (!population.isRunning() || !"reflex".equalsIgnoreCase(population.policy())) {
+                    return;
+                }
+                if (Population.localModelAnswers()) {
+                    log.info("The model at {} is answering - restarting the agents on it",
+                            Population.localModelUrl());
+                    population.stop();
+                    try {
+                        if (!population.start(count, policy).isEmpty()) {
+                            return;
+                        }
+                    } catch (RuntimeException e) {
+                        log.warn("Could not start on the model after all: {}", e.getMessage());
+                    }
+                    population.stop();
+                    try {
+                        population.start(count, "reflex");
+                    } catch (RuntimeException e) {
+                        log.error("Could not restart the agents on reflexes either; start them by hand", e);
+                        return;
+                    }
+                }
+            }
+        }, "model-watch");
+        watcher.setDaemon(true);
+        watcher.start();
+    }
+
+    private static final long MODEL_CHECK_MILLIS = 120_000;
 
     /** Ten minutes of trying, which is far longer than a server takes to come up. */
     private static final int AUTOSTART_ATTEMPTS = 40;
