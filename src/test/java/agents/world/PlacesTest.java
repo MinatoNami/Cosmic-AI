@@ -175,6 +175,19 @@ class PlacesTest {
         assertTrue(places.stream().noneMatch(place -> place.map().equals("map:2")), "not the killing ground itself");
     }
 
+    /** A shop it needs comes before somewhere more interesting. */
+    @Test
+    void aShopItNeedsComesFirst() {
+        believe("map:3", "has_door", "north00");
+        believe("map:3", "has_door", "south00");
+        believe("npc:8", "present_in", "map:3");
+
+        List<Places.Place> places = Places.worthGoing(KnownWorld.rememberedBy(memory.liveBeliefs()),
+                new Places.Facts("map:1", visits, null, Set.of(), Set.of(), Map.of(), Set.of("map:2")), WEIGHTS);
+
+        assertEquals("map:2", places.get(0).map(), places.toString());
+    }
+
     /** With a way round, the far side of a killing ground is still somewhere to go. */
     @Test
     void goesAroundAKillingGroundWhenThereIsAWay() {

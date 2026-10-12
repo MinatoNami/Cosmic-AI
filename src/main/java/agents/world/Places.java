@@ -143,6 +143,21 @@ public final class Places {
                     .thenComparingInt(Place::hops).thenComparing(Place::map));
             places = withDanger;
         }
+        // And what it must do comes before what it would like to: a Bowman with no bow, one map
+        // out of Sleepywood on its way to the bow shop, turned back for Kerning City because
+        // twelve unopened doors there outscored the shop.
+        Set<String> musts = new java.util.HashSet<>(facts.shopMaps());
+        if (facts.errandMap() != null) {
+            musts.add(facts.errandMap());
+        }
+        if (facts.sentTo() != null) {
+            musts.add(facts.sentTo());
+        }
+        if (!musts.isEmpty()) {
+            List<Place> ordered = new ArrayList<>(places);
+            ordered.sort(Comparator.comparingInt((Place place) -> musts.contains(place.map()) ? 0 : 1));
+            places = ordered;
+        }
         if (places.isEmpty() && !grounds.isEmpty() && throughDangerIfNeeded) {
             // Walled in by places that killed it. Sleepywood's only ways out on foot are the
             // dungeons either side, where predecessors died; avoiding both left nowhere worth
