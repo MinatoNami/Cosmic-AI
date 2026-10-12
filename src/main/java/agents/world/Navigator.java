@@ -1,13 +1,17 @@
 package agents.world;
 
 import java.awt.Point;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Deque;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.PriorityQueue;
+import java.util.Set;
 
 /**
  * How to get from one place in a map to another the way a character could: along floors,
@@ -51,6 +55,9 @@ public final class Navigator {
     /** How far from a rope's end a floor may be and still be where you get on or off. */
     private static final int ROPE_REACH = 60;
 
+    /** How far above the floor a rope's foot can hang and still be caught: a jump and an arm. */
+    private static final int ROPE_GRAB = JUMP_RISE + 50;
+
     /** How far a character may be above a floor and still be standing on it. */
     private static final int STANDING = 30;
 
@@ -68,7 +75,25 @@ public final class Navigator {
      * The next thing to do: walk to {@code departX} on the current floor, then make the move.
      * For {@link Kind#WALK} the walk is the whole of it and {@code landing} is the target.
      */
-    public record Step(Kind kind, int departX, Point landing, MapGeometry.Climb rope) {
+    /**
+     * @param legs for a climb, the ropes in order and how each is left; null for a plain climb
+     *             from one end of a single rope to the other, as it always was
+     */
+    public record Step(Kind kind, int departX, Point landing, MapGeometry.Climb rope, List<Leg> legs) {
+
+        public Step(Kind kind, int departX, Point landing, MapGeometry.Climb rope) {
+            this(kind, departX, landing, rope, null);
+        }
+    }
+
+    /** How a rope is left: stepping off at the top, letting go, or jumping - onto a floor or the next rope. */
+    public enum LegEnd { TOP, DROP, JUMP, ROPE }
+
+    /**
+     * One rope of a climb: climb it to {@code leaveY}, then leave it the way {@code end} says, for
+     * {@code next} - the floor landed on, or the place on the next rope caught.
+     */
+    public record Leg(MapGeometry.Climb rope, int leaveY, LegEnd end, Point next) {
     }
 
     /**
@@ -90,7 +115,7 @@ public final class Navigator {
         return graph.firstEdge(start, from.x, goal, to.x)
                 .map(edge -> new Step(edge.kind, edge.departX,
                         new Point(edge.arriveX, graph.platforms.get(edge.to).heightAt(edge.arriveX)),
-                        edge.rope));
+                        edge.rope, edge.legs));
     }
 
     /** The height of the floor a point is standing on, if it is standing on one. */
@@ -199,7 +224,11 @@ public final class Navigator {
         }
     }
 
-    record Edge(int to, Kind kind, int departX, int arriveX, MapGeometry.Climb rope) {
+    record Edge(int to, Kind kind, int departX, int arriveX, MapGeometry.Climb rope, List<Leg> legs, int climbing) {
+
+        Edge(int to, Kind kind, int departX, int arriveX, MapGeometry.Climb rope) {
+            this(to, kind, departX, arriveX, rope, null, rope == null ? 0 : rope.height());
+        }
     }
 
     static final class Graph {
@@ -365,15 +394,136 @@ public final class Navigator {
                 }
             }
 
-            // Ropes and ladders join the floor at their foot to the floor at their head.
+            // Ropes, climbed the way a player climbs them: caught from the floor below or
+            // boarded from the top, then left by stepping off at the top, letting go, jumping
+            // off sideways onto a floor, or jumping across to the next rope. Many ropes do not
+            // let anybody off at the top - Kerning's and Henesys's hillsides climb by a chain
+            // of them, rope to rope - and with only end-to-end climbs those were dead ends.
             for (MapGeometry.Climb rope : climbs) {
-                int bottom = floorNear(rope.x(), rope.bottom());
-                int top = floorNear(rope.x(), rope.top());
-                if (bottom >= 0 && top >= 0 && bottom != top) {
-                    edges.get(bottom).add(new Edge(top, Kind.CLIMB, rope.x(), rope.x(), rope));
-                    edges.get(top).add(new Edge(bottom, Kind.CLIMB, rope.x(), rope.x(), rope));
+                int bottom = floorUnderRope(rope.x(), rope.bottom());
+                if (bottom >= 0) {
+                    climbFrom(bottom, rope, rope.bottom(), climbs);
+                }
+                int top = rope.offAtTop() ? floorNear(rope.x(), rope.top()) : -1;
+                if (top >= 0 && top != bottom) {
+                    climbFrom(top, rope, rope.top(), climbs);
                 }
             }
+        }
+
+        /** Ropes in a chain worth following before giving up on it. */
+        private static final int MOST_ROPES = 6;
+
+        /** What a jump costs, against climbing, so a route does not hop for a pixel saved. */
+        private static final int JUMP_COST = 60;
+
+        private record Holding(MapGeometry.Climb rope, int y, List<Leg> legs, int cost) {
+        }
+
+        /**
+         * Every floor reachable from {@code from} by boarding {@code first} at {@code boardY}:
+         * climbing, leaving each rope every way it can be left, rope to rope. The cheapest way to
+         * each floor becomes one climbing edge, with its legs.
+         */
+        private void climbFrom(int from, MapGeometry.Climb first, int boardY, List<MapGeometry.Climb> climbs) {
+            Map<Integer, Edge> best = new HashMap<>();
+            Deque<Holding> queue = new ArrayDeque<>();
+            queue.add(new Holding(first, boardY, List.of(), 0));
+            Set<MapGeometry.Climb> held = new HashSet<>();
+            while (!queue.isEmpty()) {
+                Holding h = queue.poll();
+                if (!held.add(h.rope()) || h.legs().size() >= MOST_ROPES) {
+                    continue;
+                }
+                MapGeometry.Climb rope = h.rope();
+                if (rope.offAtTop()) {
+                    int top = floorNear(rope.x(), rope.top());
+                    if (top >= 0) {
+                        keep(best, from, first, h, new Leg(rope, rope.top(), LegEnd.TOP,
+                                new Point(rope.x(), platforms.get(top).heightAt(rope.x()))), top,
+                                Math.abs(h.y() - rope.top()));
+                    }
+                }
+                int under = platformUnder(rope.x(), rope.bottom());
+                if (under >= 0) {
+                    keep(best, from, first, h, new Leg(rope, rope.bottom(), LegEnd.DROP,
+                            new Point(rope.x(), platforms.get(under).heightAt(rope.x()))), under,
+                            Math.abs(h.y() - rope.bottom()));
+                }
+                for (int i = 0; i < platforms.size(); i++) {
+                    Platform p = platforms.get(i);
+                    for (int side : new int[] {-1, 1}) {
+                        int x = side < 0 ? Math.min(p.maxX(), rope.x() - 1) : Math.max(p.minX(), rope.x() + 1);
+                        if (!p.spans(x) || Math.abs(x - rope.x()) > JUMP_REACH) {
+                            continue;
+                        }
+                        int floorY = p.heightAt(x);
+                        if (floorY < rope.top() - JUMP_RISE) {
+                            continue;       // above where a jump from the top could reach
+                        }
+                        int leaveY = Math.max(rope.top(), Math.min(rope.bottom(), floorY));
+                        keep(best, from, first, h, new Leg(rope, leaveY, LegEnd.JUMP, new Point(x, floorY)),
+                                i, Math.abs(h.y() - leaveY) + JUMP_COST);
+                    }
+                }
+                for (MapGeometry.Climb next : climbs) {
+                    if (next == rope || held.contains(next) || Math.abs(next.x() - rope.x()) > JUMP_REACH) {
+                        continue;
+                    }
+                    int leaveY = Math.max(rope.top(), Math.min(rope.bottom(), next.top()));
+                    int catchY = Math.max(next.top(), Math.min(next.bottom(), leaveY - JUMP_RISE / 2));
+                    if (catchY < leaveY - JUMP_RISE || catchY > next.bottom()) {
+                        continue;
+                    }
+                    List<Leg> legs = new ArrayList<>(h.legs());
+                    legs.add(new Leg(rope, leaveY, LegEnd.ROPE, new Point(next.x(), catchY)));
+                    queue.add(new Holding(next, catchY, legs, h.cost() + Math.abs(h.y() - leaveY) + JUMP_COST));
+                }
+            }
+            best.values().forEach(edge -> edges.get(from).add(edge));
+        }
+
+        /** The cheapest climbing edge to each floor, legs and all. */
+        private static void keep(Map<Integer, Edge> best, int from, MapGeometry.Climb first, Holding h, Leg last,
+                                 int to, int climbed) {
+            if (to == from) {
+                return;
+            }
+            int cost = h.cost() + climbed;
+            Edge current = best.get(to);
+            if (current != null && current.climbing() <= cost) {
+                return;
+            }
+            List<Leg> legs = new ArrayList<>(h.legs());
+            legs.add(last);
+            best.put(to, new Edge(to, Kind.CLIMB, first.x(), last.next().x, first, List.copyOf(legs), cost));
+        }
+
+        /**
+         * The floor a rope can be caught from: one a little above its foot, or below it by as
+         * much as a jump and an arm. L Forest II's rope out of the ground floor by its west door
+         * hangs 71 pixels up - caught with a jump, and with it left out the ground floor was a
+         * dead end, and so was the whole map from that door.
+         */
+        private int floorUnderRope(int x, int y) {
+            int best = -1;
+            int bestGap = Integer.MAX_VALUE;
+            for (int i = 0; i < platforms.size(); i++) {
+                Platform p = platforms.get(i);
+                if (!p.spans(x)) {
+                    continue;
+                }
+                int below = p.heightAt(x) - y;      // positive: the floor is under the rope's foot
+                if (below < -ROPE_REACH || below > ROPE_GRAB) {
+                    continue;
+                }
+                int gap = Math.abs(below);
+                if (gap < bestGap) {
+                    bestGap = gap;
+                    best = i;
+                }
+            }
+            return best;
         }
 
         /** The floor at this x whose height is nearest a rope's end, within reach of it. */
@@ -420,7 +570,7 @@ public final class Navigator {
                 }
                 for (Edge edge : edges.get(here)) {
                     long next = cost[here] + Math.abs(atX[here] - edge.departX) + TRANSITION_COST
-                            + (edge.kind == Kind.CLIMB && edge.rope != null ? edge.rope.height() : 0);
+                            + (edge.kind == Kind.CLIMB ? edge.climbing : 0);
                     if (next < cost[edge.to]) {
                         cost[edge.to] = next;
                         atX[edge.to] = edge.arriveX;

@@ -301,7 +301,15 @@ public class MapGeometry {
      *
      * @param top the smaller y, because the screen's y grows downwards
      */
-    public record Climb(int x, int top, int bottom, boolean ladder) {
+    /**
+     * @param offAtTop whether a character can step off at the top onto a floor - the map
+     *                 data's "uf"; Swampy Land's rope up from Sleepywood does not let anybody off
+     */
+    public record Climb(int x, int top, int bottom, boolean ladder, boolean offAtTop) {
+
+        public Climb(int x, int top, int bottom, boolean ladder) {
+            this(x, top, bottom, ladder, true);
+        }
 
         /** The end a character would board it at, coming from this height. */
         public int endNearest(int y) {
@@ -387,7 +395,8 @@ public class MapGeometry {
             int y2 = DataTool.getInt(rope.getChildByPath("y2"), 0);
             climbs.add(new Climb(DataTool.getInt(x, 0),
                     Math.min(y1, y2), Math.max(y1, y2),
-                    DataTool.getInt(rope.getChildByPath("l"), 0) != 0));
+                    DataTool.getInt(rope.getChildByPath("l"), 0) != 0,
+                    DataTool.getInt(rope.getChildByPath("uf"), 1) != 0));
         }
         return List.copyOf(climbs);
     }

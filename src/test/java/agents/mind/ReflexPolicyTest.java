@@ -1096,10 +1096,10 @@ class ReflexPolicyTest {
     }
 
     /**
-     * A Hill West of Henesys, from a ledge at y=-115. The door high up at in00 has no way to it
-     * from there; the agent set off for an unreachable door, got nowhere, gave up, chose it
-     * again, and paced the ledge. Only a door it can reach is a door to choose. (east00, the
-     * way to Henesys, was unreachable too until the 30px step up to it counted as a jump.)
+     * A Hill West of Henesys, from a ledge at y=-115. The agent once set off for a door it could
+     * not reach, got nowhere, gave up, chose it again, and paced the ledge. Only a door it can
+     * reach is a door to choose. (The high door, in00, is reached now - by a chain of three
+     * ropes - so it is no longer the example; the rule is.)
      */
     @Test
     void choosesADoorItCanActuallyGetTo() {
@@ -1119,8 +1119,9 @@ class ReflexPolicyTest {
         }
 
         assertFalse(headedFor.isEmpty(), "never set off for a door at all");
-        assertFalse(headedFor.contains("in00"),
-                "in00 is 1,170px up with no way to it, and it set off for it anyway: " + headedFor);
+        java.util.Set<String> reachable = agents.world.Doorways.from(hill, new Point(-2300, -115));
+        assertTrue(reachable.containsAll(headedFor),
+                "set off for a door it cannot reach: " + headedFor + ", reachable " + reachable);
     }
 
     private void fullBagNextToAShopkeeper(int x) {

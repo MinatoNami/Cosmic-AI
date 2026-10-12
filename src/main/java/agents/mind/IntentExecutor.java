@@ -193,6 +193,50 @@ public class IntentExecutor {
         return world.selfPosition().distance(target) <= reach;
     }
 
+    /** The legs of a climb still to go: ropes, how far up each, and how each is left. */
+    private final java.util.ArrayDeque<Navigator.Leg> legs = new java.util.ArrayDeque<>();
+
+    /**
+     * One move of a climb with legs: catch the rope - jumping for it if it hangs above the
+     * floor - climb to where it is left, then leave it as planned: step off at the top, let go,
+     * jump onto a floor, or jump across to the next rope and carry on up that.
+     */
+    private boolean followLeg(WorldModel world, Point from) {
+        int map = world.mapId();
+        Navigator.Leg leg = legs.peek();
+        MapGeometry.Climb rope = leg.rope();
+        if (from.y > rope.bottom() + ARRIVED_PIXELS) {
+            leap(from, new Point(rope.x(), rope.bottom()), world, true);     // jump up and catch it
+            return true;
+        }
+        int toClimb = leg.leaveY() - from.y;
+        if (Math.abs(toClimb) >= ARRIVED_PIXELS) {
+            int step = (int) Math.copySign(Math.min(CLIMB_PIXELS, Math.abs(toClimb)), toClimb);
+            Point next = new Point(rope.x(), from.y + step);
+            short duration = (short) Math.max(1, Math.round(Math.abs(step) / (double) CLIMB_PIXELS_PER_SECOND * 1000));
+            session.send(ClientPackets.move(from, next, (short) 0, STANCE_CLIMBING, duration));
+            world.movedTo(next);
+            return true;
+        }
+        legs.poll();
+        switch (leg.end()) {
+            case TOP -> {
+                session.send(ClientPackets.move(from, leg.next(), foothold(map, leg.next()), STANCE_STAND_RIGHT, (short) 150));
+                world.movedTo(leg.next());
+            }
+            case DROP -> leap(from, leg.next(), world, false);
+            case JUMP -> leap(from, leg.next(), world, true);
+            case ROPE -> {
+                leap(from, leg.next(), world, true);
+                riding = legs.isEmpty() ? null : legs.peek().rope();
+                return true;
+            }
+        }
+        riding = null;
+        legs.clear();
+        return true;
+    }
+
     /** Jumping, per docs/moveactions.txt: what a watcher sees in the air, rising or falling. */
     private static final byte STANCE_JUMP_RIGHT = 6;
     private static final byte STANCE_JUMP_LEFT = 7;
@@ -239,6 +283,7 @@ public class IntentExecutor {
             }
         }
         riding = null;
+        legs.clear();
 
         if (MapGeometry.groundIn(map).isEmpty()) {
             return;         // no floor data at all: better to stand still than to guess
@@ -276,6 +321,10 @@ public class IntentExecutor {
                 riding = step.rope();
                 ridingMap = map;
                 ridingTo = step.rope().endAwayFrom(step.rope().endNearest(from.y));
+                legs.clear();
+                if (step.legs() != null) {
+                    legs.addAll(step.legs());
+                }
                 climb(world, from);
             }
             default -> walkAlongFloor(step.departX(), world, from);
@@ -349,6 +398,9 @@ public class IntentExecutor {
         if (Math.abs(from.x - rope.x()) > ARRIVED_PIXELS) {
             walkAlongFloor(rope.x(), world, from);      // to the foot of it first
             return true;
+        }
+        if (!legs.isEmpty()) {
+            return followLeg(world, from);
         }
         int toClimb = ridingTo - from.y;
         if (Math.abs(toClimb) < ARRIVED_PIXELS) {

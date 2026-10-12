@@ -78,6 +78,13 @@ public final class Doorways {
         if (MapGeometry.groundIn(mapId).isEmpty()) {
             return true;        // no floor data: nothing to rule anything out with
         }
-        return Navigator.nextStep(mapId, feet, door).isPresent();
+        // To the floor under the door, not the point the door is drawn at: doors are drawn
+        // above the floor, some by most of a character's height, and routing to the drawing
+        // found no floor there and called the door unreachable.
+        Point underDoor = Navigator.floorHeight(mapId, door).map(y -> new Point(door.x, y)).orElse(door);
+        if (Math.abs(underDoor.x - feet.x) < AT_DOOR && Math.abs(underDoor.y - feet.y) <= 1) {
+            return true;
+        }
+        return Navigator.nextStep(mapId, feet, underDoor).isPresent();
     }
 }

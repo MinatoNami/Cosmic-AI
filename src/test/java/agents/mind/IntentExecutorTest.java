@@ -262,4 +262,27 @@ class IntentExecutorTest {
         assertTrue(!IntentExecutor.canSpeakTo(10000, new Point(-41, 469), new Point(833, 125), 60),
                 "Sera can be reached, so it should go to her");
     }
+
+    /**
+     * L Forest II's west door is on a ground floor whose only way up is a rope hanging 71
+     * pixels above it - caught with a jump. Without that, the door led nowhere.
+     */
+    @Test
+    void crossesLForestIIFromTheWestDoorByCatchingTheRope() {
+        WorldModel world = standingAt(103020100, new Point(2233, 755));
+
+        Point end = walkTowards(world, new Point(4479, 515), 600);
+
+        assertTrue(end.distance(new Point(4479, 515)) <= 40, "never reached the east door: " + end);
+    }
+
+    /** Swampy Land from Sleepywood's side, up the hanging ropes to the way towards Henesys. */
+    @Test
+    void climbsSwampyLandToItsUpperDoor() {
+        WorldModel world = standingAt(105040000, new Point(28, 105));
+
+        Point end = walkTowards(world, new Point(-1035, -1575), 1200);
+
+        assertTrue(end.distance(new Point(-1035, -1575)) <= 40, "never reached the upper door: " + end);
+    }
 }
