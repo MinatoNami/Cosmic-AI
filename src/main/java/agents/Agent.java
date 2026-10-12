@@ -1129,7 +1129,7 @@ public class Agent implements Runnable {
             return false;
         }
         return KnownWorld.rememberedBy(mind.semantic().liveBeliefs())
-                .routeToNearestFrontier(KnownWorld.mapRef(world.mapId()))
+                .routeToNearestUnopenedDoor(KnownWorld.mapRef(world.mapId()))
                 .isEmpty();
     }
 

@@ -564,4 +564,20 @@ class KnownWorldTest {
             KnownWorld.useAtlas(null);
         }
     }
+
+    /**
+     * Maps it knows only from the world map are somewhere to explore, but not a reason to think
+     * the island unfinished: that kept the model turning the ferry down.
+     */
+    @Test
+    void theWorldMapIsNotADoorItHasSeenAndNotOpened() {
+        KnownWorld.useAtlas(new Atlas());
+        try {
+            KnownWorld known = KnownWorld.rememberedBy(java.util.List.of());
+            assertTrue(known.routeToNearestFrontier("map:2000000").isPresent(), "unvisited maps to explore");
+            assertTrue(known.routeToNearestUnopenedDoor("map:2000000").isEmpty(), "but no door seen and not opened");
+        } finally {
+            KnownWorld.useAtlas(null);
+        }
+    }
 }

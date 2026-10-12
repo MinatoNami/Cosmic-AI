@@ -310,6 +310,18 @@ public final class KnownWorld {
      * these doors looks promising" but "where is the edge of what I know, and which way is
      * it from here".
      */
+    /**
+     * The shortest walk to a door it has seen and never opened - the frontier of its own
+     * experience, leaving out maps it knows only from the world map.
+     *
+     * For telling it whether it has run out of island. Every map on the world map it has never
+     * stood in is "somewhere new", so with those counted Maple Island was never finished, the
+     * model was always told so, and it turned the ferry down every time it was offered.
+     */
+    public Optional<Route> routeToNearestUnopenedDoor(String fromMap) {
+        return search(fromMap, map -> !unopenedDoorsIn(map).isEmpty(), "frontier");
+    }
+
     public Optional<Route> routeToNearestFrontier(String fromMap) {
         return search(fromMap, map -> !unopenedDoorsIn(map).isEmpty() || neverHeardOf(map), "frontier");
     }
