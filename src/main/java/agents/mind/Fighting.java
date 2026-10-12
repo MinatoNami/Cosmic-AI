@@ -175,29 +175,82 @@ public final class Fighting {
     static final int GUN = 49;
 
     /** The kind of weapon in hand, by the item's id, or NONE. */
-    static int weaponKind(WorldModel world) {
+    public static int weaponKind(WorldModel world) {
         return world.inventory().wornAt(WEAPON_SLOT).map(item -> (item.itemId() / 10000) % 100).orElse(NONE);
     }
 
     private static final int WEAPON_SLOT = -11;
 
     /** Something to fire from this weapon in the bag: arrows for a bow, bolts, stars, bullets. */
-    static boolean hasAmmunition(WorldModel world, int weapon) {
+    public static boolean hasAmmunition(WorldModel world, int weapon) {
+        return ammunition(world, weapon) > 0;
+    }
+
+    /** How much there is to fire from this weapon. */
+    public static int ammunition(WorldModel world, int weapon) {
+        int count = 0;
         for (Item item : world.inventory().carried(Item.USE)) {
-            int id = item.itemId();
-            boolean fits = switch (weapon) {
-                case BOW -> id / 1000 == 2060;
-                case CROSSBOW -> id / 1000 == 2061;
-                case CLAW -> id / 10000 == 207;
-                case GUN -> id / 10000 == 233;
-                default -> false;
-            };
-            if (fits && item.quantity() > 0) {
-                return true;
+            if (fires(weapon, item.itemId())) {
+                count += item.quantity();
             }
         }
-        return false;
+        return count;
     }
+
+    /** Whether this item is what this weapon fires. */
+    public static boolean fires(int weapon, int itemId) {
+        return switch (weapon) {
+            case BOW -> itemId / 1000 == 2060;
+            case CROSSBOW -> itemId / 1000 == 2061;
+            case CLAW -> itemId / 10000 == 207;
+            case GUN -> itemId / 10000 == 233;
+            default -> false;
+        };
+    }
+
+    public static boolean isShooter(int weapon) {
+        return weapon == BOW || weapon == CROSSBOW || weapon == CLAW || weapon == GUN;
+    }
+
+    /** The kind of weapon an item is, from its id; NONE for anything that is not a weapon. */
+    public static int kindOfWeapon(int itemId) {
+        int family = itemId / 100000;
+        return family == 13 || family == 14 ? (itemId / 10000) % 100 : NONE;
+    }
+
+    /**
+     * Whether a job fights with this kind of weapon. A Bowman can swing a sword, and a sword
+     * with more attack than its bow looked the better thing to wear - but it cannot shoot with
+     * one. Beginners can use anything; a first job either of its branch's weapons.
+     */
+    public static boolean weaponSuits(int weapon, int job) {
+        int family = (Math.max(0, job) % 1000) / 100;
+        int branch = (Math.max(0, job) % 100) / 10;
+        return switch (family) {
+            case 0 -> true;
+            case 1 -> Set.of(30, 31, 32, 40, 41, 42, 43, 44).contains(weapon);
+            case 2 -> weapon == WAND || weapon == STAFF;
+            case 3 -> branch == 1 ? weapon == BOW : branch == 2 ? weapon == CROSSBOW
+                    : weapon == BOW || weapon == CROSSBOW;
+            case 4 -> branch == 1 ? weapon == CLAW : branch == 2 ? weapon == DAGGER
+                    : weapon == CLAW || weapon == DAGGER;
+            case 5 -> branch == 1 ? weapon == KNUCKLE : branch == 2 ? weapon == GUN
+                    : weapon == KNUCKLE || weapon == GUN;
+            default -> true;
+        };
+    }
+
+    /** Below this much to fire, it is time to buy more. */
+    public static final int RUNNING_LOW = 200;
+
+    /** Whether what it fires is running low for the weapon in hand. */
+    public static boolean wantsAmmunition(WorldModel world) {
+        int weapon = weaponKind(world);
+        return isShooter(weapon) && ammunition(world, weapon) < RUNNING_LOW;
+    }
+
+    static final int DAGGER = 33;
+    static final int KNUCKLE = 48;
 
     /** The first of these buffs that has worn off, or was never cast. */
     public static Optional<SkillBook.SkillLevel> due(List<SkillBook.SkillLevel> buffs,

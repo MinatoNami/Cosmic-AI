@@ -894,7 +894,9 @@ public class ReflexPolicy implements Policy {
             return;
         }
         boolean toSell = world.inventoryFull(tick);
-        Set<String> keepers = toSell ? shopkeepers(mind) : stocking(mind, knownHealers(mind));
+        Set<String> keepers = toSell ? shopkeepers(mind)
+                : Fighting.wantsAmmunition(world) ? ammunitionSellers(mind, world)
+                : stocking(mind, knownHealers(mind));
         keepers.removeAll(noUseNow(mind, world));
         Optional<WorldModel.Entity> keeper = world.visibleNpcs().stream()
                 .filter(npc -> keepers.contains("npc:" + npc.typeId()))
@@ -912,7 +914,8 @@ public class ReflexPolicy implements Policy {
         WorldModel.Entity npc = keeper.get();
         double score = SHOP_URGENCY + NEGLECT_MATTERS * neglect("shop")
                 + commitmentTo("shop", npc.position());
-        String why = toSell ? "sell what I cannot carry" : "buy something that heals";
+        String why = toSell ? "sell what I cannot carry"
+                : Fighting.wantsAmmunition(world) ? "buy something to fire" : "buy something that heals";
         if (!IntentExecutor.canSpeakTo(world.mapId(), self, npc.position(), NPC_RANGE)) {
             Point where = npc.position();
             choices.add(new Choice("shop", new Intent.MoveTo(where),
@@ -940,6 +943,10 @@ public class ReflexPolicy implements Policy {
         if (world.inventory().meso() < MONEY_FOR_POTIONS) {
             return false;
         }
+        // Nothing left to fire is as good as no weapon at all for a Bowman.
+        if (Fighting.wantsAmmunition(world)) {
+            return true;
+        }
         Set<String> healers = knownHealers(mind);
         return !healers.isEmpty()
                 && healers.stream().allMatch(item -> world.inventory().count(itemIdIn(item)) == 0)
@@ -956,6 +963,22 @@ public class ReflexPolicy implements Policy {
             }
         }
         return healers;
+    }
+
+    /**
+     * Who sells something to fire from the weapon in hand - or, if it has never seen anybody
+     * sell any, every shopkeeper, to look. A shop that has nothing is written off by the usual
+     * "no use" note, so this does not go round the same counter for ever.
+     */
+    private static Set<String> ammunitionSellers(Mind mind, WorldModel world) {
+        int weapon = Fighting.weaponKind(world);
+        Set<String> sellers = new HashSet<>();
+        for (Belief belief : mind.semantic().liveBeliefs()) {
+            if (belief.predicate().equals("sells") && Fighting.fires(weapon, itemIdIn(belief.object()))) {
+                sellers.add(belief.subject());
+            }
+        }
+        return sellers.isEmpty() ? shopkeepers(mind) : sellers;
     }
 
     /** Shopkeepers seen with any of these on their shelves. */

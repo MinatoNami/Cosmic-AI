@@ -83,8 +83,12 @@ public final class Wardrobe {
             if (info.cash() || !canWear(info, world)) {
                 continue;
             }
+            int weapon = Fighting.kindOfWeapon(candidate.itemId());
+            if (weapon != Fighting.NONE && !Fighting.weaponSuits(weapon, world.job())) {
+                continue;       // a Bowman does not take up a sword, however sharp
+            }
             for (int slot : info.slots()) {
-                double gain = worth(candidate, world) - worthOfReplacing(slot, info, inventory, world);
+                double gain = worthInHand(candidate, world) - worthOfReplacing(slot, info, inventory, world);
                 if (gain > bestGain) {
                     bestGain = gain;
                     best = new Change(candidate.itemId(), candidate.slot(), slot);
@@ -105,7 +109,7 @@ public final class Wardrobe {
      * which the server takes off to make room.
      */
     private double worthOfReplacing(int slot, EquipInfo incoming, Inventory inventory, WorldModel world) {
-        double lost = inventory.wornAt(slot).map(item -> worth(item, world)).orElse(0.0);
+        double lost = inventory.wornAt(slot).map(item -> worthInHand(item, world)).orElse(0.0);
         if (incoming.overall()) {
             lost += inventory.wornAt(PANTS).map(item -> worth(item, world)).orElse(0.0);
         }
@@ -117,6 +121,26 @@ public final class Wardrobe {
         }
         return lost;
     }
+
+    /**
+     * What something is worth worn, for a weapon also whether it can be used: one the job does
+     * not fight with is worth nothing to keep on, and one with nothing to fire from it in the
+     * bag is worth much less than one that can be used.
+     */
+    private static double worthInHand(Item item, WorldModel world) {
+        double worth = worth(item, world);
+        int weapon = Fighting.kindOfWeapon(item.itemId());
+        if (weapon == Fighting.NONE) {
+            return worth;
+        }
+        if (!Fighting.weaponSuits(weapon, world.job())) {
+            return 0;
+        }
+        return Fighting.isShooter(weapon) && !Fighting.hasAmmunition(world, weapon) ? worth * EMPTY_SHOOTER : worth;
+    }
+
+    /** What a bow, claw or gun is worth with nothing to fire from it. */
+    private static final double EMPTY_SHOOTER = 0.3;
 
     private static final int TOP = -5;
     private static final int PANTS = -6;

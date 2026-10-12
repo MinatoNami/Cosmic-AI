@@ -115,4 +115,47 @@ class WardrobeTest {
 
         assertEquals(PANTS, wardrobe.step(world).orElseThrow().itemId());
     }
+
+    private static final int BOW = 1452002;
+    private static final int CLAW = 1472000;
+    private static final int DAGGER = 1332000;
+
+    private void carrying(int job, Item... items) {
+        world.update(new Observation.SelfDescribed(1, 2, "Agent1", 12, job, 100000000, 0,
+                Map.of("STR", 4, "DEX", 40, "INT", 4, "LUK", 30)));
+        world.update(new Observation.InventoryShown(2, 0, Map.of(1, 24, 2, 24, 3, 24, 4, 24, 5, 24),
+                List.of(items)));
+    }
+
+    /** A sword with more attack than the bow is no use to a Bowman, who cannot shoot with it. */
+    @Test
+    void aBowmanKeepsItsBowOverASharperSword() {
+        carrying(300, new Item(1, -11, BOW, 1, attack(10)), new Item(1, 4, GOOD_SWORD, 1, attack(30)),
+                new Item(2, 1, 2060000, 500, null));
+
+        assertTrue(wardrobe.step(world).isEmpty());
+    }
+
+    @Test
+    void aBowmanHoldingASwordTakesUpItsBow() {
+        carrying(300, new Item(1, -11, GOOD_SWORD, 1, attack(30)), new Item(1, 4, BOW, 1, attack(10)),
+                new Item(2, 1, 2060000, 500, null));
+
+        assertEquals(BOW, wardrobe.step(world).orElseThrow().itemId());
+    }
+
+    /** A first-job Thief with no stars to throw fights with its dagger, not an empty claw. */
+    @Test
+    void aThiefWithNoStarsUsesItsDagger() {
+        carrying(400, new Item(1, -11, CLAW, 1, attack(15)), new Item(1, 4, DAGGER, 1, attack(12)));
+
+        assertEquals(DAGGER, wardrobe.step(world).orElseThrow().itemId());
+    }
+
+    @Test
+    void aBowmanLowOnArrowsNeedsAShop() {
+        carrying(300, new Item(1, -11, BOW, 1, attack(10)), new Item(2, 1, 2060000, 50, null));
+
+        assertTrue(Fighting.wantsAmmunition(world));
+    }
 }

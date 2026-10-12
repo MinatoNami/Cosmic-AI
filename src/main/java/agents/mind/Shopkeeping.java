@@ -145,6 +145,10 @@ public final class Shopkeeping {
         if (meso <= 0) {
             return Optional.empty();
         }
+        Optional<Packet> ammunition = ammunition(world, meso);
+        if (ammunition.isPresent()) {
+            return ammunition;
+        }
         Optional<Packet> healers = topUp(world, mind, meso, "restores_hp", HEALERS_WANTED);
         if (healers.isPresent()) {
             return healers;
@@ -165,6 +169,33 @@ public final class Shopkeeping {
     }
 
     /** Buys enough of the cheapest thing known to do this to carry {@code wanted}, if affordable. */
+    /**
+     * Something to fire, for a bow, crossbow, claw or gun running low: the cheapest on the
+     * shelf that fits, arrows and bolts by the hundred, stars and bullets by the set, and never
+     * more than most of the money - something to heal with matters too.
+     */
+    private Optional<Packet> ammunition(WorldModel world, int meso) {
+        int weapon = Fighting.weaponKind(world);
+        if (!Fighting.wantsAmmunition(world)) {
+            return Optional.empty();
+        }
+        int budget = (int) (meso * AMMUNITION_BUDGET);
+        return open.items().stream()
+                .filter(item -> Fighting.fires(weapon, item.itemId()))
+                .filter(item -> item.price() > 0 && item.price() <= budget)
+                .min(Comparator.comparingInt(Observation.ShopOpened.ShopItem::price))
+                .map(item -> {
+                    boolean bundled = weapon == Fighting.BOW || weapon == Fighting.CROSSBOW;
+                    int quantity = bundled
+                            ? Math.min(ARROWS_WANTED - Fighting.ammunition(world, weapon), budget / item.price())
+                            : 1;
+                    return ClientPackets.buyFromShop(item.index(), item.itemId(), Math.max(1, quantity));
+                });
+    }
+
+    static final int ARROWS_WANTED = 1000;
+    static final double AMMUNITION_BUDGET = 0.6;
+
     private Optional<Packet> topUp(WorldModel world, Mind mind, int meso, String does, int wanted) {
         return open.items().stream()
                 .filter(item -> believes(mind, item.itemId(), does, "true"))
