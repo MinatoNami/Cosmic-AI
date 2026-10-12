@@ -176,6 +176,36 @@ class InventoryDecodingTest {
         assertEquals(3, bags.items().get(3).quantity());
     }
 
+    /**
+     * The skills that follow the bags on entering the world (addSkillInfo): id, level and
+     * expiry each, a master level for a fourth-job skill, then the cooldowns.
+     */
+    @Test
+    void readsTheSkillsCarriedIntoTheWorld() {
+        OutPacket p = OutPacket.create(SendOpcode.SET_FIELD);
+        p.writeByte(0);
+        p.writeShort(3);
+        p.writeInt(3001004);                    // Arrow Blow
+        p.writeInt(5);
+        p.writeLong(0);
+        p.writeInt(3121002);                    // Sharp Eyes, a fourth-job skill
+        p.writeInt(1);
+        p.writeLong(0);
+        p.writeInt(30);                         // its master level
+        p.writeInt(3001003);                    // Focus
+        p.writeInt(2);
+        p.writeLong(0);
+        p.writeShort(0);                        // no cooldowns
+
+        InPacket in = new ByteBufInPacket(Unpooled.wrappedBuffer(p.getBytes()));
+        in.readShort();
+        List<int[]> skills = ObservationDecoder.readSkills(in);
+
+        assertEquals(List.of(3001004, 3121002, 3001003), skills.stream().map(s -> s[0]).toList());
+        assertEquals(List.of(5, 1, 2), skills.stream().map(s -> s[1]).toList());
+        assertEquals(2, in.available(), "only the cooldown count left");
+    }
+
     /** The server sends an empty change to let the client act again; nothing happened. */
     @Test
     void anEmptyChangeIsNotAnObservation() {

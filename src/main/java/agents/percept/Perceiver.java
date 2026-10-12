@@ -48,7 +48,7 @@ public class Perceiver {
                 unrecognisedCounts.merge(unrecognised.opcodeName(), 1, Integer::sum);
             }
             observations.add(observation);
-            if (decoder.hasFollowUp()) {
+            while (decoder.hasFollowUp()) {
                 observations.add(decoder.takeFollowUp(++tick));
             }
         }

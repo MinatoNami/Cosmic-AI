@@ -54,7 +54,8 @@ public class ObservationDecoder {
      * tick. Entering the world is the case: one packet describes both the character and
      * everything it is carrying.
      */
-    private java.util.function.LongFunction<Observation> followUp;
+    private final java.util.ArrayDeque<java.util.function.LongFunction<Observation>> followUps =
+            new java.util.ArrayDeque<>();
 
     /**
      * @return what the packet says, or null when it says nothing happened - an empty update,
@@ -62,7 +63,7 @@ public class ObservationDecoder {
      */
     public Observation decode(long tick, int opcode, InPacket p) {
         int available = p.available();
-        followUp = null;
+        followUps.clear();
         try {
             Observation observation = decodeKnown(tick, opcode, p);
             if (observation == NOTHING_NEW) {
@@ -77,13 +78,11 @@ public class ObservationDecoder {
 
     /** Whether the last packet decoded said a second thing, to be taken with {@link #takeFollowUp}. */
     public boolean hasFollowUp() {
-        return followUp != null;
+        return !followUps.isEmpty();
     }
 
     public Observation takeFollowUp(long tick) {
-        Observation observation = followUp.apply(tick);
-        followUp = null;
-        return observation;
+        return followUps.poll().apply(tick);
     }
 
     private static Observation unrecognised(long tick, int opcode, int bytes) {
@@ -208,11 +207,40 @@ public class ObservationDecoder {
             for (int type = Item.EQUIP; type <= Item.CASH; type++) {
                 limits.put(type, bags.slotLimits()[type]);
             }
-            followUp = at -> new Observation.InventoryShown(at, meso, Map.copyOf(limits), bags.items());
+            followUps.add(at -> new Observation.InventoryShown(at, meso, Map.copyOf(limits), bags.items()));
+            // Then every skill it has. Only changes were ever read, so after any restart an
+            // agent knew none of the skills it had learned: it could neither cast nor choose.
+            for (int[] skill : readSkills(p)) {
+                followUps.add(at -> new Observation.SkillChanged(at, skill[0], skill[1], 0));
+            }
         } catch (RuntimeException e) {
-            log.debug("Could not read the bags on entering the world", e);
+            log.debug("Could not read the bags or skills on entering the world", e);
         }
         return described;
+    }
+
+    /**
+     * The skills section of the character, as the server writes it: a marker, a count, then
+     * each skill's id, level and expiry - and its master level, for a fourth-job skill.
+     *
+     * @see tools.PacketCreator#addSkillInfo
+     */
+    static java.util.List<int[]> readSkills(InPacket p) {
+        p.readByte();
+        int count = p.readShort();
+        java.util.List<int[]> skills = new java.util.ArrayList<>();
+        for (int i = 0; i < count; i++) {
+            int id = p.readInt();
+            int level = p.readInt();
+            p.readLong();                               // expiry
+            int job = id / 10000;
+            if (job != 2212 && (job % 10 == 2 || id == 22170001 || id == 22171003
+                    || id == 22171004 || id == 22181002 || id == 22181003)) {
+                p.readInt();                            // master level
+            }
+            skills.add(new int[] {id, level});
+        }
+        return skills;
     }
 
     /**
