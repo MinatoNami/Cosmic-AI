@@ -85,4 +85,17 @@ class FightingTest {
         assertEquals(List.of(0, 300, 310), Fighting.jobsUpTo(310));
         assertEquals(List.of(0, 300), Fighting.jobsUpTo(300));
     }
+
+    /** Arrow Blow and Double Shot before Focus, and all three before Critical Shot, a passive. */
+    @Test
+    void skillPointsGoToWhatCanBeCastFirst() {
+        java.util.Map<Integer, Integer> rank = new java.util.HashMap<>();
+        for (agents.world.SkillBook.Skill skill : agents.world.SkillBook.forJob(300)) {
+            rank.put(skill.id(), Training.priority(skill));
+        }
+        assertEquals(0, rank.get(3001004));
+        assertEquals(0, rank.get(3001005));
+        assertEquals(1, rank.get(3001003));
+        assertEquals(2, rank.get(3000001));
+    }
 }

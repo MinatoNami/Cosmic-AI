@@ -39,6 +39,16 @@ import java.util.function.Supplier;
  */
 public final class Training {
 
+    /** 0 for an attack that is cast, 1 for a buff that is cast, 2 for anything else. */
+    static int priority(SkillBook.Skill skill) {
+        return SkillBook.levelOf(skill.id(), 1).map(at -> {
+            if (at.mpCost() <= 0) {
+                return 2;
+            }
+            return at.attacks() ? 0 : at.isBuff() ? 1 : 2;
+        }).orElse(2);
+    }
+
     /** Stat bits, as the server names them. */
     static final int STR = 0x40;
     static final int DEX = 0x80;
@@ -287,7 +297,10 @@ public final class Training {
         // once; otherwise as the window lists them, which keeps prerequisites early. Ahead of
         // both, whatever people playing this job chose; a stable sort keeps the rest in order.
         List<Integer> shown = skillsShownFor(world.job());
-        order.sort(Comparator.comparing((SkillBook.Skill s) -> !s.dealsDamage()));
+        // Active attacks, then buffs, then the rest. "Deals damage" also took in passives with a
+        // damage figure - Critical Shot - and a Bowman put thirteen points into it and none into
+        // Arrow Blow, Double Shot or Focus, so it had nothing to cast.
+        order.sort(Comparator.comparingInt(Training::priority));
         order.sort(Comparator.comparingInt((SkillBook.Skill s) -> {
             int at = shown.indexOf(s.id());
             return at < 0 ? Integer.MAX_VALUE : at;
