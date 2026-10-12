@@ -826,7 +826,8 @@ public class ReflexPolicy implements Policy {
             double score = (0.2 + disposition.aggression()) * near
                     + NEGLECT_MATTERS * neglect("fight") + urgeFor("fight")
                     + commitmentTo("fight", monster.position());
-            boolean withinReach = distance < MELEE_RANGE;
+            // From as far as its attack reaches: a Bowman shoots from where it stands.
+            boolean withinReach = Fighting.canHit(Fighting.choose(world), self, monster.position(), MELEE_RANGE);
             Intent intent = withinReach
                     ? new Intent.Attack(monster.objectId(), monster.position())
                     : new Intent.MoveTo(monster.position());

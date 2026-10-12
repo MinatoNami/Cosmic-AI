@@ -93,10 +93,17 @@ public class IntentExecutor {
                 // is a step a decision now, so a target further than that is walked towards
                 // and hit on a later decision. Sending the swing anyway had an agent hitting a
                 // monster 2,500px off, which the server flags as a distance hack.
-                moveTo(attack.position(), world);
-                if (within(attack.position(), ATTACK_REACH, world)) {
-                    session.send(ClientPackets.meleeAttack(attack.objectId(), attack.position(),
-                            claimedDamage(world), attack.position().x >= world.selfPosition().x));
+                // With the strongest attack it has and can pay for. A shot or a spell is made
+                // from where it stands if the target is in reach; only a swing walks up first.
+                Fighting.Attack how = Fighting.choose(world);
+                if (how.kind() == Fighting.Kind.MELEE
+                        || !Fighting.canHit(how, world.selfPosition(), attack.position(), ATTACK_REACH)) {
+                    moveTo(attack.position(), world);
+                }
+                if (Fighting.canHit(how, world.selfPosition(), attack.position(), ATTACK_REACH)) {
+                    session.send(ClientPackets.attack(how.kind(), how.skillId(), attack.objectId(),
+                            attack.position(), claims(how, world),
+                            attack.position().x >= world.selfPosition().x));
                 }
             }
             case Intent.PickUp pickUp -> {
@@ -372,6 +379,35 @@ public class IntentExecutor {
      * checks claims against this same calculation and only warns at half as much again, so a
      * claim inside it is simply a hit.
      */
+    /**
+     * What each line of an attack claims to have done.
+     *
+     * A physical skill hits for its percentage of a plain hit; a spell by the server's own
+     * magic formula - its magic attack times a base from the caster's INT and the magic on
+     * what it wears. Each line is drawn on its own, between half and all of what it could do.
+     */
+    int[] claims(Fighting.Attack how, WorldModel world) {
+        int[] lines = new int[how.lines()];
+        for (int i = 0; i < lines.length; i++) {
+            if (how.kind() == Fighting.Kind.MAGIC) {
+                int intel = Math.max(0, world.stat("INT"));
+                int magic = intel;
+                for (agents.percept.Item worn : world.inventory().worn()) {
+                    if (worn.stats() != null) {
+                        magic += worn.stats().matk();
+                    }
+                }
+                long base = (long) (Math.ceil((magic * Math.ceil(magic / 1000.0) + magic) / 30.0)
+                        + Math.ceil(intel / 200.0));
+                int max = (int) Math.max(1, base * how.magic());
+                lines[i] = max / 2 + swing.nextInt(max - max / 2 + 1);
+            } else {
+                lines[i] = Math.max(1, claimedDamage(world) * how.damagePercent() / 100);
+            }
+        }
+        return lines;
+    }
+
     int claimedDamage(WorldModel world) {
         Optional<agents.percept.Item> weapon = world.inventory().wornAt(WEAPON_SLOT);
         if (weapon.isEmpty()) {

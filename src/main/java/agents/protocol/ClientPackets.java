@@ -234,6 +234,64 @@ public final class ClientPackets {
      * @param facingRight which way the attacker is turned, so onlookers see it swing at the
      *                    thing rather than away from it
      */
+    /**
+     * An attack, with or without a skill, of any of the three kinds the server takes: a swing,
+     * a shot or throw, or a spell. One target, as many damage lines as the skill hits.
+     *
+     * The three share a layout but for the bytes after the stance, which a shot spends on the
+     * direction it flies. What is fired is not named: the server takes it from the bag itself.
+     *
+     * @see net.server.channel.handlers.AbstractDealDamageHandler#parseDamage
+     */
+    public static Packet attack(agents.mind.Fighting.Kind kind, int skillId, int targetObjectId,
+                                Point targetPosition, int[] damage, boolean facingRight) {
+        OutPacket p = packet(switch (kind) {
+            case MELEE -> RecvOpcode.CLOSE_RANGE_ATTACK;
+            case RANGED -> RecvOpcode.RANGED_ATTACK;
+            case MAGIC -> RecvOpcode.MAGIC_ATTACK;
+        });
+        p.writeByte(0);
+        p.writeByte((1 << 4) | damage.length);  // one target, this many damage lines
+        p.writeInt(skillId);
+        p.writeBytes(new byte[8]);
+        p.writeByte(0);                         // display
+        p.writeByte(facingRight ? 0 : 1);       // direction
+        p.writeByte(ATTACK_STANCE);             // stance
+        if (kind == agents.mind.Fighting.Kind.RANGED) {
+            p.writeByte(0);
+            p.writeByte(ATTACK_SPEED);
+            p.writeByte(0);
+            p.writeByte(facingRight ? 0 : 1);   // which way the shot flies
+            p.writeBytes(new byte[7]);
+        } else {
+            p.writeByte(0);
+            p.writeByte(ATTACK_SPEED);
+            p.writeBytes(new byte[4]);
+        }
+        p.writeInt(targetObjectId);
+        p.writeBytes(new byte[4]);
+        p.writePos(targetPosition);
+        p.writePos(targetPosition);
+        p.writeShort(0);                        // delay
+        for (int line : damage) {
+            p.writeInt(line);
+        }
+        p.writeBytes(new byte[4]);
+        return p;
+    }
+
+    /**
+     * Casts something on oneself - a buff - at the level the skill window shows. The server
+     * refuses any other level.
+     */
+    public static Packet castOnSelf(int skillId, int level) {
+        OutPacket p = packet(RecvOpcode.SPECIAL_MOVE);
+        p.writeInt((int) (System.currentTimeMillis() & 0x7FFFFFFF));
+        p.writeInt(skillId);
+        p.writeByte(level);
+        return p;
+    }
+
     public static Packet meleeAttack(int targetObjectId, Point targetPosition, int damage,
                                      boolean facingRight) {
         OutPacket p = packet(RecvOpcode.CLOSE_RANGE_ATTACK);

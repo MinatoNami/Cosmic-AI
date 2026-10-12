@@ -550,6 +550,7 @@ public class Agent implements Runnable {
         }
         deadFor = 0;
         doWhatWasAsked();
+        keepBuffsUp();
         watchForStalling();
 
         // At a shop counter the agent does its business there and nothing else, one
@@ -662,6 +663,7 @@ public class Agent implements Runnable {
      * corpse around, as far as anyone watching could tell, and nothing would happen.
      */
     private void awaitRevival() {
+        buffsLastUntil.clear();     // dying takes every buff with it
         if (deadFor++ == 0) {
             log.info("{} died in map {}", mind.name(), world.mapId());
             // First-hand, and at the level it happened: a map that killed a level-8 character
@@ -693,6 +695,29 @@ public class Agent implements Runnable {
         return mind.semantic().liveBeliefs().stream()
                 .anyMatch(b -> b.subject().equals(who) && b.predicate().equals("strands_you"));
     }
+
+    /**
+     * Casts whatever buff it has learned that has worn off, one at a time, as a player keeps
+     * Magic Guard or Iron Body up. Not mid-conversation, and not more often than every few
+     * steps, so the server sees each land.
+     */
+    private void keepBuffsUp() {
+        if (pendingDialogue != null || steps - lastCastAt < STEPS_BETWEEN_CASTS) {
+            return;
+        }
+        long now = System.currentTimeMillis();
+        agents.mind.Fighting.due(agents.mind.Fighting.buffs(world), buffsLastUntil, now).ifPresent(buff -> {
+            log.info("{} casts skill:{} (level {})", mind.name(), buff.skillId(), buff.level());
+            connection.session().send(ClientPackets.castOnSelf(buff.skillId(), buff.level()));
+            buffsLastUntil.put(buff.skillId(), now + buff.seconds() * 1000L - RECAST_EARLY_MILLIS);
+            lastCastAt = steps;
+        });
+    }
+
+    private final java.util.Map<Integer, Long> buffsLastUntil = new java.util.HashMap<>();
+    private int lastCastAt = Integer.MIN_VALUE / 2;
+    private static final int STEPS_BETWEEN_CASTS = 5;
+    private static final long RECAST_EARLY_MILLIS = 3000;
 
     /** Past this level, a calling that does not suit it is better than none. */
     private static final int ANY_CALLING_AFTER = 15;
