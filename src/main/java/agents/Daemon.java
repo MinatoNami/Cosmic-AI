@@ -49,7 +49,7 @@ public class Daemon {
             agents.world.KnownWorld.useAtlas(new agents.world.Atlas());
             log.info("Agents can see the world map");
         }
-        if ("on".equalsIgnoreCase(setting("AGENTS_DOOR_ROUTING", "off"))) {
+        if (!"off".equalsIgnoreCase(setting("AGENTS_DOOR_ROUTING", "on"))) {
             agents.world.KnownWorld.useDoorRouting(true);
             log.info("Routes follow which doors can be walked to from each entrance");
         }

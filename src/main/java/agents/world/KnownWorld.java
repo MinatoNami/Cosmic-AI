@@ -508,10 +508,10 @@ public final class KnownWorld {
 
     /**
      * Whether routes respect which doors can be walked to from where each map is entered, and
-     * not only from where the agent stands. Off until the floor model can be trusted: across
-     * 283 maps of Victoria Island it took one entrance in four to fall short of doors a player
-     * walks to - walls and ropes it does not climb - and routing by it would leave agents
-     * believing themselves trapped where they are not.
+     * not only from where the agent stands. Switched on by the daemon once ropes were climbed
+     * as players climb them: of 283 maps on Victoria Island, the entrances falling short of a
+     * door went from one in four to 43 maps, nearly all of them one-way by design - jump
+     * quests, and two exits to the same place from a ledge you cannot climb back to.
      */
     private static volatile boolean doorRouting;
 
