@@ -897,12 +897,15 @@ public class Agent implements Runnable {
         // Nor a calling that does not suit it. The job statues in Lith Harbor send a character
         // straight to an instructor, and a fighter one level short of Warrior took the
         // Magician's statue to Ellinia and turned the Magician down when it got there.
+        // Not only a question: Athena Pierce makes a Bowman of whoever clicks Next through "So you
+        // decided to become a bowman?" and "It is an important and final choice", and a fighter
+        // did. So whatever kind of line offers the wrong calling, the conversation is closed.
         Optional<String> offered = callingOffered(dialogue.text());
-        if (isAQuestion(dialogue.style()) && world.job() == 0 && offered.isPresent()
+        if (world.job() == 0 && offered.isPresent()
                 && !disposition.callingsThatSuit().contains(offered.get())
                 && world.level() < ANY_CALLING_AFTER) {
             log.info("{} turns down npc:{} - a {} is not for it", mind.name(), dialogue.npcId(), offered.get());
-            reply(dialogue.style(), NPC_NO, NO_SELECTION);
+            reply(dialogue.style(), isAQuestion(dialogue.style()) ? NPC_NO : NPC_CLOSE, NO_SELECTION);
             return;
         }
         // Nor somebody whose offer goes somewhere with nothing to do - unless that is no worse

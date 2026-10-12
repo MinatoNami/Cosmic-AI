@@ -137,6 +137,8 @@ class AgentAnswersTest {
                 "Hey #h #, I can send you to #b#m101000003##k if you want to be a #bMagician#k. Do you want to go now?"));
         assertEquals(java.util.Optional.of("magician"), Agent.callingOffered(
                 "Oh...! You look like someone that can definitely be a part of us... so, what do you think? Wanna be the Magician?"));
+        assertEquals(java.util.Optional.of("bowman"), Agent.callingOffered(
+                "So you decided to become a #rbowman#k? There are some standards to meet, y'know..."));
         assertEquals(java.util.Optional.empty(), Agent.callingOffered("Do you want to get out of Happyville?"));
     }
 
