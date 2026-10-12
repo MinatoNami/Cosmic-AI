@@ -446,6 +446,40 @@ public class ReflexPolicy implements Policy {
         return !shopMaps.isEmpty() || errandMap != null || sentMap != null;
     }
 
+    /**
+     * Whether somebody has named a price it cannot pay yet, and nothing else they asked for
+     * stands in the way. Agent0 had been to Southperry thirty-one times with sixteen mesos to
+     * Shanks's hundred and fifty, and as a wanderer barely fought: nothing made earning the
+     * fare worth more than another walk round the island.
+     */
+    private boolean shortOfMoney;
+
+    static boolean shortOfMoney(Mind mind, WorldModel world) {
+        int mesos = world.inventory().meso();
+        if (mesos < 0) {
+            return false;
+        }
+        for (Belief belief : mind.semantic().liveBeliefs()) {
+            if (!belief.predicate().equals("wants_first") || !belief.subject().startsWith("npc:")) {
+                continue;
+            }
+            Matcher price = MESOS_ASKED.matcher(belief.object());
+            if (!price.find()) {
+                continue;
+            }
+            int asked = Integer.parseInt(price.group(1).replace(",", ""));
+            if (asked > mesos && canPay(belief.object(), world.level(), asked, id -> world.inventory().count(id))) {
+                return true;        // everything but the money
+            }
+        }
+        return false;
+    }
+
+    /** How much more a hunt is worth, and how far it is followed, when the money is short. */
+    private static final double SHORT_OF_MONEY = 1.5;
+    private static final double MONEY_MAKES_HUNTING = 4;
+    private static final int BROKE_PURSUIT = 600;
+
     /** Where the agent stands as of this decision, so routes start from doors it can walk to. */
     private java.awt.Point standingAt;
 
@@ -471,6 +505,7 @@ public class ReflexPolicy implements Policy {
     @Override
     public Decision decide(Mind mind, WorldModel world, long tick) {
         currentTick = tick;
+        shortOfMoney = shortOfMoney(mind, world);
         standingAt = world.selfPosition();
         boolean wasStranded = strandedHere;
         strandedHere = world.monsterCount() == 0 && decisionsHere > STRANDED_AFTER && nothingNewOnFoot(mind, world);
@@ -828,11 +863,13 @@ public class ReflexPolicy implements Policy {
     private void somethingToFight(List<Choice> choices, WorldModel world, Point self) {
         world.nearestMonster().ifPresent(monster -> {
             double distance = monster.position().distance(self);
-            double near = nearness(distance, disposition.pursuitRange());
+            double near = nearness(distance, shortOfMoney
+                    ? Math.max(disposition.pursuitRange(), BROKE_PURSUIT) : disposition.pursuitRange());
             if (near <= 0) {
                 return;
             }
             double score = (0.2 + disposition.aggression()) * near
+                    + (shortOfMoney ? SHORT_OF_MONEY * near : 0)
                     + NEGLECT_MATTERS * neglect("fight") + urgeFor("fight")
                     + commitmentTo("fight", monster.position());
             // From as far as its attack reaches: a Bowman shoots from where it stands.
@@ -1902,7 +1939,8 @@ public class ReflexPolicy implements Policy {
                 0.8,                                        // somebody worth hearing again
                 3.0,                                        // somebody owed a visit
                 3.5,                                        // a shop, when the bag is full
-                0.4 + disposition.aggression() * 1.2,       // something to hunt
+                (0.4 + disposition.aggression() * 1.2)      // something to hunt,
+                        * (shortOfMoney ? MONEY_MAKES_HUNTING : 1),  // and much more when broke
                 1.5,                                        // somewhere never stood in
                 0.3,                                        // the less visited, the better
                 0.35,                                       // each door of walking

@@ -77,6 +77,25 @@ class ReflexPolicyTest {
                 "a wanderer has better things to do than chase something that far away");
     }
 
+    /**
+     * The same wanderer, the same monster across the map - but Shanks wants 150 mesos for the
+     * ferry and it has 16. Earning the fare is worth the walk.
+     */
+    @Test
+    void aWandererShortOfTheFareGoesHunting() {
+        world.update(new Observation.MonsterAppeared(2, 9001, 100100, new Point(400, 0)));
+        world.update(new Observation.InventoryShown(2, 16, Map.of(1, 24, 2, 24, 3, 24, 4, 24, 5, 24), List.of()));
+        mind.take(new Observation.MapEntered(1, 10000, 0));
+        mind.hear("npc:22000", "wants_first", "150 mesos", 1);
+        Policy wanderer = new ReflexPolicy(new Random(1), Disposition.WANDERER);
+
+        Intent intent = wanderer.decide(mind, world, 2).intent();
+
+        assertEquals(new Point(400, 0), assertInstanceOf(Intent.MoveTo.class, intent).destination(),
+                "short of the fare, the monster is worth the walk");
+        assertTrue(ReflexPolicy.shortOfMoney(mind, world));
+    }
+
     @Test
     void picksUpWhatIsUnderfootBeforeFighting() {
         world.update(new Observation.MonsterAppeared(2, 9001, 100100, new Point(20, 0)));
