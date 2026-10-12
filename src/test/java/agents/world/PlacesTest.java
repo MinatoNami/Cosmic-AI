@@ -158,6 +158,23 @@ class PlacesTest {
         assertTrue(places.isEmpty(), places.toString());
     }
 
+    /** A shop it needs, beyond somewhere that killed it, is worth going through for. */
+    @Test
+    void goesThroughDangerForAShopItNeeds() {
+        believe("map:1", "has_door", "west00");     // something else worth doing on this side
+        door(1, "west00", 5);
+        believe("npc:7", "present_in", "map:5");
+        visits.put("map:5", 3);
+
+        List<Places.Place> places = Places.worthGoing(KnownWorld.rememberedBy(memory.liveBeliefs()),
+                new Places.Facts("map:1", visits, null, Set.of(), Set.of(), Map.of(), Set.of("map:3"), null, null,
+                        Map.of("map:2", 2)), WEIGHTS);
+
+        assertTrue(places.stream().anyMatch(place -> place.map().equals("map:3")
+                && place.reasons().contains("somebody who buys and sells, and you need to")), places.toString());
+        assertTrue(places.stream().noneMatch(place -> place.map().equals("map:2")), "not the killing ground itself");
+    }
+
     /** With a way round, the far side of a killing ground is still somewhere to go. */
     @Test
     void goesAroundAKillingGroundWhenThereIsAWay() {

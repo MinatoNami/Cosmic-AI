@@ -123,6 +123,26 @@ public final class Places {
                                          boolean throughDangerIfNeeded) {
         Set<String> grounds = killingGrounds(facts);
         List<Place> places = worthGoing(known, facts, w, grounds, false);
+        // What it must do is worth the danger: a Bowman with no bow, whose only bow-seller was
+        // beyond the dungeon that had killed it, hunted with a spear in the dungeon instead.
+        Set<String> needed = new java.util.HashSet<>(facts.shopMaps());
+        if (facts.errandMap() != null) {
+            needed.add(facts.errandMap());
+        }
+        if (facts.sentTo() != null) {
+            needed.add(facts.sentTo());
+        }
+        needed.removeAll(grounds);
+        places.stream().map(Place::map).toList().forEach(needed::remove);
+        if (!needed.isEmpty() && !grounds.isEmpty() && throughDangerIfNeeded) {
+            List<Place> withDanger = new ArrayList<>(places);
+            worthGoing(known, facts, w, Set.of(), true).stream()
+                    .filter(place -> needed.contains(place.map()))
+                    .forEach(withDanger::add);
+            withDanger.sort(Comparator.comparingDouble(Place::value).reversed()
+                    .thenComparingInt(Place::hops).thenComparing(Place::map));
+            places = withDanger;
+        }
         if (places.isEmpty() && !grounds.isEmpty() && throughDangerIfNeeded) {
             // Walled in by places that killed it. Sleepywood's only ways out on foot are the
             // dungeons either side, where predecessors died; avoiding both left nowhere worth
