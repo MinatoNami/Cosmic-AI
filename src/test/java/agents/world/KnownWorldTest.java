@@ -573,7 +573,10 @@ class KnownWorldTest {
     void theWorldMapIsNotADoorItHasSeenAndNotOpened() {
         KnownWorld.useAtlas(new Atlas());
         try {
-            KnownWorld known = KnownWorld.rememberedBy(java.util.List.of());
+            // Standing in Southperry, which it knows: it has seen its door to Split Road.
+            agents.memory.SemanticMemory memory = new agents.memory.SemanticMemory();
+            memory.assertTriple("map:2000000", "has_door", "west00", 0, 1, agents.memory.Belief.Provenance.FIRST_HAND);
+            KnownWorld known = KnownWorld.rememberedBy(memory.liveBeliefs());
             assertTrue(known.routeToNearestFrontier("map:2000000").isPresent(), "unvisited maps to explore");
             assertTrue(known.routeToNearestUnopenedDoor("map:2000000").isEmpty(), "but no door seen and not opened");
         } finally {
