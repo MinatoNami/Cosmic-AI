@@ -129,9 +129,11 @@ public final class Shopkeeping {
         if (info.slots().length == 0 || !info.allowsJob(Math.max(0, world.job()))) {
             return true;
         }
-        double worth = Wardrobe.worth(equipment, world);
+        // Valued as worn, job and all: Athena's bow looked worse than the spear a Bowman was
+        // holding, and was sold, and the Bowman never shot an arrow again.
+        double worth = Wardrobe.worthInHand(equipment, world);
         for (int slot : info.slots()) {
-            double worn = world.inventory().wornAt(slot).map(item -> Wardrobe.worth(item, world)).orElse(0.0);
+            double worn = world.inventory().wornAt(slot).map(item -> Wardrobe.worthInHand(item, world)).orElse(0.0);
             if (worth > worn) {
                 return false;
             }
@@ -144,6 +146,10 @@ public final class Shopkeeping {
         int meso = world.inventory().meso();
         if (meso <= 0) {
             return Optional.empty();
+        }
+        Optional<Packet> weapon = weapon(world, meso);
+        if (weapon.isPresent()) {
+            return weapon;
         }
         Optional<Packet> ammunition = ammunition(world, meso);
         if (ammunition.isPresent()) {
@@ -191,6 +197,25 @@ public final class Shopkeeping {
                             : 1;
                     return ClientPackets.buyFromShop(item.index(), item.itemId(), Math.max(1, quantity));
                 });
+    }
+
+    /**
+     * A weapon its job fights with, when it has none: the cheapest on the shelf it can wear,
+     * with at most most of its money. The wardrobe puts it on once it is in the bag.
+     */
+    private Optional<Packet> weapon(WorldModel world, int meso) {
+        if (!Wardrobe.needsAWeapon(world)) {
+            return Optional.empty();
+        }
+        int budget = (int) (meso * AMMUNITION_BUDGET);
+        Wardrobe fitting = new Wardrobe(tooltips);
+        return open.items().stream()
+                .filter(item -> Fighting.kindOfWeapon(item.itemId()) != Fighting.NONE)
+                .filter(item -> Fighting.weaponSuits(Fighting.kindOfWeapon(item.itemId()), world.job()))
+                .filter(item -> item.price() > 0 && item.price() <= budget)
+                .filter(item -> fitting.canWear(tooltips.apply(item.itemId()), world))
+                .min(Comparator.comparingInt(Observation.ShopOpened.ShopItem::price))
+                .map(item -> ClientPackets.buyFromShop(item.index(), item.itemId(), 1));
     }
 
     static final int ARROWS_WANTED = 1000;

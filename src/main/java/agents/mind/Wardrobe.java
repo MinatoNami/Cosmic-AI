@@ -127,7 +127,7 @@ public final class Wardrobe {
      * not fight with is worth nothing to keep on, and one with nothing to fire from it in the
      * bag is worth much less than one that can be used.
      */
-    private static double worthInHand(Item item, WorldModel world) {
+    static double worthInHand(Item item, WorldModel world) {
         double worth = worth(item, world);
         int weapon = Fighting.kindOfWeapon(item.itemId());
         if (weapon == Fighting.NONE) {
@@ -137,6 +137,20 @@ public final class Wardrobe {
             return 0;
         }
         return Fighting.isShooter(weapon) && !Fighting.hasAmmunition(world, weapon) ? worth * EMPTY_SHOOTER : worth;
+    }
+
+    /** Whether it holds or carries a weapon its job fights with. */
+    static boolean hasAUsableWeapon(WorldModel world) {
+        return world.inventory().worn().stream().filter(item -> item.slot() == -11)
+                .anyMatch(item -> Fighting.weaponSuits(Fighting.kindOfWeapon(item.itemId()), world.job()))
+                || world.inventory().carried(Item.EQUIP).stream()
+                .anyMatch(item -> Fighting.kindOfWeapon(item.itemId()) != Fighting.NONE
+                        && Fighting.weaponSuits(Fighting.kindOfWeapon(item.itemId()), world.job()));
+    }
+
+    /** Whether it needs to buy a weapon: one is in hand, but not one its job fights with. */
+    public static boolean needsAWeapon(WorldModel world) {
+        return world.inventory().known() && world.job() > 0 && !hasAUsableWeapon(world);
     }
 
     /** What a bow, claw or gun is worth with nothing to fire from it. */

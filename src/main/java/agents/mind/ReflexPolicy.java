@@ -895,6 +895,7 @@ public class ReflexPolicy implements Policy {
         }
         boolean toSell = world.inventoryFull(tick);
         Set<String> keepers = toSell ? shopkeepers(mind)
+                : Wardrobe.needsAWeapon(world) ? weaponSellers(mind, world)
                 : Fighting.wantsAmmunition(world) ? ammunitionSellers(mind, world)
                 : stocking(mind, knownHealers(mind));
         keepers.removeAll(noUseNow(mind, world));
@@ -915,6 +916,7 @@ public class ReflexPolicy implements Policy {
         double score = SHOP_URGENCY + NEGLECT_MATTERS * neglect("shop")
                 + commitmentTo("shop", npc.position());
         String why = toSell ? "sell what I cannot carry"
+                : Wardrobe.needsAWeapon(world) ? "buy a weapon I can fight with"
                 : Fighting.wantsAmmunition(world) ? "buy something to fire" : "buy something that heals";
         if (!IntentExecutor.canSpeakTo(world.mapId(), self, npc.position(), NPC_RANGE)) {
             Point where = npc.position();
@@ -943,8 +945,9 @@ public class ReflexPolicy implements Policy {
         if (world.inventory().meso() < MONEY_FOR_POTIONS) {
             return false;
         }
-        // Nothing left to fire is as good as no weapon at all for a Bowman.
-        if (Fighting.wantsAmmunition(world)) {
+        // Nothing left to fire is as good as no weapon at all for a Bowman, and no weapon its
+        // job fights with is no weapon at all.
+        if (Fighting.wantsAmmunition(world) || Wardrobe.needsAWeapon(world)) {
             return true;
         }
         Set<String> healers = knownHealers(mind);
@@ -975,6 +978,19 @@ public class ReflexPolicy implements Policy {
         Set<String> sellers = new HashSet<>();
         for (Belief belief : mind.semantic().liveBeliefs()) {
             if (belief.predicate().equals("sells") && Fighting.fires(weapon, itemIdIn(belief.object()))) {
+                sellers.add(belief.subject());
+            }
+        }
+        return sellers.isEmpty() ? shopkeepers(mind) : sellers;
+    }
+
+    /** Who sells a weapon its job fights with, or every shopkeeper if it has seen none. */
+    private static Set<String> weaponSellers(Mind mind, WorldModel world) {
+        Set<String> sellers = new HashSet<>();
+        for (Belief belief : mind.semantic().liveBeliefs()) {
+            int weapon = Fighting.kindOfWeapon(itemIdIn(belief.object()));
+            if (belief.predicate().equals("sells") && weapon != Fighting.NONE
+                    && Fighting.weaponSuits(weapon, world.job())) {
                 sellers.add(belief.subject());
             }
         }

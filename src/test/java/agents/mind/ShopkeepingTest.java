@@ -152,4 +152,24 @@ class ShopkeepingTest {
         assertEquals(3, read(shop.next(world, mind)).readByte(), "straight out again");
         assertTrue(!shop.atCounter());
     }
+
+    /** Athena's bow was sold because a spear in hand looked better; to a Bowman it is not. */
+    @Test
+    void aBowmanDoesNotSellItsBowForTheSpearInItsHand() {
+        world.update(new Observation.SelfDescribed(1, 2, "Agent1", 14, 300, 100000000, 0,
+                Map.of("STR", 4, "DEX", 40)));
+        carrying(1000, new Item(1, -11, 1432000, 1, attack(30)), new Item(1, 3, 1452051, 1, attack(10)));
+
+        assertTrue(shop.spare(world, mind).stream().noneMatch(item -> item.itemId() == 1452051));
+        assertFalse(Wardrobe.needsAWeapon(world), "it has a bow, in the bag");
+    }
+
+    @Test
+    void aBowmanWithNoBowNeedsOne() {
+        world.update(new Observation.SelfDescribed(1, 2, "Agent1", 14, 300, 100000000, 0,
+                Map.of("STR", 4, "DEX", 40)));
+        carrying(1000, new Item(1, -11, 1432000, 1, attack(30)));
+
+        assertTrue(Wardrobe.needsAWeapon(world));
+    }
 }
