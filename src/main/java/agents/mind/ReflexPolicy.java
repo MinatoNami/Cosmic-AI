@@ -2445,6 +2445,37 @@ public class ReflexPolicy implements Policy {
                 break;
             }
         }
+        // Whoever stands where a statue offering a calling that suits it sends people, and has
+        // not been heard yet, is who gives that calling. Agent1 rode the Warrior's statue to the
+        // Warriors' Sanctuary and saw Dances with Balrog there, but he had named no condition,
+        // so was no errand, and the fighter went back to Perion to hand in quests.
+        // Ahead of the statue itself, whose part is only to send people there.
+        if (world.job() == 0) {
+            int instructorHops = Integer.MAX_VALUE;
+            Set<String> heard = spokenTo(mind);
+            for (String instructorsRoom : whereCallingsAreGiven(mind)) {
+                for (Belief there : mind.semantic().liveBeliefs()) {
+                    if (!there.predicate().equals("present_in") || !there.object().equals(instructorsRoom)
+                            || !there.subject().startsWith("npc:") || heard.contains(there.subject())) {
+                        continue;
+                    }
+                    if (reachable == null) {
+                        reachable = KnownWorld.rememberedBy(mind.semantic().liveBeliefs()).reachableFrom(here, Set.of());
+                    }
+                    int hops = instructorsRoom.equals(here) ? 0
+                            : reachable.containsKey(instructorsRoom) ? reachable.get(instructorsRoom).hops() : -1;
+                    if (hops < 0 || hops >= instructorHops || stranders.contains(there.subject())) {
+                        continue;
+                    }
+                    instructorHops = hops;
+                    bestRank = BEST_ERRAND;
+                    bestHops = hops;
+                    errandForACalling = true;
+                    errandNpc = npcIdIn(there.subject());
+                    errandMap = instructorsRoom.equals(here) ? null : instructorsRoom;
+                }
+            }
+        }
         // A quest under way, whose finisher is somewhere it can walk to, comes before any
         // price that is not a calling. Nothing took an agent to anybody it owed except
         // stumbling on them: Roger in Snail Garden and Sen in his house in Mushroom Town were
@@ -2466,9 +2497,18 @@ public class ReflexPolicy implements Policy {
         // held the Lith Harbor taxi's fare as its errand for good, and never went back to
         // Athena Pierce for its second job.
         int payableNpc = errandNpc;
+        String payableMap = errandMap;
         errandNpc = -1;
         whereItWasSent(mind, world, here, tick);
-        if (sentMap != null || errandNpc >= 0) {
+        if (errandForACalling && payableNpc >= 0) {
+            // Except an errand about its calling, which nothing it was told outranks: the Perion
+            // cab's "I'll take you to Lith Harbor" was written down as being sent there, and
+            // took a fighter away from the Warrior instructor it had come for.
+            sentMap = null;
+            sentWhy = null;
+            errandNpc = payableNpc;
+            errandMap = payableMap;
+        } else if (sentMap != null || errandNpc >= 0) {
             errandMap = null;
         } else {
             errandNpc = payableNpc;
@@ -2584,6 +2624,26 @@ public class ReflexPolicy implements Policy {
         errandMap = bestNear.equals(here) ? null : bestNear;
         rideWanted = bestNpc;
         rideTo = null;          // wherever they go back to will do
+    }
+
+    /** Where somebody offering a calling that suits it takes people. */
+    private Set<String> whereCallingsAreGiven(Mind mind) {
+        Set<String> guides = new HashSet<>();
+        for (Belief belief : mind.semantic().liveBeliefs()) {
+            if (belief.predicate().equals("offers_calling")
+                    && disposition.callingsThatSuit().contains(belief.object())) {
+                guides.add(belief.subject());
+            }
+        }
+        Set<String> rooms = new HashSet<>();
+        for (Belief belief : mind.semantic().liveBeliefs()) {
+            if (guides.contains(belief.subject())
+                    && (belief.predicate().equals("takes_you_to") || belief.predicate().equals("sends_you_to"))
+                    && belief.object().startsWith("map:")) {
+                rooms.add(belief.object());
+            }
+        }
+        return rooms;
     }
 
     /** Where somebody is known to have taken people. */
