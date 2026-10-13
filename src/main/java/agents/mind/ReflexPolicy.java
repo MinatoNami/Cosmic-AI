@@ -944,6 +944,12 @@ public class ReflexPolicy implements Policy {
      */
     private void unfinishedBusiness(List<Choice> choices, WorldModel world, Point self,
                                     Set<Integer> unfinished) {
+        // Quests wait while it goes for its calling. A talker beside the Magician's statue in
+        // Lith Harbor walked to and fro to hand a quest in elsewhere in the map, the score for
+        // it climbing with every decision it was not done, and never once spoke to the statue.
+        if (jobAdvancementPending()) {
+            return;
+        }
         errandFor(world, unfinished).ifPresent(errand -> {
             WorldModel.Entity host = errand.npc();
             double distance = host.position().distance(self);
@@ -1173,6 +1179,16 @@ public class ReflexPolicy implements Policy {
         }
         Set<String> stranders = strandedBy(mind);
         silentOnes = doesNotAnswer(mind);
+        // Whoever it came for about its calling, if they are here, before anybody else.
+        if (jobAdvancementPending()) {
+            Optional<WorldModel.Entity> calling = world.visibleNpcs().stream()
+                    .filter(npc -> npc.typeId() == errandNpc)
+                    .filter(npc -> !outOfMind(npc.position()))
+                    .findFirst();
+            if (calling.isPresent()) {
+                return calling;
+            }
+        }
         return world.visibleNpcs().stream()
                 .filter(npc -> !stranders.contains("npc:" + npc.typeId()))
                 // Nor somebody it has just failed to reach. Chosen anyway, the choice was
