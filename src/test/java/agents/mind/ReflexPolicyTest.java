@@ -1454,6 +1454,19 @@ class ReflexPolicyTest {
                 || intent instanceof Intent.Attack, "after the snail: " + intent);
     }
 
+    /** A Bowman at 17, a wanderer by temperament, hunts on the way to its second job. */
+    @Test
+    void aFirstJobShortOfTheSecondGoesHunting() {
+        world.update(new Observation.StatsChanged(1, Map.of("LEVEL", 17, "JOB", 300, "STR", 12, "DEX", 85, "INT", 4, "LUK", 4)));
+        world.update(new Observation.MonsterAppeared(2, 9001, 100100, new Point(400, 0)));
+        ReflexPolicy wanderer = new ReflexPolicy(new Random(1), Disposition.WANDERER);
+
+        Intent intent = wanderer.decide(mind, world, 3).intent();
+
+        assertTrue(intent instanceof Intent.MoveTo move && move.destination().x == 400
+                || intent instanceof Intent.Attack, "after the snail: " + intent);
+    }
+
     @Test
     void thirtyOfWhatWasAskedForIsWhatWasAskedFor() {
         java.util.function.IntUnaryOperator twelveMarbles = id -> id == 4031013 ? 12 : 0;

@@ -459,8 +459,9 @@ public class ReflexPolicy implements Policy {
      */
     private boolean shortOfMoney;
 
-    /** A beginner without the stats yet for any calling that suits it. */
+    /** A beginner without the stats yet for any calling that suits it, or a first job short of the second. */
     private boolean shortOfStats;
+    private static final int SECOND_JOB_AT = 30;
 
     static boolean shortOfMoney(Mind mind, WorldModel world) {
         int mesos = world.inventory().meso();
@@ -518,7 +519,11 @@ public class ReflexPolicy implements Policy {
         // from hunting: a wanderer five DEX short of Bowman stayed at level 13 for two hours,
         // travelling and talking, while the levels that would have brought the DEX went unearned.
         shortOfStats = world.job() == 0 && world.level() >= 10
-                && Training.shortForACalling(disposition, world).isPresent();
+                && Training.shortForACalling(disposition, world).isPresent()
+                // And in a first job short of the second, which comes at level 30 and only by
+                // levels: a Bowman by temperament a wanderer stayed at 17 in Lith Harbor,
+                // walking from one stranger to the next, while the Warrior levelled past it.
+                || world.job() > 0 && world.job() % 100 == 0 && world.level() < SECOND_JOB_AT;
         standingAt = world.selfPosition();
         boolean wasStranded = strandedHere;
         strandedHere = world.monsterCount() == 0 && decisionsHere > STRANDED_AFTER && nothingNewOnFoot(mind, world);
