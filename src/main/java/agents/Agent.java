@@ -721,7 +721,7 @@ public class Agent implements Runnable {
     private static final long RECAST_EARLY_MILLIS = 3000;
 
     private static final java.util.regex.Pattern CALLING = java.util.regex.Pattern.compile(
-            "(?i)(?:be(?:come)? an?|be the)\\s*(?:#[a-z])*\\s*(warrior|bowman|magician|thief|pirate)");
+            "(?i)(?:be(?:come)? an?|be the)\\s*(?:#[a-z])*\\s*(warrior|bowman|archer|magician|mage|thief|rogue|pirate)\\b");
 
     /** The calling an NPC is offering, if it is offering one: "want to be a #bMagician#k?" */
     static Optional<String> callingOffered(String said) {
@@ -733,7 +733,7 @@ public class Agent implements Runnable {
         // Bowman in Henesys, a Magician in Ellinia, a Warrior in Perion...", and three agents
         // took it for an offer of the first, cut it off, and wrote it down as offering Bowman.
         long named = CALLING_NAME.matcher(said).results()
-                .map(name -> name.group().toLowerCase()).distinct().count();
+                .map(name -> callingNamed(name.group())).distinct().count();
         if (named > 1) {
             return Optional.empty();
         }
@@ -753,7 +753,7 @@ public class Agent implements Runnable {
         // Pointing you to somebody else is advice: "You want to become a Warrior? Hmmm, then I
         // suggest you head over to Perion" is a Maple Island helper's answer to a question.
         boolean sendsYouOn = ADVICE.matcher(said).find();
-        return putToYou && !sendsYouOn ? Optional.of(calling.group(1).toLowerCase()) : Optional.empty();
+        return putToYou && !sendsYouOn ? Optional.of(callingNamed(calling.group(1))) : Optional.empty();
     }
 
     private static final java.util.regex.Pattern ADVICE = java.util.regex.Pattern.compile(
@@ -772,7 +772,21 @@ public class Agent implements Runnable {
             "(?i)\\b(want|wanna|decided|would you|will you|ready to|like to)\\b");
 
     private static final java.util.regex.Pattern CALLING_NAME = java.util.regex.Pattern.compile(
-            "(?i)(warrior|bowman|magician|thief|pirate)");
+            "(?i)(warrior|bowman|archer|magician|mage\\b|thief|rogue|pirate)");
+
+    /**
+     * A calling by the name the statues give it. The Dark Lord asks "Wanna be the Rogue?",
+     * and a forager with the DEX for it turned him down for not having been asked about
+     * thieving at all.
+     */
+    static String callingNamed(String said) {
+        return switch (said.toLowerCase()) {
+            case "rogue" -> "thief";
+            case "archer" -> "bowman";
+            case "mage" -> "magician";
+            default -> said.toLowerCase();
+        };
+    }
 
     /**
      * Reads again, with today's reading, the words each "offers a calling" belief rests on,
@@ -1015,6 +1029,11 @@ public class Agent implements Runnable {
      * nobody drops - and those would otherwise keep an agent refusing the one way on for good.
      */
     private static final int STAY_FOR_AT_MOST = 4;
+
+    /** The NPC offering it a calling that suits it, and when, to see the conversation through. */
+    private int callingTalkWith = -1;
+    private int callingTalkAt = Integer.MIN_VALUE / 2;
+    private static final int CALLING_TALK = 60;
     private final java.util.Map<Integer, Integer> stayedFor = new java.util.HashMap<>();
 
     /**
@@ -1100,12 +1119,20 @@ public class Agent implements Runnable {
             reply(dialogue.style(), isAQuestion(dialogue.style()) ? NPC_NO : NPC_CLOSE, NO_SELECTION);
             return;
         }
-        // And a calling that suits it, asked outright, is a yes - not a question for a model
-        // that might think the moment wrong.
-        if (world.job() == 0 && offered.isPresent() && isAQuestion(dialogue.style())
+        // And a calling that suits it is seen through by the agent itself, not left to a model
+        // that might think the moment wrong: yes when asked, and on through what follows. The
+        // Warrior's and Bowman's instructors never ask - "Do you want to become a warrior?" is a
+        // statement, then "It is an important and final choice", then the job - and closing any
+        // of those lines is turning the calling down.
+        if (world.job() == 0 && offered.isPresent()
                 && (disposition.callingsThatSuit().contains(offered.get())
                     || world.level() >= agents.mind.Disposition.ANY_CALLING_AFTER)) {
+            callingTalkWith = dialogue.npcId();
+            callingTalkAt = steps;
             log.info("{} says yes to npc:{} - a {} is what it wants to be", mind.name(), dialogue.npcId(), offered.get());
+        }
+        if (world.job() == 0 && dialogue.npcId() == callingTalkWith && steps - callingTalkAt < CALLING_TALK
+                && dialogue.style() != MENU) {
             noteAnswer(dialogue.npcId(), dialogue.style(), NPC_YES_OR_NEXT);
             reply(dialogue.style(), NPC_YES_OR_NEXT, NO_SELECTION);
             return;

@@ -150,6 +150,10 @@ class AgentAnswersTest {
         assertEquals(java.util.Optional.of("bowman"), Agent.callingOffered(
                 "So you decided to become a #rbowman#k? There are some standards to meet, y'know..."));
         assertEquals(java.util.Optional.empty(), Agent.callingOffered("Do you want to get out of Happyville?"));
+        assertEquals(java.util.Optional.of("thief"), Agent.callingOffered(
+                "Oh...! You look like someone that can definitely be a part of us... all you need is a little "
+                        + "sinister mind, and... yeah... so, what do you think? Wanna be the Rogue?"),
+                "the Dark Lord calls it Rogue");
         assertEquals(java.util.Optional.empty(), Agent.callingOffered(
                 "Once you train hard enough, you will be entitled to occupy a job. You can become a Bowman in "
                         + "Henesys, a Magician in Ellinia, a Warrior in Perion, and a Thief in Kerning City..."),
