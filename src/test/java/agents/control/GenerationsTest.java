@@ -46,6 +46,9 @@ class GenerationsTest {
         mindOf(Population.INHERITANCE, new String[][]{
                 {"map:10000", "has_door", "east00"},
         });
+        java.nio.file.attribute.FileTime made = java.nio.file.attribute.FileTime.from(
+                java.time.Instant.parse("2026-09-28T00:13:15Z"));
+        Files.setLastModifiedTime(data.resolve("minds").resolve(Population.INHERITANCE), made);
         Population population = new Population("localhost", 0, data);
 
         population.condense();
@@ -74,6 +77,8 @@ class GenerationsTest {
         String archived = (String) condense.get("previousInheritance");
         assertNotNull(archived);
         assertTrue(Files.isRegularFile(data.resolve(archived)));
+        assertEquals(made, Files.getLastModifiedTime(data.resolve(archived)),
+                "the archived one keeps the time it was made, not the time it was copied");
         assertEquals(1, Files.list(data.resolve("minds"))
                 .filter(p -> p.getFileName().toString().startsWith("inherited")).count());
     }

@@ -91,7 +91,10 @@ public class Generations {
             String archived = "inherited." + STAMP.format(
                     Files.getLastModifiedTime(inheritance).toInstant()) + ".mind";
             Files.createDirectories(past);
-            Files.copy(inheritance, past.resolve(archived), StandardCopyOption.REPLACE_EXISTING);
+            // With its file time, which is when it was made: the page reads that back as the
+            // snapshot's date, and a copy stamped with today labelled an old inheritance as new.
+            Files.copy(inheritance, past.resolve(archived), StandardCopyOption.REPLACE_EXISTING,
+                    StandardCopyOption.COPY_ATTRIBUTES);
             return PAST_INHERITANCES + "/" + archived;
         } catch (IOException e) {
             // Losing the old copy is a pity; refusing to condense over it would be worse.
