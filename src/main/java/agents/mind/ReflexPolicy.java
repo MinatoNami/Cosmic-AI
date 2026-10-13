@@ -965,7 +965,7 @@ public class ReflexPolicy implements Policy {
                     + commitmentTo("errand", host.position());
             if (!IntentExecutor.canSpeakTo(world.mapId(), self, host.position(), NPC_RANGE)) {
                 Point where = host.position();
-                choices.add(new Choice("errand", new Intent.MoveTo(host.position()),
+                choices.add(new Choice("errand", new Intent.MoveTo(approach(world, self, host.position())),
                         "go back to the one I owe something", score,
                         () -> settingOff("errand", where)));
                 return;
@@ -1381,6 +1381,35 @@ public class ReflexPolicy implements Policy {
         return met;
     }
 
+    /**
+     * Where to walk to speak to somebody: where they stand, or - when nothing walks there -
+     * below them along its own floor, from where they can be clicked as a player would.
+     * Dances with Balrog stands on a ledge in the Warriors' Sanctuary that no floor reaches;
+     * a fighter walked at the ledge until it gave up, and left without the Warrior's calling.
+     */
+    private static Point approach(WorldModel world, Point self, Point npc) {
+        int map = world.mapId();
+        if (agents.world.MapGeometry.groundIn(map).isEmpty() || agents.world.Navigator.nextStep(map, self, npc).isPresent()
+                || self.distance(npc) < NPC_RANGE) {
+            return npc;
+        }
+        // The floors beneath them, nearest first, for the first one there is a way to.
+        for (int below = npc.y + FLOOR_GAP; below < npc.y + ON_SCREEN_BELOW; below += FLOOR_GAP) {
+            Optional<Integer> floor = agents.world.Navigator.floorHeight(map, new Point(npc.x, below));
+            if (floor.isPresent() && floor.get() > npc.y) {
+                Point stand = new Point(npc.x, floor.get());
+                if (stand.distance(self) < NPC_RANGE || agents.world.Navigator.nextStep(map, self, stand).isPresent()) {
+                    return stand;
+                }
+                below = Math.max(below, floor.get());
+            }
+        }
+        return new Point(npc.x, agents.world.Navigator.heightAlongFloor(map, self, npc.x).orElse(self.y));
+    }
+
+    private static final int FLOOR_GAP = 10;
+    private static final int ON_SCREEN_BELOW = 300;
+
     private void someoneToTalkTo(List<Choice> choices, WorldModel world, Mind mind, Point self) {
         worthTalkingTo(world, mind, self).ifPresent(npc -> {
             double distance = npc.position().distance(self);
@@ -1411,7 +1440,7 @@ public class ReflexPolicy implements Policy {
 
             if (!IntentExecutor.canSpeakTo(world.mapId(), self, npc.position(), NPC_RANGE)) {
                 Point where = npc.position();
-                choices.add(new Choice("talk", new Intent.MoveTo(npc.position()),
+                choices.add(new Choice("talk", new Intent.MoveTo(approach(world, self, npc.position())),
                         "go and see what that one wants", score,
                         () -> settingOff("talk", where)));
                 return;
@@ -2713,9 +2742,12 @@ public class ReflexPolicy implements Policy {
             return false;
         }
         int npcId = npcIdIn(hop.firstDoor());
-        if (decisionsMade - rideAskedAt.getOrDefault(npcId, -ASK_FOR_A_RIDE_AGAIN) < ASK_FOR_A_RIDE_AGAIN
-                && rideWanted != npcId) {
-            return false;       // asked them lately and it came to nothing
+        if (decisionsMade - rideAskedAt.getOrDefault(npcId, -ASK_FOR_A_RIDE_AGAIN) < ASK_FOR_A_RIDE_AGAIN) {
+            // Asked them lately and it came to nothing - or is coming to something, which the
+            // conversation, answered as a ride, sees through without asking again. Letting the
+            // ride wanted ask regardless had a fighter ask the Thief's statue for its ride, and
+            // turn the Thief's calling down, every step for as long as it stood there.
+            return false;
         }
         String landing = known.exitTo(here, hop.firstDoor()).orElse(null);
         Optional<WorldModel.Entity> npc = world.visibleNpcs().stream().filter(n -> n.typeId() == npcId).findFirst();
