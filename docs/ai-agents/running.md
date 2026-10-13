@@ -183,7 +183,14 @@ A generation that was reset without being condensed can still be passed on from 
 `POST /api/condense?from=minds.backup-<date>-generation` folds the minds in that folder into the
 standing inheritance (leaving out the backup's own, older copy of it). This one is allowed while
 agents run, since none of them is writing those minds and a running agent never reads the
-inheritance. To read the recordings
+inheritance.
+
+When the way minds are merged changes, the inheritance can be made again from an archived one
+through the backed-up generations, in order:
+`POST /api/inheritance/rebuild?base=inherited.<stamp>.mind&from=minds.backup-<a>,minds.backup-<b>`.
+The inheritance it replaces is archived first and every step is in the ledger. A merge counts
+witnesses: an agent's own sightings are a new one, named for the merge, and what it only
+inherited counts as the witnesses it inherited it from, so a merge never weakens a belief. To read the recordings
 without condensing:
 
 ```bash
