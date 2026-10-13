@@ -1399,6 +1399,22 @@ class ReflexPolicyTest {
         assertEquals("map:20000", policy.errandMap(), "the Bowman's statue");
     }
 
+    /** A jobless fighter at 18 goes to the statue before the medal quest that never finishes. */
+    @Test
+    void aBeginnerGoesForACallingBeforeAQuestHandIn() {
+        aJunction();
+        mind.take(new Observation.QuestStateChanged(2, 1021, 1));
+        mind.saw("npc:2000", "present_in", "map:30000", 2);
+        mind.saw("npc:9201123", "present_in", "map:20000", 3);
+        mind.hear("npc:9201123", "wants_first", "level 10, STR 35", 3);
+        world.update(new Observation.MapEntered(10, 10000, 0));
+        world.update(new Observation.StatsChanged(10, Map.of("LEVEL", 18, "JOB", 0, "STR", 89, "DEX", 13)));
+        ReflexPolicy policy = new ReflexPolicy(new Random(1), Disposition.FIGHTER);
+        policy.decide(mind, world, 11);
+
+        assertEquals("map:20000", policy.errandMap(), "the statue, not Roger");
+    }
+
     @Test
     void thirtyOfWhatWasAskedForIsWhatWasAskedFor() {
         java.util.function.IntUnaryOperator twelveMarbles = id -> id == 4031013 ? 12 : 0;

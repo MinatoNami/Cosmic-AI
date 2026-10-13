@@ -2375,7 +2375,11 @@ public class ReflexPolicy implements Policy {
         // price that is not a calling. Nothing took an agent to anybody it owed except
         // stumbling on them: Roger in Snail Garden and Sen in his house in Mushroom Town were
         // never gone back to, and every agent stood at the ferry with both quests open.
-        if (bestRank < BEST_ERRAND) {
+        // But not before a calling: a beginner's errand to anybody who named a calling's stats
+        // stands. Agent1, a level-18 fighter with STR 89, gave its errands to medal quests
+        // whose NPC only ever says the ranking is unavailable, and went on a world tour
+        // instead of to the Warrior's statue.
+        if (bestRank < CALLING_ERRAND) {
             Optional<String[]> owed = questToHandIn(mind, world, here);
             if (owed.isPresent()) {
                 errandNpc = Integer.parseInt(owed.get()[0]);
@@ -2455,6 +2459,9 @@ public class ReflexPolicy implements Policy {
     /** A beginner's errand to somebody offering a calling that suits it: nothing beats it. */
     private static final int BEST_ERRAND = 3;
 
+    /** A beginner's errand to somebody who named a calling's stats, offer not yet heard. */
+    private static final int CALLING_ERRAND = 2;
+
     /**
      * How much a payable errand is worth running, or -1 for not at all.
      *
@@ -2475,7 +2482,7 @@ public class ReflexPolicy implements Policy {
             }
             return world.level() >= Disposition.ANY_CALLING_AFTER ? 1 : -1;
         }
-        return STAT_ASKED.matcher(asked.object()).find() ? 2 : 0;
+        return STAT_ASKED.matcher(asked.object()).find() ? CALLING_ERRAND : 0;
     }
 
     /** The calling an NPC has been heard offering, if any. */
