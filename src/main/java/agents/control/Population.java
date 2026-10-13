@@ -139,6 +139,9 @@ public class Population {
             throw new IllegalStateException("Already running - stop first");
         }
         this.policyName = requestedPolicy == null ? "reflex" : requestedPolicy.toLowerCase();
+        // A fresh start is a fresh allowance: whatever kept an agent falling over may be fixed.
+        relaunches = new Relaunches();
+        givenUpOn.clear();
         // The field, not a local. A local here shadowed it, wake() read the field, and so
         // every agent was built with a null oracle and quietly ran on the reflex while the
         // status endpoint reported "local" and the log said the model had been found. The
@@ -231,14 +234,29 @@ public class Population {
      * The mind is carried across rather than reloaded, so being rescued costs the agent
      * nothing it had learned. The old session is stopped and joined before the new login,
      * because two sessions for one character is the failure this class exists to avoid.
+     *
+     * <p>Also brings back any agent that has left the world without being asked to: the
+     * server dropped its session, or it fell over. Nothing else would - its thread has
+     * ended, and until this it stayed ended until the daemon restarted. Three agents went
+     * that way after every restart on 13 October, dropped as idle while route planning read
+     * the game data, and the population ran on one agent until somebody noticed.
      */
     private synchronized void rescueTheTrapped() {
         for (Running stuck : List.copyOf(running)) {
-            boolean trapped = stuck.agent().isTrapped();
-            if (!trapped && !stuck.agent().isStalled()) {
+            boolean gone = !stuck.thread().isAlive();
+            boolean trapped = !gone && stuck.agent().isTrapped();
+            if (!gone && !trapped && !stuck.agent().isStalled()) {
                 continue;
             }
-            log.warn(trapped ? "{} is in map {} with no way out - logging it back in"
+            if (gone && relaunches.exhausted(stuck.name(), System.currentTimeMillis())) {
+                if (givenUpOn.add(stuck.name())) {
+                    log.error("{} has left the world {} times in the last hour - leaving it out"
+                            + " until the agents are restarted", stuck.name(), Relaunches.PER_HOUR);
+                }
+                continue;
+            }
+            log.warn(gone ? "{} left the world in map {} - logging it back in"
+                            : trapped ? "{} is in map {} with no way out - logging it back in"
                             : "{} has made no progress in map {} for forty minutes - logging it back in",
                     stuck.name(), stuck.agent().world().mapId());
             long reachedTick = stuck.agent().tick();
@@ -251,9 +269,17 @@ public class Population {
             }
             running.remove(stuck);
             if (!logBackIn(stuck, reachedTick)) {
+                if (gone) {
+                    // Kept on the roster, still saved and still shown as not alive, so the
+                    // next pass tries again - the likeliest reason is a server that is down.
+                    running.add(stuck);
+                    continue;
+                }
                 // Its mind is still held and still saved; it simply is not in the world.
                 // Better than a half-started agent nobody can stop.
                 stuck.mind().close();
+            } else if (gone) {
+                relaunches.relaunched(stuck.name(), System.currentTimeMillis());
             }
         }
     }
@@ -316,6 +342,10 @@ public class Population {
         log.error("{} could not be logged back in at all", stuck.name());
         return false;
     }
+
+    private Relaunches relaunches = new Relaunches();
+    /** Agents past their relaunches for the hour, so that is said once rather than every minute. */
+    private final java.util.Set<String> givenUpOn = new java.util.HashSet<>();
 
     /** Enough tries, with backoff, to outlast the server holding a disconnected account. */
     private static final int LOGIN_ATTEMPTS = 5;
