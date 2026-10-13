@@ -169,4 +169,47 @@ class GenerationsTest {
         assertEquals(null, population.compare("inherited.20990101T000000Z.mind", "current"));
         assertNotNull(population.compare("current", "current"));
     }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void aBackedUpGenerationCanBeFoldedInLater() throws Exception {
+        mindOf(Population.INHERITANCE, new String[][]{{"map:10000", "has_door", "east00"}});
+        Path backup = data.resolve("minds.backup-2026-10-03-generation");
+        Files.createDirectories(backup);
+        Files.copy(data.resolve("minds").resolve(Population.INHERITANCE),
+                backup.resolve(Population.INHERITANCE));
+        mindOf("Agent0.mind", new String[][]{
+                {"map:10000", "has_door", "east00"},
+                {"monster:100100", "gives_exp", "3"},
+        });
+        Files.move(data.resolve("minds").resolve("Agent0.mind"), backup.resolve("Agent0.mind"));
+        Population population = new Population("localhost", 0, data);
+
+        population.condenseFrom("minds.backup-2026-10-03-generation");
+
+        Map<String, Object> entry = population.generations().read().get(0);
+        assertEquals("minds.backup-2026-10-03-generation", entry.get("foldedFrom"));
+        List<Map<String, Object>> sources = (List<Map<String, Object>>) entry.get("sources");
+        // The backup's own copy of the inheritance is left out; the standing one goes in.
+        assertEquals(List.of("Agent0.mind", "inherited.mind"),
+                sources.stream().map(s -> s.get("file")).toList());
+        assertEquals(1, sources.get(0).get("notInLastInheritance"));
+        assertEquals(2, entry.get("inherited"));
+    }
+
+    @Test
+    void onlyABackupFolderCanBeFoldedIn() throws Exception {
+        mindOf("Agent0.mind", new String[][]{{"map:10000", "has_door", "east00"}});
+        Population population = new Population("localhost", 0, data);
+
+        for (String bad : new String[]{"minds", "../minds", "minds.backup-../x", "minds.backup-none"}) {
+            try {
+                population.condenseFrom(bad);
+                throw new AssertionError("folded from " + bad);
+            } catch (IllegalArgumentException expected) {
+                // refused
+            }
+        }
+        assertTrue(population.generations().read().isEmpty());
+    }
 }

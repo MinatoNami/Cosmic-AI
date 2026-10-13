@@ -177,7 +177,13 @@ including a reset that failed halfway. The inheritance a condense replaces is ke
 `agents-data/inheritance/inherited.<UTC stamp it was made>.mind`, so any two consolidations can
 be compared. The **Generations** tab on the knowledge page (`/knowledge.html?view=generations`)
 shows both: the ledger as a timeline, and what any two inheritances differ by, belief by belief
-(`GET /api/inheritance/compare?from=<name>&to=<name>`, `current` for the standing one). To read the recordings
+(`GET /api/inheritance/compare?from=<name>&to=<name>`, `current` for the standing one).
+
+A generation that was reset without being condensed can still be passed on from its backup:
+`POST /api/condense?from=minds.backup-<date>-generation` folds the minds in that folder into the
+standing inheritance (leaving out the backup's own, older copy of it). This one is allowed while
+agents run, since none of them is writing those minds and a running agent never reads the
+inheritance. To read the recordings
 without condensing:
 
 ```bash

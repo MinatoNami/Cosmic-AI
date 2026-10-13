@@ -699,7 +699,7 @@ function eventSummary(e) {
     const fromAgents = (e.sources || []).filter(s => !/^inherited/.test(s.file) && s.file !== 'demonstrated.mind');
     const parts = [`${num(e.inherited ?? 0)} beliefs inherited`];
     if (e.beliefsBefore !== undefined && e.inherited !== undefined) parts.push(`${num(e.inherited - e.beliefsBefore)} more than before`);
-    if (e.sources) parts.push(`from ${fromAgents.length} agent${fromAgents.length === 1 ? '' : 's'}`);
+    if (e.sources) parts.push(`from ${fromAgents.length} agent${fromAgents.length === 1 ? '' : 's'}${e.foldedFrom ? ` kept in ${e.foldedFrom}` : ''}`);
     if (e.demonstrationSessions) parts.push(`${e.demonstrationSessions} recorded sessions`);
     return parts.join(', ');
   }

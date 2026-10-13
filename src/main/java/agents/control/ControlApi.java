@@ -131,7 +131,11 @@ public class ControlApi {
             return;
         }
         try {
-            agents.memory.Inheritance.Merged merged = population.condense();
+            // ?from=minds.backup-<date> folds a generation's backed-up minds in instead of
+            // the current one's.
+            String from = query(exchange.getRequestURI()).get("from");
+            agents.memory.Inheritance.Merged merged = from == null
+                    ? population.condense() : population.condenseFrom(from);
             send(exchange, 200, Map.of(
                     "mindsRead", merged.minds(),
                     "beliefsRead", merged.beliefsRead(),
@@ -141,6 +145,9 @@ public class ControlApi {
                             ? "no saved minds to condense - have the agents run and stopped?"
                             : "the next generation will be born knowing " + merged.beliefsKept()
                               + " things"));
+        } catch (IllegalArgumentException e) {
+            // A folder that is not a backup, or has no minds in it: the caller's mistake.
+            send(exchange, 400, Map.of("error", String.valueOf(e.getMessage())));
         } catch (RuntimeException e) {
             log.error("Condense failed", e);
             send(exchange, 409, Map.of("error", String.valueOf(e.getMessage())));

@@ -410,7 +410,43 @@ public class Population {
                     demonstrations.beliefs());
             sources.add(demonstrated);
         }
+        return fold(sources, demonstrations, null);
+    }
 
+    /** A backup folder beside the minds, as the new-generation routine names them. */
+    private static final java.util.regex.Pattern BACKUP =
+            java.util.regex.Pattern.compile("minds\\.backup-[A-Za-z0-9-]{1,64}");
+
+    /**
+     * Folds the minds kept in a backup folder into the inheritance.
+     *
+     * For a generation that was reset without being condensed: its minds were copied aside
+     * but never passed on. The backup's own copy of the inheritance is left out - it is an
+     * older one, already part of the standing inheritance.
+     *
+     * Allowed while agents run, unlike {@link #condense()}: nothing here is a mind a living
+     * agent is still writing, and a running agent never reads the inheritance - only one
+     * born without a mind of its own does, at start.
+     */
+    public synchronized Inheritance.Merged condenseFrom(String folder) {
+        if (folder == null || !BACKUP.matcher(folder).matches()) {
+            throw new IllegalArgumentException("not a backup folder: " + folder);
+        }
+        Path backup = minds.getParent().resolve(folder);
+        List<Path> sources = new ArrayList<>(Inheritance.mindsIn(backup, INHERITANCE));
+        if (sources.isEmpty()) {
+            throw new IllegalArgumentException("no minds in " + folder);
+        }
+        Path standing = minds.resolve(INHERITANCE);
+        if (Files.isRegularFile(standing)) {
+            sources.add(standing);
+        }
+        return fold(sources, null, folder);
+    }
+
+    private Inheritance.Merged fold(List<Path> sources, Demonstrations.Read demonstrations,
+                                    String foldedFrom) {
+        Path standing = minds.resolve(INHERITANCE);
         // Sizes taken before the merge, because the standing inheritance is about to be
         // written over and its size afterwards says nothing about what went in.
         Map<String, Long> bytes = new LinkedHashMap<>();
@@ -436,6 +472,9 @@ public class Population {
             contributed.add(one);
         }
         Map<String, Object> entry = new LinkedHashMap<>();
+        if (foldedFrom != null) {
+            entry.put("foldedFrom", foldedFrom);
+        }
         entry.put("mindsRead", merged.minds());
         entry.put("beliefsRead", merged.beliefsRead());
         entry.put("inherited", merged.beliefsKept());
