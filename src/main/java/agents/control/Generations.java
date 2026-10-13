@@ -29,7 +29,7 @@ import java.util.Map;
  * dying halfway through, and nothing ever needs to rewrite history.
  *
  * Each inheritance a condense replaces is kept beside the ledger, named by when it was
- * replaced, so any two consolidations can be compared rather than only the latest.
+ * made, so any two consolidations can be compared rather than only the latest.
  */
 public class Generations {
     private static final Logger log = LoggerFactory.getLogger(Generations.class);
@@ -76,19 +76,20 @@ public class Generations {
      * Copies the inheritance about to be replaced into the archive.
      *
      * A copy rather than a move, because the standing inheritance is one of the sources the
-     * condense is about to read.
+     * condense is about to read. Named by when it was made - the condense that wrote it -
+     * rather than when it was replaced, because "the inheritance of the 28th" is what
+     * somebody comparing generations is looking for.
      *
-     * @return the archived file's name, or null if there was nothing to keep
+     * @return the archived file's path relative to the data directory, or null if there was
+     *         nothing to keep
      */
     public String archive(Path inheritance) {
         if (!Files.isRegularFile(inheritance)) {
             return null;
         }
-        String name = inheritance.getFileName().toString();
-        int dot = name.lastIndexOf('.');
-        String archived = name.substring(0, dot) + "." + STAMP.format(Instant.now())
-                + name.substring(dot);
         try {
+            String archived = "inherited." + STAMP.format(
+                    Files.getLastModifiedTime(inheritance).toInstant()) + ".mind";
             Files.createDirectories(past);
             Files.copy(inheritance, past.resolve(archived), StandardCopyOption.REPLACE_EXISTING);
             return PAST_INHERITANCES + "/" + archived;
@@ -97,6 +98,61 @@ public class Generations {
             log.warn("Could not archive {} before replacing it", inheritance, e);
             return null;
         }
+    }
+
+    /** An inheritance that can be compared with another: a past one, or the one standing. */
+    public record Snapshot(String name, String madeAt, long bytes) {
+    }
+
+    public static final String STANDING = "current";
+
+    /** Every inheritance there is to compare, oldest first, the standing one last. */
+    public List<Snapshot> snapshots(Path standing) {
+        List<Snapshot> all = new ArrayList<>();
+        if (Files.isDirectory(past)) {
+            try (var entries = Files.list(past)) {
+                for (Path p : entries.sorted().toList()) {
+                    if (ARCHIVED.matcher(p.getFileName().toString()).matches()) {
+                        all.add(snapshotOf(p.getFileName().toString(), p));
+                    }
+                }
+            } catch (IOException e) {
+                log.warn("Could not list {}", past, e);
+            }
+        }
+        if (Files.isRegularFile(standing)) {
+            all.add(snapshotOf(STANDING, standing));
+        }
+        return all;
+    }
+
+    private static Snapshot snapshotOf(String name, Path file) {
+        try {
+            return new Snapshot(name, Files.getLastModifiedTime(file).toInstant().toString(),
+                    Files.size(file));
+        } catch (IOException e) {
+            return new Snapshot(name, null, -1);
+        }
+    }
+
+    private static final java.util.regex.Pattern ARCHIVED =
+            java.util.regex.Pattern.compile("inherited\\.\\d{8}T\\d{6}Z\\.mind");
+
+    /**
+     * The file behind a snapshot's name, or null for a name that is not one.
+     *
+     * Names come from a query string, so only the exact archive pattern is accepted - never
+     * a path - and nothing outside the archive can be read through this.
+     */
+    public Path resolve(String name, Path standing) {
+        if (STANDING.equals(name)) {
+            return Files.isRegularFile(standing) ? standing : null;
+        }
+        if (name == null || !ARCHIVED.matcher(name).matches()) {
+            return null;
+        }
+        Path file = past.resolve(name);
+        return Files.isRegularFile(file) ? file : null;
     }
 
     /**

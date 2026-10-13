@@ -118,4 +118,51 @@ class GenerationsTest {
         assertEquals(List.of(Map.of("file", "Agent0.mind", "bytes", 10)),
                 events.get(0).get("mindsForgotten"));
     }
+
+    @Test
+    void twoInheritancesAreComparedByWhatTheySay() throws Exception {
+        mindOf("Agent0.mind", new String[][]{
+                {"portal:10000/east00", "leads_to", "map:20000"},
+                {"npc:22000", "runs_shop", "shop:1"},
+        });
+        Population population = new Population("localhost", 0, data);
+        population.condense();
+        // Pretend the first inheritance was made an hour ago, so the second gets its own name.
+        Path standing = data.resolve("minds").resolve(Population.INHERITANCE);
+        Files.setLastModifiedTime(standing, java.nio.file.attribute.FileTime.from(
+                java.time.Instant.now().minusSeconds(3600)));
+
+        population.forgetMinds();
+        mindOf("Agent0.mind", new String[][]{
+                {"portal:10000/east00", "leads_to", "map:20000"},
+                {"monster:100100", "drops", "item:2000000"},
+        });
+        population.condense();
+
+        List<Generations.Snapshot> snapshots = population.inheritances();
+        assertEquals(2, snapshots.size());
+        assertEquals(Generations.STANDING, snapshots.get(1).name());
+
+        Population.InheritanceDiff diff = population.compare(snapshots.get(0).name(), "current");
+        assertEquals(2, diff.beliefsBefore());
+        assertEquals(3, diff.beliefsAfter());
+        assertEquals(List.of("drops"), diff.added().stream().map(Population.BeliefView::predicate).toList());
+        assertTrue(diff.removed().isEmpty(), "the standing inheritance is a source, so nothing is lost");
+        // Said again by the new generation, so it now rests on two sources rather than one.
+        assertEquals(1, diff.changed().size());
+        assertEquals("leads_to", diff.changed().get(0).belief().predicate());
+        assertEquals(1, diff.changed().get(0).evidenceBefore());
+        assertEquals(1, diff.unchanged());
+    }
+
+    @Test
+    void onlyArchivedNamesCanBeCompared() throws Exception {
+        mindOf("Agent0.mind", new String[][]{{"map:10000", "has_door", "east00"}});
+        Population population = new Population("localhost", 0, data);
+        population.condense();
+
+        assertEquals(null, population.compare("../minds/Agent0.mind", "current"));
+        assertEquals(null, population.compare("inherited.20990101T000000Z.mind", "current"));
+        assertNotNull(population.compare("current", "current"));
+    }
 }

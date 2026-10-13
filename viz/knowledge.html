@@ -119,6 +119,12 @@
   .empty { color: var(--ink-faint); font-style: italic; padding: 12px 14px; }
   .more { padding: 8px 14px; font-size: 12px; color: var(--ink-faint); }
   .two { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; }
+  .tab.gen { border-style: dashed; }
+  .tab.gen.on { border-style: solid; }
+  .pickers { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+  .pickers select { max-width: 100%; }
+  .chip.on { background: var(--accent-soft); color: var(--accent); }
+  .why { font-size: 13px; color: var(--ink-soft); margin: 0 0 8px; }
   .err { margin: 16px; padding: 12px 14px; border-radius: var(--radius); background: var(--danger-soft); color: var(--danger); }
   @media (max-width: 1100px) { .two { grid-template-columns: 1fr; } }
   @media (max-width: 900px) { .who { grid-template-columns: 1fr; } }
@@ -142,7 +148,10 @@
 /* Everything here is read from the daemon: /api/status for who is out there and what they
    are doing, /api/beliefs/<name> for what one of them currently holds true. Beliefs arrive
    as triples - subject, predicate, object - with the ids underneath the names, and this page
-   only regroups them by what they are about. It works nothing out that the agent has not. */
+   only regroups them by what they are about. It works nothing out that the agent has not.
+   The Generations view reads /api/generations - the ledger of every condense and reset, and
+   the inheritances there are to compare - and /api/inheritance/compare for what one
+   inheritance holds that another does not. */
 
 const REFRESH_MS = 30000;
 const PER_TABLE = 150;
@@ -158,6 +167,9 @@ const state = {
   open: new Set(),            // expanded table rows, by section:key
   sort: {},                   // section -> column index
   shown: {},                  // section -> how many rows to show
+  view: new URLSearchParams(location.search).get('view') === 'generations' ? 'generations' : 'agent',
+  gens: null,                 // /api/generations
+  compare: { from: null, to: null, diff: null, key: null, mode: 'added', predicate: null, query: '' },
 };
 
 const $ = (sel, root = document) => root.querySelector(sel);
@@ -181,7 +193,9 @@ async function load(quiet) {
       const wanted = new URLSearchParams(location.search).get('agent');
       state.agent = state.agents.some(a => a.name === wanted) ? wanted : state.agents[0]?.name ?? null;
     }
-    if (state.agent) {
+    if (state.view === 'generations') {
+      await loadGenerations();
+    } else if (state.agent) {
       const held = await json(`/api/beliefs/${encodeURIComponent(state.agent)}`);
       state.beliefs = held.beliefs || [];
     } else {
@@ -198,14 +212,56 @@ async function load(quiet) {
 }
 
 function pick(name) {
-  if (name === state.agent) return;
+  if (name === state.agent && state.view === 'agent') return;
+  state.view = 'agent';
   state.agent = name;
   state.open.clear();
   state.shown = {};
   const url = new URL(location.href);
   url.searchParams.set('agent', name);
+  url.searchParams.delete('view');
   history.replaceState(null, '', url);
   $('#main').innerHTML = `<div class="empty">Loading what ${esc(name)} knows...</div>`;
+  load();
+}
+
+async function loadGenerations() {
+  state.gens = await json('/api/generations');
+  const names = (state.gens.inheritances || []).map(i => i.name);
+  const c = state.compare;
+  const asked = new URLSearchParams(location.search);
+  if (!names.includes(c.from)) c.from = names.includes(asked.get('from')) ? asked.get('from') : names[names.length - 2] ?? names[0] ?? null;
+  if (!names.includes(c.to)) c.to = names.includes(asked.get('to')) ? asked.get('to') : names[names.length - 1] ?? null;
+  // The standing inheritance changes under the same name when a condense runs, so its
+  // size is part of what makes a comparison stale.
+  const sized = n => `${n}@${state.gens.inheritances.find(i => i.name === n)?.bytes}`;
+  const key = c.from && c.to ? `${sized(c.from)}>${sized(c.to)}` : null;
+  if (key && key !== c.key) {
+    c.diff = await json(`/api/inheritance/compare?from=${encodeURIComponent(c.from)}&to=${encodeURIComponent(c.to)}`);
+    c.key = key;
+  }
+}
+
+function showGenerations() {
+  state.view = 'generations';
+  state.open.clear();
+  state.shown = {};
+  const url = new URL(location.href);
+  url.searchParams.set('view', 'generations');
+  url.searchParams.delete('agent');
+  history.replaceState(null, '', url);
+  $('#main').innerHTML = `<div class="empty">Loading the generations...</div>`;
+  load();
+}
+
+function compareWith(side, name) {
+  state.compare[side] = name;
+  state.compare.predicate = null;
+  state.shown = {};
+  const url = new URL(location.href);
+  url.searchParams.set('from', state.compare.from);
+  url.searchParams.set('to', state.compare.to);
+  history.replaceState(null, '', url);
   load();
 }
 
@@ -622,11 +678,163 @@ function renderEverything(m) {
   ], r => `<div class="muted">${esc(SOURCES[r.b.provenance]?.label)}, confidence ${Math.round(r.b.confidence * 100)}%, ${r.b.evidence} piece${r.b.evidence === 1 ? '' : 's'} of evidence. Ids: <code>${esc(r.b.subjectRef ?? '?')}</code> ${esc(r.b.predicate)} <code>${esc(r.b.objectRef ?? '?')}</code> (${esc(r.b.id)})</div>`);
 }
 
+/* ---------------------------------------------------------------- generations */
+
+const kb = n => n < 0 ? '?' : n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`;
+const when = iso => iso ? new Date(iso).toLocaleString([], { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '?';
+const said = p => esc(String(p).replace(/_/g, ' '));
+
+/* Which generation each event belongs to: a reset ends one and the next begins. */
+function numbered(events) {
+  let gen = 1;
+  return events.map((e, i) => {
+    const row = { key: String(i), e, gen, at: Date.parse(e.at) || 0 };
+    if (e.event === 'reset') gen++;
+    return row;
+  });
+}
+
+function eventSummary(e) {
+  if (e.event === 'condense') {
+    const fromAgents = (e.sources || []).filter(s => !/^inherited/.test(s.file) && s.file !== 'demonstrated.mind');
+    const fresh = fromAgents.reduce((n, s) => n + (s.new ?? 0), 0);
+    const parts = [`${num(e.inherited ?? 0)} beliefs inherited`];
+    const agents = `${fromAgents.length} agent${fromAgents.length === 1 ? '' : 's'}`;
+    if (e.sources) parts.push(fromAgents.every(s => s.new !== undefined) ? `${num(fresh)} new from ${agents}` : `from ${agents}`);
+    if (e.demonstrationSessions) parts.push(`${e.demonstrationSessions} recorded sessions`);
+    return parts.join(', ');
+  }
+  if (e.event === 'reset') {
+    const minds = e.mindsForgotten || [];
+    const size = minds.reduce((n, m) => n + Math.max(0, m.bytes ?? 0), 0);
+    return `${minds.length} mind${minds.length === 1 ? '' : 's'} forgotten${size ? ` (${kb(size)})` : ''}` +
+      (e.charactersDeleted !== undefined ? `, ${e.charactersDeleted} characters deleted` : '') +
+      (e.error ? ` - failed: ${e.error}` : '');
+  }
+  if (e.event === 'backup') return `${(e.minds || []).length} minds copied to ${e.folder}`;
+  return '';
+}
+
+/* The inheritance a condense made, and the one before it, for a one-click comparison. */
+function madeBy(r) {
+  const snaps = state.gens?.inheritances || [];
+  const i = snaps.findIndex(s => Math.abs(Date.parse(s.madeAt) - r.at) < 5 * 60000);
+  return i > 0 ? { from: snaps[i - 1].name, to: snaps[i].name } : null;
+}
+
+function eventDetail(r) {
+  const e = r.e;
+  const pair = e.event === 'condense' ? madeBy(r) : null;
+  const look = pair ? `<p><button data-pair="${esc(pair.from)}|${esc(pair.to)}">Show what this condense changed</button></p>` : '';
+  const notes = [e.evidence, e.note].filter(Boolean).map(n => `<p class="why">${esc(n)}</p>`).join('');
+  const minds = list => `<ul style="margin:0;padding:0;list-style:none">${list.map(m => `<li><code>${esc(m.file)}</code> <span class="muted">${kb(m.bytes)}${m.tick !== undefined ? `, tick ${num(m.tick)}` : ''}</span></li>`).join('')}</ul>`;
+  if (e.event === 'condense') {
+    const rows = (e.sources || []).map(s => `<tr><td><code>${esc(s.file)}</code></td><td class="num">${kb(s.bytes ?? -1)}</td><td class="num">${num(s.beliefsRead)}</td><td class="num">${num(s.new)}</td><td class="num">${num(s.agreed)}</td></tr>`).join('');
+    return `${notes}${look}
+      <div class="muted" style="margin-bottom:8px">Inheritance ${kb(e.inheritanceBytesBefore ?? -1)} &rarr; ${kb(e.inheritanceBytesAfter ?? -1)}${e.agreedOn !== undefined ? `, ${num(e.agreedOn)} beliefs said by more than one source` : ''}${e.previousInheritance ? `. The one it replaced is kept as <code>${esc(e.previousInheritance)}</code>` : ''}</div>
+      ${rows ? `<table><thead><tr><th>Source</th><th>Size</th><th>Beliefs</th><th>New to the line</th><th>Agreed with an earlier source</th></tr></thead><tbody>${rows}</tbody></table>` : ''}`;
+  }
+  if (e.event === 'reset' || e.event === 'backup') return `${notes}${minds(e.mindsForgotten || e.minds || [])}`;
+  return notes || '<span class="muted">nothing more recorded</span>';
+}
+
+function renderTimeline(rows) {
+  const tone = { condense: 'good', reset: 'bad', backup: 'plain' };
+  const word = { condense: 'condensed', reset: 'reset', backup: 'backed up' };
+  return table('timeline', 'Generations', 'every condense and reset, newest first; open one for what went in', rows, [
+    // Ties broken by ledger order, so a reset recorded after a condense stays after it.
+    { label: 'When', value: r => r.at + Number(r.key) / 1000, html: r => `${r.e.timeKnown === false ? '<span class="muted">about</span> ' : ''}${esc(when(r.e.at))}` },
+    { label: 'Gen', num: true, value: r => r.gen, html: r => r.gen },
+    { label: 'What', value: r => r.e.event, html: r => `${tag(word[r.e.event] ?? r.e.event, tone[r.e.event] ?? 'plain')}${r.e.reconstructed ? tag('reconstructed', 'warn') : ''}` },
+    { label: 'Summary', value: r => eventSummary(r.e), html: r => esc(eventSummary(r.e)) },
+  ], eventDetail);
+}
+
+function snapshotLabel(snap, events) {
+  // The condense that made it is the one recorded within a few minutes of its file time.
+  const made = Date.parse(snap.madeAt);
+  const by = events.find(r => r.e.event === 'condense' && Math.abs(r.at - made) < 5 * 60000);
+  return `${snap.name === 'current' ? 'Standing now' : 'Past'} - made ${when(snap.madeAt)}${by ? ` by generation ${by.gen}` : ''} (${kb(snap.bytes)})`;
+}
+
+function renderComparison(events) {
+  const snaps = state.gens.inheritances || [];
+  const c = state.compare, d = c.diff;
+  if (snaps.length < 1) return `<section class="card"><h2>What changed in the inheritance</h2><div class="empty">No inheritance yet - nothing has been condensed.</div></section>`;
+  const select = side => `<select data-compare="${side}">${snaps.map(s => `<option value="${esc(s.name)}" ${s.name === c[side] ? 'selected' : ''}>${esc(snapshotLabel(s, events))}</option>`).join('')}</select>`;
+  if (!d) return `<section class="card"><h2>What changed in the inheritance</h2><div class="pad pickers">${select('from')} &rarr; ${select('to')}</div></section>`;
+
+  const lists = {
+    added: d.added.map(b => ({ b })),
+    removed: d.removed.map(b => ({ b })),
+    agreed: d.changed.map(x => ({ b: x.belief, before: x.evidenceBefore })),
+  };
+  const byPredicate = new Map();
+  for (const [mode, list] of Object.entries(lists)) {
+    for (const x of list) {
+      const p = x.b.predicate;
+      if (!byPredicate.has(p)) byPredicate.set(p, { added: 0, removed: 0, agreed: 0 });
+      byPredicate.get(p)[mode]++;
+    }
+  }
+  const q = c.query;
+  const rows = lists[c.mode]
+    .filter(x => !c.predicate || x.b.predicate === c.predicate)
+    .filter(x => !q || [x.b.subject, x.b.predicate, x.b.object, x.b.subjectRef, x.b.objectRef].some(v => String(v ?? '').toLowerCase().includes(q)))
+    .map((x, i) => ({ key: `${c.mode}:${i}:${x.b.subjectRef}:${x.b.predicate}:${x.b.objectRef}`, ...x }));
+  const modeTile = (mode, n, label, detail) => `<button class="tile" data-mode="${mode}" style="${c.mode === mode ? 'border-color: var(--accent)' : ''}"><div class="n">${num(n)}</div><div class="l">${label}</div><div class="d">${detail}</div></button>`;
+  const preds = [...byPredicate.entries()].sort((a, b) => (b[1][c.mode] - a[1][c.mode]) || a[0].localeCompare(b[0])).filter(([, n]) => n[c.mode] > 0);
+  const title = { added: 'Beliefs it gained', removed: 'Beliefs it lost', agreed: 'Beliefs more sources now agree on' }[c.mode];
+
+  return `
+  <section class="card">
+    <h2>What changed in the inheritance <span class="hint">pick any two; the later one on the right</span></h2>
+    <div class="pad">
+      <div class="pickers">${select('from')} <span>&rarr;</span> ${select('to')}</div>
+      <div class="tiles" style="margin-top: 12px">
+        <div class="tile" style="cursor: default"><div class="n">${num(d.beliefsBefore)} &rarr; ${num(d.beliefsAfter)}</div><div class="l">beliefs</div><div class="d">${num(d.unchanged)} unchanged</div></div>
+        ${modeTile('added', d.added.length, 'gained', 'in the later one only')}
+        ${modeTile('removed', d.removed.length, 'lost', 'in the earlier one only')}
+        ${modeTile('agreed', d.changed.length, 'more agreed', 'held by both, now resting on more sources')}
+      </div>
+      <div class="controls" style="margin-top: 12px">
+        <span class="chip ${c.predicate ? '' : 'on'}" data-predicate="" style="background: var(--panel-2)">every kind <b>${num(lists[c.mode].length)}</b></span>
+        ${preds.map(([p, n]) => `<span class="chip ${c.predicate === p ? 'on' : ''}" data-predicate="${esc(p)}" style="${c.predicate === p ? '' : 'background: var(--panel-2)'}">${said(p)} <b>${num(n[c.mode])}</b></span>`).join('')}
+      </div>
+      <div class="controls" style="margin-top: 10px"><input type="search" id="dq" placeholder="Search the changes: a map, a person, a monster, an item..." value="${esc(c.query)}"></div>
+    </div>
+  </section>
+  ${table('diff', title, c.mode === 'agreed' ? 'sources before &rarr; after' : 'how many sources said it', rows, [
+    { label: 'About', value: r => r.b.subject, html: r => esc(r.b.subject) },
+    { label: 'Believes', value: r => r.b.predicate, html: r => said(r.b.predicate) },
+    { label: 'What', value: r => r.b.object, html: r => esc(r.b.object) },
+    { label: 'Sources', num: true, value: r => r.b.evidence, html: r => r.before !== undefined ? `${r.before} &rarr; ${r.b.evidence}` : r.b.evidence },
+  ], r => `<div class="muted">Ids: <code>${esc(r.b.subjectRef ?? '?')}</code> ${esc(r.b.predicate)} <code>${esc(r.b.objectRef ?? '?')}</code>, confidence ${Math.round(r.b.confidence * 100)}%</div>`, null, 1)}`;
+}
+
+function renderGenerations() {
+  const events = numbered(state.gens?.events || []);
+  return [
+    renderComparison(events),
+    events.length ? renderTimeline(events) : `<section class="card"><h2>Generations</h2><div class="empty">Nothing recorded yet. Condensing and resetting from now on will show up here.</div></section>`,
+  ].join('');
+}
+
 /* ---------------------------------------------------------------- page */
 
 function render() {
-  $('#tabs').innerHTML = state.agents.map(a => `<button class="tab ${a.name === state.agent ? 'on' : ''}" data-agent="${esc(a.name)}">${esc(a.name)} <span class="muted">lv ${esc(a.level)}</span></button>`).join('');
+  $('#tabs').innerHTML = `<button class="tab gen ${state.view === 'generations' ? 'on' : ''}" data-view="generations">Generations</button>` +
+    state.agents.map(a => `<button class="tab ${state.view === 'agent' && a.name === state.agent ? 'on' : ''}" data-agent="${esc(a.name)}">${esc(a.name)} <span class="muted">lv ${esc(a.level)}</span></button>`).join('');
   $('#updated').textContent = state.loadedAt ? `updated ${state.loadedAt.toLocaleTimeString()}` : '';
+  if (state.view === 'generations') {
+    const focused = document.activeElement?.id === 'dq';
+    const caret = focused ? document.activeElement.selectionStart : 0;
+    const scroll = window.scrollY;
+    $('#main').innerHTML = renderGenerations();
+    if (focused) { const q = $('#dq'); q.focus(); q.setSelectionRange(caret, caret); }
+    window.scrollTo(0, scroll);
+    return;
+  }
   if (!state.agent) {
     $('#main').innerHTML = `<div class="empty">No agents are running. Start some from the <a href="/">live page</a>.</div>`;
     return;
@@ -655,8 +863,17 @@ function render() {
 }
 
 document.addEventListener('click', e => {
-  const t = e.target.closest('[data-agent],[data-jump],[data-open],[data-sort],[data-more]');
+  const t = e.target.closest('[data-agent],[data-view],[data-pair],[data-mode],[data-predicate],[data-jump],[data-open],[data-sort],[data-more]');
   if (!t) return;
+  if (t.dataset.view) return showGenerations();
+  if (t.dataset.pair) {
+    const [from, to] = t.dataset.pair.split('|');
+    state.compare.from = from;
+    compareWith('to', to);
+    return window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+  if (t.dataset.mode) { state.compare.mode = t.dataset.mode; state.compare.predicate = null; state.shown = {}; return render(); }
+  if (t.dataset.predicate !== undefined) { state.compare.predicate = t.dataset.predicate || null; state.shown = {}; return render(); }
   if (t.dataset.agent) return pick(t.dataset.agent);
   if (t.dataset.jump) return document.getElementById(t.dataset.jump)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   if (t.dataset.more) { e.preventDefault(); state.shown[t.dataset.more] = Infinity; return render(); }
@@ -664,6 +881,7 @@ document.addEventListener('click', e => {
   if (t.dataset.open) { state.open.has(t.dataset.open) ? state.open.delete(t.dataset.open) : state.open.add(t.dataset.open); return render(); }
 });
 document.addEventListener('change', e => {
+  if (e.target.dataset.compare) return compareWith(e.target.dataset.compare, e.target.value);
   if (e.target.dataset.source) {
     const k = e.target.dataset.source;
     state.sources.has(k) ? state.sources.delete(k) : state.sources.add(k);
@@ -672,6 +890,11 @@ document.addEventListener('change', e => {
 });
 let typing;
 document.addEventListener('input', e => {
+  if (e.target.id === 'dq') {
+    clearTimeout(typing);
+    typing = setTimeout(() => { state.compare.query = e.target.value.trim().toLowerCase(); state.shown = {}; render(); }, 200);
+    return;
+  }
   if (e.target.id !== 'q') return;
   clearTimeout(typing);
   typing = setTimeout(() => { state.query = e.target.value.trim().toLowerCase(); state.shown = {}; render(); }, 200);

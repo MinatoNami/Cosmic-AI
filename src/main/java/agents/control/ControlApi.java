@@ -59,6 +59,7 @@ public class ControlApi {
         http.createContext("/api/reset", this::reset);
         http.createContext("/api/condense", this::condense);
         http.createContext("/api/generations", this::generations);
+        http.createContext("/api/inheritance/compare", this::compareInheritances);
         http.createContext("/api/beliefs/", this::beliefs);
         http.createContext("/api/trace/", this::trace);
         http.createContext("/", this::page);
@@ -177,9 +178,22 @@ public class ControlApi {
         }
     }
 
-    /** Every condense and reset so far, oldest first. */
+    /** Every condense and reset so far, and every inheritance there is to compare, oldest first. */
     private void generations(HttpExchange exchange) throws IOException {
-        send(exchange, 200, Map.of("events", population.generations().read()));
+        send(exchange, 200, Map.of(
+                "events", population.generations().read(),
+                "inheritances", population.inheritances()));
+    }
+
+    /** ?from=&to= - snapshot names as /api/generations lists them, "current" for the standing one. */
+    private void compareInheritances(HttpExchange exchange) throws IOException {
+        Map<String, String> query = query(exchange.getRequestURI());
+        Population.InheritanceDiff diff = population.compare(query.get("from"), query.get("to"));
+        if (diff == null) {
+            send(exchange, 404, Map.of("error", "no such inheritance"));
+            return;
+        }
+        send(exchange, 200, diff);
     }
 
     private void beliefs(HttpExchange exchange) throws IOException {

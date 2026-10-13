@@ -174,7 +174,10 @@ Every condense and reset is appended to `agents-data/generations.jsonl` (also se
 new to the line, agreed with an earlier source - and the inheritance's size before and after;
 for a reset, which minds were deleted at what size and how many characters went with them,
 including a reset that failed halfway. The inheritance a condense replaces is kept as
-`agents-data/inheritance/inherited.<UTC stamp>.mind`, so any two consolidations can be compared. To read the recordings
+`agents-data/inheritance/inherited.<UTC stamp it was made>.mind`, so any two consolidations can
+be compared. The **Generations** tab on the knowledge page (`/knowledge.html?view=generations`)
+shows both: the ledger as a timeline, and what any two inheritances differ by, belief by belief
+(`GET /api/inheritance/compare?from=<name>&to=<name>`, `current` for the standing one). To read the recordings
 without condensing:
 
 ```bash

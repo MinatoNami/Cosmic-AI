@@ -493,17 +493,89 @@ public class Population {
                 return r.mind().semantic().liveBeliefs().stream()
                         .sorted(java.util.Comparator.comparingDouble(
                                 agents.memory.Belief::confidence).reversed())
-                        .map(b -> new BeliefView(
-                                b.ref(),
-                                display(b.subject()), b.predicate(), display(b.object()),
-                                Math.round(b.confidence() * 1000) / 1000.0,
-                                b.provenance().name().toLowerCase(),
-                                b.supportedBy().size(),
-                                b.subject(), b.object()))
+                        .map(Population::view)
                         .toList();
             }
         }
         return List.of();
+    }
+
+    /** Every inheritance there is to compare, oldest first. */
+    public List<Generations.Snapshot> inheritances() {
+        return generations.snapshots(minds.resolve(INHERITANCE));
+    }
+
+    /**
+     * What one inheritance holds that another does not, belief by belief.
+     *
+     * Beliefs are matched on what they say - subject, predicate, object - not on their ids,
+     * which are only numbers in the order a merge happened to assert them. A belief both
+     * hold is reported only if the number of sources behind it changed, because that is the
+     * other thing a condense does: more agents having found the same door.
+     *
+     * @return null if either name is not an inheritance there is
+     */
+    public InheritanceDiff compare(String from, String to) {
+        Path standing = minds.resolve(INHERITANCE);
+        Path before = generations.resolve(from, standing);
+        Path after = generations.resolve(to, standing);
+        if (before == null || after == null) {
+            return null;
+        }
+        Map<String, agents.memory.Belief> old = liveIn(before);
+        Map<String, agents.memory.Belief> now = liveIn(after);
+        List<BeliefView> added = new ArrayList<>();
+        List<BeliefView> removed = new ArrayList<>();
+        List<Change> changed = new ArrayList<>();
+        int same = 0;
+        for (var e : now.entrySet()) {
+            agents.memory.Belief was = old.get(e.getKey());
+            if (was == null) {
+                added.add(view(e.getValue()));
+            } else if (was.supportedBy().size() != e.getValue().supportedBy().size()) {
+                changed.add(new Change(view(e.getValue()), was.supportedBy().size(),
+                        Math.round(was.confidence() * 1000) / 1000.0));
+            } else {
+                same++;
+            }
+        }
+        for (var e : old.entrySet()) {
+            if (!now.containsKey(e.getKey())) {
+                removed.add(view(e.getValue()));
+            }
+        }
+        return new InheritanceDiff(from, to, old.size(), now.size(), same, added, removed,
+                changed);
+    }
+
+    private static Map<String, agents.memory.Belief> liveIn(Path mind) {
+        agents.memory.EpisodicMemory episodic = new agents.memory.EpisodicMemory();
+        agents.memory.SemanticMemory semantic = new agents.memory.SemanticMemory();
+        agents.memory.MindSnapshot.load(mind, episodic, semantic);
+        Map<String, agents.memory.Belief> live = new LinkedHashMap<>();
+        for (agents.memory.Belief b : semantic.liveBeliefs()) {
+            live.put(b.subject() + "\u0000" + b.predicate() + "\u0000" + b.object(), b);
+        }
+        return live;
+    }
+
+    private static BeliefView view(agents.memory.Belief b) {
+        return new BeliefView(
+                b.ref(),
+                display(b.subject()), b.predicate(), display(b.object()),
+                Math.round(b.confidence() * 1000) / 1000.0,
+                b.provenance().name().toLowerCase(),
+                b.supportedBy().size(),
+                b.subject(), b.object());
+    }
+
+    /** A belief both inheritances hold, now resting on a different number of sources. */
+    public record Change(BeliefView belief, int evidenceBefore, double confidenceBefore) {
+    }
+
+    public record InheritanceDiff(String from, String to, int beliefsBefore, int beliefsAfter,
+                                  int unchanged, List<BeliefView> added,
+                                  List<BeliefView> removed, List<Change> changed) {
     }
 
     /**
