@@ -3,7 +3,7 @@ package agents.body;
 import agents.world.WorldModel;
 import provider.Data;
 import provider.DataProvider;
-import provider.DataProviderFactory;
+import agents.world.WzData;
 import provider.DataTool;
 import provider.wz.WZFiles;
 import tools.StringUtil;
@@ -119,7 +119,7 @@ public final class Touch {
     }
 
     private static MobBody load(int monsterId) {
-        DataProvider provider = DataProviderFactory.getDataProvider(WZFiles.MOB);
+        DataProvider provider = WzData.of(WZFiles.MOB);
         Data monster = provider.getData(StringUtil.getLeftPaddedStr(monsterId + ".img", '0', 11));
         if (monster == null || monster.getChildByPath("info") == null) {
             return MobBody.HARMLESS;

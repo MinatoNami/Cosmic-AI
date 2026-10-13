@@ -1,7 +1,7 @@
 package agents.trace;
 
 import provider.Data;
-import provider.DataProviderFactory;
+import agents.world.WzData;
 import provider.DataTool;
 import provider.wz.WZFiles;
 import server.maps.MapFactory;
@@ -84,7 +84,7 @@ public final class Labels {
         if (ITEM_NAMES.isEmpty()) {
             for (String file : ITEM_FILES) {
                 try {
-                    collectNames(DataProviderFactory.getDataProvider(WZFiles.STRING).getData(file), 0);
+                    collectNames(WzData.of(WZFiles.STRING).getData(file), 0);
                 } catch (Exception e) {
                     // Leave what we have; ids still identify the item.
                 }
@@ -124,7 +124,7 @@ public final class Labels {
 
     private static String stringData(String img, int id) {
         try {
-            Data data = DataProviderFactory.getDataProvider(WZFiles.STRING).getData(img);
+            Data data = WzData.of(WZFiles.STRING).getData(img);
             return DataTool.getString(id + "/name", data, "");
         } catch (Exception e) {
             // A missing name is not worth failing a run over - the id still identifies it.

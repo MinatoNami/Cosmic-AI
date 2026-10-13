@@ -2,7 +2,6 @@ package agents.world;
 
 import provider.Data;
 import provider.DataProvider;
-import provider.DataProviderFactory;
 import provider.DataTool;
 import provider.wz.WZFiles;
 import tools.StringUtil;
@@ -84,7 +83,7 @@ public class MapGeometry {
     }
 
     private static List<PortalSighting> load(int mapId) {
-        DataProvider provider = DataProviderFactory.getDataProvider(WZFiles.MAP);
+        DataProvider provider = WzData.of(WZFiles.MAP);
         Data mapData = provider.getData(pathFor(mapId));
         if (mapData == null) {
             return List.of();
@@ -118,7 +117,7 @@ public class MapGeometry {
     }
 
     private static List<Hop> loadHops(int mapId) {
-        DataProvider provider = DataProviderFactory.getDataProvider(WZFiles.MAP);
+        DataProvider provider = WzData.of(WZFiles.MAP);
         Data mapData = provider.getData(pathFor(mapId));
         if (mapData == null || mapData.getChildByPath("portal") == null) {
             return List.of();
@@ -256,7 +255,7 @@ public class MapGeometry {
     }
 
     private static List<Ground> loadGround(int mapId) {
-        DataProvider provider = DataProviderFactory.getDataProvider(WZFiles.MAP);
+        DataProvider provider = WzData.of(WZFiles.MAP);
         Data mapData = provider.getData(pathFor(mapId));
         if (mapData == null) {
             return List.of();
@@ -375,7 +374,7 @@ public class MapGeometry {
     }
 
     private static List<Climb> loadClimbs(int mapId) {
-        DataProvider provider = DataProviderFactory.getDataProvider(WZFiles.MAP);
+        DataProvider provider = WzData.of(WZFiles.MAP);
         Data mapData = provider.getData(pathFor(mapId));
         if (mapData == null) {
             return List.of();

@@ -2,7 +2,6 @@ package agents.world;
 
 import provider.Data;
 import provider.DataProvider;
-import provider.DataProviderFactory;
 import provider.DataTool;
 import provider.wz.WZFiles;
 
@@ -38,7 +37,7 @@ public final class QuestItems {
         if (folder == null) {
             return false;
         }
-        DataProvider provider = DataProviderFactory.getDataProvider(WZFiles.ITEM);
+        DataProvider provider = WzData.of(WZFiles.ITEM);
         Data group = provider.getData(folder + "/" + String.format("%04d", itemId / 10000) + ".img");
         if (group == null) {
             return false;

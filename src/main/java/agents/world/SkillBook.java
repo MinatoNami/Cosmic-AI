@@ -2,7 +2,6 @@ package agents.world;
 
 import provider.Data;
 import provider.DataProvider;
-import provider.DataProviderFactory;
 import provider.DataTool;
 import provider.wz.WZFiles;
 
@@ -67,7 +66,7 @@ public final class SkillBook {
     }
 
     private static java.util.Optional<SkillLevel> readLevel(int skillId, int level) {
-        DataProvider provider = DataProviderFactory.getDataProvider(WZFiles.SKILL);
+        DataProvider provider = WzData.of(WZFiles.SKILL);
         Data book = provider.getData(String.format("%03d.img", skillId / 10000));
         if (book == null) {
             return java.util.Optional.empty();
@@ -93,7 +92,7 @@ public final class SkillBook {
     }
 
     private static List<Skill> load(int job) {
-        DataProvider provider = DataProviderFactory.getDataProvider(WZFiles.SKILL);
+        DataProvider provider = WzData.of(WZFiles.SKILL);
         Data book = provider.getData(String.format("%03d.img", job));
         if (book == null || book.getChildByPath("skill") == null) {
             return List.of();

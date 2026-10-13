@@ -5,7 +5,6 @@ import provider.Data;
 import provider.DataDirectoryEntry;
 import provider.DataFileEntry;
 import provider.DataProvider;
-import provider.DataProviderFactory;
 import provider.DataTool;
 import provider.wz.WZFiles;
 
@@ -37,7 +36,7 @@ public record EquipInfo(int[] slots, int reqLevel, int reqJob, int reqStr, int r
     }
 
     private static EquipInfo load(int itemId) {
-        DataProvider provider = DataProviderFactory.getDataProvider(WZFiles.CHARACTER);
+        DataProvider provider = WzData.of(WZFiles.CHARACTER);
         String file = "0" + itemId + ".img";
         String folder = folders(provider).get(file);
         if (folder == null) {

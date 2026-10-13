@@ -1,7 +1,7 @@
 package agents.provision;
 
 import provider.Data;
-import provider.DataProviderFactory;
+import agents.world.WzData;
 import provider.DataTool;
 import provider.wz.WZFiles;
 
@@ -26,7 +26,7 @@ public record StarterLook(int face, int hair, int hairColor, int skin,
 
     /** Picks one valid combination at random, so a population of agents does not look identical. */
     public static StarterLook random(Random random, boolean male) {
-        Data info = DataProviderFactory.getDataProvider(WZFiles.ETC)
+        Data info = WzData.of(WZFiles.ETC)
                 .getData("MakeCharInfo.img")
                 .getChildByPath("Info/" + (male ? "CharMale" : "CharFemale"));
 

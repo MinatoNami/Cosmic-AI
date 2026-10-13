@@ -1,7 +1,6 @@
 package agents.world;
 
 import provider.Data;
-import provider.DataProviderFactory;
 import provider.DataTool;
 import provider.wz.WZFiles;
 
@@ -68,7 +67,7 @@ public class QuestBoard {
         Map<Integer, List<Integer>> byNpc = new HashMap<>();
         Map<Integer, List<Integer>> endNpc = new HashMap<>();
         try {
-            Data check = DataProviderFactory.getDataProvider(WZFiles.QUEST).getData("Check.img");
+            Data check = WzData.of(WZFiles.QUEST).getData("Check.img");
             for (Data quest : check.getChildren()) {
                 int questId = parseOrSkip(quest.getName());
                 if (questId < 0) {

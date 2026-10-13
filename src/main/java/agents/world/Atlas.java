@@ -2,7 +2,6 @@ package agents.world;
 
 import provider.Data;
 import provider.DataProvider;
-import provider.DataProviderFactory;
 import provider.DataTool;
 import provider.wz.WZFiles;
 import tools.StringUtil;
@@ -46,7 +45,7 @@ public final class Atlas {
     }
 
     private static Map<String, String> load(int mapId, String what) {
-        DataProvider provider = DataProviderFactory.getDataProvider(WZFiles.MAP);
+        DataProvider provider = WzData.of(WZFiles.MAP);
         String padded = StringUtil.getLeftPaddedStr(Integer.toString(mapId), '0', 9);
         Data map = provider.getData("Map/Map" + (mapId / 100000000) + "/" + padded + ".img");
         if (map == null || map.getChildByPath("portal") == null) {
