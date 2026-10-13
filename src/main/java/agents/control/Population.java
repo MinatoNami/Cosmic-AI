@@ -25,7 +25,9 @@ import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -68,6 +70,7 @@ public class Population {
 
     private final Path minds;
     private final Path traces;
+    private final Generations generations;
 
     private final List<Running> running = new ArrayList<>();
     private final ScheduledExecutorService saver =
@@ -86,6 +89,7 @@ public class Population {
         this.port = port;
         this.minds = dataDirectory.resolve("minds");
         this.traces = dataDirectory.resolve("traces");
+        this.generations = new Generations(dataDirectory);
         saver.scheduleAtFixedRate(this::saveQuietly,
                 SAVE_EVERY_SECONDS, SAVE_EVERY_SECONDS, TimeUnit.SECONDS);
     }
@@ -115,6 +119,10 @@ public class Population {
 
     public Path traceDirectory() {
         return traces;
+    }
+
+    public Generations generations() {
+        return generations;
     }
 
     /**
@@ -364,23 +372,63 @@ public class Population {
         // Rewritten from the recordings every time rather than kept, because the recordings
         // are the record and this is only a reading of them.
         Path recorded = minds.getParent().resolve("demonstrations");
+        Demonstrations.Read demonstrations = null;
         if (!Demonstrations.recordings(recorded).isEmpty()) {
             Path demonstrated = minds.getParent().resolve(DEMONSTRATED);
-            Demonstrations.Read read = Demonstrations.write(recorded, demonstrated);
-            log.info("Read {} recorded sessions into {} beliefs", read.sessions(), read.beliefs());
+            demonstrations = Demonstrations.write(recorded, demonstrated);
+            log.info("Read {} recorded sessions into {} beliefs", demonstrations.sessions(),
+                    demonstrations.beliefs());
             sources.add(demonstrated);
         }
-        return Inheritance.merge(sources, standing, "Inherited");
+
+        // Sizes taken before the merge, because the standing inheritance is about to be
+        // written over and its size afterwards says nothing about what went in.
+        Map<String, Long> bytes = new LinkedHashMap<>();
+        for (Path source : sources) {
+            Generations.MindFile file = Generations.MindFile.of(source);
+            bytes.put(file.file(), file.bytes());
+        }
+        Long before = bytes.get(INHERITANCE);
+        String archived = generations.archive(standing);
+
+        Inheritance.Merged merged = Inheritance.merge(sources, standing, "Inherited");
+
+        List<Map<String, Object>> contributed = new ArrayList<>();
+        for (Inheritance.Contribution c : merged.sources()) {
+            Map<String, Object> one = new LinkedHashMap<>();
+            one.put("file", c.file());
+            one.put("bytes", bytes.getOrDefault(c.file(), -1L));
+            one.put("beliefsRead", c.beliefsRead());
+            one.put("new", c.beliefsKept());
+            one.put("agreed", c.agreed());
+            contributed.add(one);
+        }
+        Map<String, Object> entry = new LinkedHashMap<>();
+        entry.put("mindsRead", merged.minds());
+        entry.put("beliefsRead", merged.beliefsRead());
+        entry.put("inherited", merged.beliefsKept());
+        entry.put("agreedOn", merged.agreed());
+        entry.put("inheritanceBytesBefore", before == null ? 0 : before);
+        entry.put("inheritanceBytesAfter", Generations.MindFile.of(standing).bytes());
+        entry.put("previousInheritance", archived);
+        if (demonstrations != null) {
+            entry.put("demonstrationSessions", demonstrations.sessions());
+            entry.put("demonstrationBeliefs", demonstrations.beliefs());
+        }
+        entry.put("sources", contributed);
+        generations.record("condense", entry);
+        return merged;
     }
 
-    public synchronized int forgetMinds() {
+    /** @return the minds deleted, with their sizes as they were, for the ledger */
+    public synchronized List<Generations.MindFile> forgetMinds() {
         if (isRunning()) {
             throw new IllegalStateException("Stop the agents before wiping their minds");
         }
-        int forgotten = 0;
+        List<Generations.MindFile> forgotten = new ArrayList<>();
         try {
             if (!Files.isDirectory(minds)) {
-                return 0;
+                return forgotten;
             }
             try (var entries = Files.list(minds)) {
                 for (Path mind : entries.toList()) {
@@ -390,8 +438,10 @@ public class Population {
                     if (mind.getFileName().toString().equals(INHERITANCE)) {
                         continue;
                     }
-                    Files.deleteIfExists(mind);
-                    forgotten++;
+                    Generations.MindFile was = Generations.MindFile.of(mind);
+                    if (Files.deleteIfExists(mind)) {
+                        forgotten.add(was);
+                    }
                 }
             }
         } catch (IOException e) {

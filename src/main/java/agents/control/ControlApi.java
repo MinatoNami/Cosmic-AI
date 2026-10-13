@@ -58,6 +58,7 @@ public class ControlApi {
         http.createContext("/api/stop", this::stop);
         http.createContext("/api/reset", this::reset);
         http.createContext("/api/condense", this::condense);
+        http.createContext("/api/generations", this::generations);
         http.createContext("/api/beliefs/", this::beliefs);
         http.createContext("/api/trace/", this::trace);
         http.createContext("/", this::page);
@@ -150,19 +151,35 @@ public class ControlApi {
             send(exchange, 405, Map.of("error", "POST"));
             return;
         }
+        Map<String, Object> entry = new LinkedHashMap<>();
         try {
             population.stop();
-            int minds = population.forgetMinds();
+            List<Generations.MindFile> minds = population.forgetMinds();
+            entry.put("mindsForgotten", minds);
             CharacterReset.Result characters = characterReset.wipe();
+            entry.put("charactersDeleted", characters.characters());
+            entry.put("rowsCleared", characters.ownedRows());
+            entry.put("note", characters.note());
+            population.generations().record("reset", entry);
             send(exchange, 200, Map.of(
-                    "mindsForgotten", minds,
+                    "mindsForgotten", minds.size(),
                     "charactersDeleted", characters.characters(),
                     "rowsCleared", characters.ownedRows(),
                     "note", characters.note()));
         } catch (RuntimeException e) {
             log.error("Reset failed", e);
+            // Recorded even when it fails, because the likeliest failure - the database - comes
+            // after the minds are already gone, and that half-reset is exactly what someone
+            // reading the ledger later would need to know about.
+            entry.put("error", String.valueOf(e.getMessage()));
+            population.generations().record("reset", entry);
             send(exchange, 500, Map.of("error", String.valueOf(e.getMessage())));
         }
+    }
+
+    /** Every condense and reset so far, oldest first. */
+    private void generations(HttpExchange exchange) throws IOException {
+        send(exchange, 200, Map.of("events", population.generations().read()));
     }
 
     private void beliefs(HttpExchange exchange) throws IOException {

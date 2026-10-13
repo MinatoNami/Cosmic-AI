@@ -167,7 +167,14 @@ own `TradeCompleted` entry whichever side confirmed last, and `state.party` is t
 
 Condensing (`POST /api/condense`, agents stopped) reads every recording into
 `agents-data/demonstrated.mind` and folds it into the inheritance, so the next generation is
-born knowing it - as hearsay, promoted when they see it for themselves. To read the recordings
+born knowing it - as hearsay, promoted when they see it for themselves.
+
+Every condense and reset is appended to `agents-data/generations.jsonl` (also served at
+`GET /api/generations`): for a condense, what each source mind contributed - beliefs read,
+new to the line, agreed with an earlier source - and the inheritance's size before and after;
+for a reset, which minds were deleted at what size and how many characters went with them,
+including a reset that failed halfway. The inheritance a condense replaces is kept as
+`agents-data/inheritance/inherited.<UTC stamp>.mind`, so any two consolidations can be compared. To read the recordings
 without condensing:
 
 ```bash

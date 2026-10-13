@@ -80,7 +80,15 @@ public final class Inheritance {
     }
 
     /** What a merge produced, for the caller to report. */
-    public record Merged(int minds, int beliefsRead, int beliefsKept, int agreed) {
+    public record Merged(int minds, int beliefsRead, int beliefsKept, int agreed,
+                         List<Contribution> sources) {
+    }
+
+    /**
+     * What one source brought: how much it knew, how much of that was new to the line, and
+     * how much only agreed with what an earlier source had already said.
+     */
+    public record Contribution(String file, int beliefsRead, int beliefsKept, int agreed) {
     }
 
     /**
@@ -105,6 +113,7 @@ public final class Inheritance {
         int kept = 0;
         int agreed = 0;
         int minds = 0;
+        List<Contribution> contributions = new ArrayList<>();
 
         for (Path source : sources) {
             if (!Files.isRegularFile(source)) {
@@ -116,10 +125,13 @@ public final class Inheritance {
                 continue;
             }
             minds++;
+            int theirRead = 0;
+            int theirKept = 0;
+            int theirAgreed = 0;
             long told = episodic.restore(0, "Inherited",
                     "Inherited[from " + source.getFileName() + "]").id();
             for (Belief belief : theirBeliefs.liveBeliefs()) {
-                read++;
+                theirRead++;
                 if (!WORTH_KEEPING.contains(belief.predicate())) {
                     continue;
                 }
@@ -127,17 +139,22 @@ public final class Inheritance {
                         belief.subject(), belief.predicate(), belief.object(),
                         told, 0, Belief.Provenance.HEARSAY);
                 if (assertion.isNew()) {
-                    kept++;
+                    theirKept++;
                 } else {
-                    agreed++;
+                    theirAgreed++;
                 }
             }
+            read += theirRead;
+            kept += theirKept;
+            agreed += theirAgreed;
+            contributions.add(new Contribution(source.getFileName().toString(),
+                    theirRead, theirKept, theirAgreed));
         }
 
         // Tick zero: the next generation starts its clock at the beginning, because it is a
         // new life and not a continuation of anybody's.
         MindSnapshot.save(destination, name, 0, episodic, inherited);
-        return new Merged(minds, read, kept, agreed);
+        return new Merged(minds, read, kept, agreed, contributions);
     }
 
     /** Every saved mind in a directory, excluding any inheritance file already there. */
