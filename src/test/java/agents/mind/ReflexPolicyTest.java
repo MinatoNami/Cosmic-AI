@@ -150,6 +150,27 @@ class ReflexPolicyTest {
         assertEquals("map:20000", policy.errandMap());
     }
 
+    /**
+     * Shanks's ferry is a quest: taking it takes the fare and sails. With Roger's quest still
+     * to finish a map away, the ferry quest is not taken.
+     */
+    @Test
+    void doesNotTakeTheFerryQuestWithAQuestToFinishOnFoot() {
+        aJunction();
+        mind.take(new Observation.QuestStateChanged(4, 1021, 1));
+        mind.saw("npc:2000", "present_in", "map:20000", 4);
+        mind.saw("npc:22000", "takes_you_to", "map:104000000", 4);
+        mind.saw("npc:22000", "talks_in", "map:10000", 4);       // heard him already
+        world.update(new Observation.MapEntered(5, 10000, 0));
+        world.update(new Observation.NpcAppeared(5, 7022, 22000, new Point(20, 0)));
+        ReflexPolicy policy = new ReflexPolicy(new Random(1), Disposition.WANDERER);
+
+        for (int t = 6; t < 12; t++) {
+            assertFalse(policy.decide(mind, world, t).intent() instanceof Intent.StartQuest,
+                    "the ferry waits while Roger can still be walked to");
+        }
+    }
+
     /** Roger is waiting for his apple to be eaten; the quest is offered back once it has been. */
     @Test
     void doesNotHandInWhileTheNpcIsWaitingOnIt() {

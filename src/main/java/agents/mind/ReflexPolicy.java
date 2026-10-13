@@ -1358,7 +1358,14 @@ public class ReflexPolicy implements Policy {
     private void someoneToTalkTo(List<Choice> choices, WorldModel world, Mind mind, Point self) {
         worthTalkingTo(world, mind, self).ifPresent(npc -> {
             double distance = npc.position().distance(self);
-            Optional<Integer> offer = QuestBoard.offeredBy(npc.typeId()).stream()
+            // Somebody known to take you elsewhere is not somebody to take a quest from while
+            // a quest under way can still be finished on foot here. Shanks's ferry is a quest:
+            // starting it takes the fare and sails, with no question asked that a "not yet"
+            // could answer - Agent2 went to Victoria with Pio's and Sen's quests open.
+            String here = KnownWorld.mapRef(world.mapId());
+            boolean holdOn = takesYouAway(mind, npc.typeId(), here)
+                    && questToHandIn(mind, world, here, false).isPresent();
+            Optional<Integer> offer = holdOn ? Optional.empty() : QuestBoard.offeredBy(npc.typeId()).stream()
                     .filter(q -> !questsTried.contains(q))
                     .findFirst();
             // The NPC that named a price this agent can now pay is the one it came back
@@ -2396,13 +2403,21 @@ public class ReflexPolicy implements Policy {
      * up offering it to at this level.
      */
     private Optional<String[]> questToHandIn(Mind mind, WorldModel world, String here) {
-        Set<String> waiting = waitingOn(mind);
+        return questToHandIn(mind, world, here, true);
+    }
+
+    /**
+     * As above; with {@code readyNow} false, also counting finishers it is waiting on or has
+     * just offered a quest back to - business it still has here, if not this minute.
+     */
+    private Optional<String[]> questToHandIn(Mind mind, WorldModel world, String here, boolean readyNow) {
+        Set<String> waiting = readyNow ? waitingOn(mind) : Set.of();
         Map<String, KnownWorld.Hop> reach = null;
         String[] best = null;
         int bestHops = Integer.MAX_VALUE;
         for (int quest : startedQuests(mind)) {
             int ender = QuestBoard.enderOf(quest);
-            if (ender < 0 || waiting.contains("npc:" + ender) || !offWorriedCooldown(quest)
+            if (ender < 0 || waiting.contains("npc:" + ender) || (readyNow && !offWorriedCooldown(quest))
                     || givenUpAtThisLevel(quest, world.level())) {
                 continue;
             }
@@ -2427,6 +2442,14 @@ public class ReflexPolicy implements Policy {
             }
         }
         return Optional.ofNullable(best);
+    }
+
+    /** Whether an NPC is known to take the agent somewhere other than here. */
+    private static boolean takesYouAway(Mind mind, int npcId, String here) {
+        String npc = "npc:" + npcId;
+        return mind.semantic().liveBeliefs().stream()
+                .anyMatch(b -> b.subject().equals(npc) && b.predicate().equals("takes_you_to")
+                        && !b.object().equals(here));
     }
 
     /** A beginner's errand to somebody offering a calling that suits it: nothing beats it. */
