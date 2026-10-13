@@ -725,8 +725,19 @@ public class Agent implements Runnable {
     /** The calling an NPC is offering, if it is offering one: "want to be a #bMagician#k?" */
     static Optional<String> callingOffered(String said) {
         java.util.regex.Matcher calling = CALLING.matcher(said);
-        return calling.find() ? Optional.of(calling.group(1).toLowerCase()) : Optional.empty();
+        if (!calling.find()) {
+            return Optional.empty();
+        }
+        // Naming several is telling, not offering: Maple Island's guide says "you can become a
+        // Bowman in Henesys, a Magician in Ellinia, a Warrior in Perion...", and three agents
+        // took it for an offer of the first, cut it off, and wrote it down as offering Bowman.
+        long named = CALLING_NAME.matcher(said).results()
+                .map(name -> name.group().toLowerCase()).distinct().count();
+        return named > 1 ? Optional.empty() : Optional.of(calling.group(1).toLowerCase());
     }
+
+    private static final java.util.regex.Pattern CALLING_NAME = java.util.regex.Pattern.compile(
+            "(?i)(warrior|bowman|magician|thief|pirate)");
 
     /** "Train yourself further until you reach #blevel 10, DEX 25#k": a condition, in so many words. */
     private static final java.util.regex.Pattern COME_BACK_AT = java.util.regex.Pattern.compile(
