@@ -60,10 +60,14 @@ class GenerationsTest {
 
         List<Map<String, Object>> sources = (List<Map<String, Object>>) condense.get("sources");
         assertEquals("Agent0.mind", sources.get(0).get("file"));
-        assertEquals(2, sources.get(0).get("new"));
+        assertEquals(2, sources.get(0).get("firstToSay"));
+        assertEquals(2, sources.get(0).get("notInLastInheritance"));
         assertEquals("Agent1.mind", sources.get(1).get("file"));
-        assertEquals(0, sources.get(1).get("new"));
+        assertEquals(0, sources.get(1).get("firstToSay"));
         assertEquals(1, sources.get(1).get("agreed"));
+        // Agent0 said it first, but it was still news to the line when Agent1 said it too.
+        assertEquals(1, sources.get(1).get("notInLastInheritance"));
+        assertEquals(1, condense.get("beliefsBefore"));
         assertTrue(((Number) sources.get(0).get("bytes")).longValue() > 0);
 
         // The inheritance it replaced is kept, outside the minds directory.

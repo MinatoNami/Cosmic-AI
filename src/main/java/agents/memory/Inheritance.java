@@ -85,10 +85,15 @@ public final class Inheritance {
     }
 
     /**
-     * What one source brought: how much it knew, how much of that was new to the line, and
-     * how much only agreed with what an earlier source had already said.
+     * What one source brought.
+     *
+     * beliefsKept and agreed depend on the order of the merge - the first source to say
+     * something keeps it, the rest agree - so on their own they credit whoever went first.
+     * notInBaseline does not: it is what this source held that the inheritance before the
+     * merge did not, which is the honest answer to "what did this agent add".
      */
-    public record Contribution(String file, int beliefsRead, int beliefsKept, int agreed) {
+    public record Contribution(String file, int beliefsRead, int beliefsKept, int agreed,
+                               int notInBaseline) {
     }
 
     /**
@@ -102,6 +107,21 @@ public final class Inheritance {
      * than by throwing evidence away here.
      */
     public static Merged merge(List<Path> sources, Path destination, String name) {
+        return merge(sources, destination, name, null);
+    }
+
+    /** @param baseline the inheritance before this merge, to measure each source against */
+    public static Merged merge(List<Path> sources, Path destination, String name, Path baseline) {
+        Set<String> before = new java.util.HashSet<>();
+        if (baseline != null && Files.isRegularFile(baseline)) {
+            EpisodicMemory ignored = new EpisodicMemory();
+            SemanticMemory held = new SemanticMemory();
+            if (MindSnapshot.load(baseline, ignored, held) != null) {
+                for (Belief b : held.liveBeliefs()) {
+                    before.add(said(b));
+                }
+            }
+        }
         // One episode per predecessor, not one for the whole inheritance. Two agents that
         // independently found the same door are two pieces of evidence for it, and they only
         // read as two if they are two separate moments of being told - a single shared
@@ -128,6 +148,7 @@ public final class Inheritance {
             int theirRead = 0;
             int theirKept = 0;
             int theirAgreed = 0;
+            int theirNovel = 0;
             long told = episodic.restore(0, "Inherited",
                     "Inherited[from " + source.getFileName() + "]").id();
             for (Belief belief : theirBeliefs.liveBeliefs()) {
@@ -143,18 +164,25 @@ public final class Inheritance {
                 } else {
                     theirAgreed++;
                 }
+                if (!before.contains(said(belief))) {
+                    theirNovel++;
+                }
             }
             read += theirRead;
             kept += theirKept;
             agreed += theirAgreed;
             contributions.add(new Contribution(source.getFileName().toString(),
-                    theirRead, theirKept, theirAgreed));
+                    theirRead, theirKept, theirAgreed, theirNovel));
         }
 
         // Tick zero: the next generation starts its clock at the beginning, because it is a
         // new life and not a continuation of anybody's.
         MindSnapshot.save(destination, name, 0, episodic, inherited);
         return new Merged(minds, read, kept, agreed, contributions);
+    }
+
+    private static String said(Belief b) {
+        return b.subject() + '\u0000' + b.predicate() + '\u0000' + b.object();
     }
 
     /** Every saved mind in a directory, excluding any inheritance file already there. */

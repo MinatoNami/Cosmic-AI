@@ -202,4 +202,27 @@ class InheritanceTest {
         assertFalse(holds(inherited, "self", "trained_by", "npc:1022000"), "about a body that is gone");
         assertFalse(holds(inherited, "npc:1012004", "shop_was_no_use", "392"), "about money it no longer has");
     }
+
+    @Test
+    void whatASourceAddedIsMeasuredAgainstTheLastInheritanceNotTheMergeOrder() {
+        Path old = mindOf("Old", new String[][]{{"map:10000", "has_door", "east00"}});
+        Path standing = minds.resolve("inherited.mind");
+        Inheritance.merge(List.of(old), standing, "Inherited");
+        Path first = mindOf("Agent0", new String[][]{
+                {"map:10000", "has_door", "east00"},
+                {"map:10000", "has_door", "west00"},
+        });
+        Path second = mindOf("Agent1", new String[][]{{"map:10000", "has_door", "west00"}});
+
+        Inheritance.Merged merged = Inheritance.merge(List.of(first, second, standing),
+                standing, "Inherited", standing);
+
+        Inheritance.Contribution agent0 = merged.sources().get(0);
+        Inheritance.Contribution agent1 = merged.sources().get(1);
+        Inheritance.Contribution line = merged.sources().get(2);
+        assertEquals(2, agent0.beliefsKept(), "first in the merge, so first to say both");
+        assertEquals(1, agent0.notInBaseline(), "but only the west door was news");
+        assertEquals(1, agent1.notInBaseline());
+        assertEquals(0, line.notInBaseline());
+    }
 }

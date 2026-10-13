@@ -697,17 +697,16 @@ function numbered(events) {
 function eventSummary(e) {
   if (e.event === 'condense') {
     const fromAgents = (e.sources || []).filter(s => !/^inherited/.test(s.file) && s.file !== 'demonstrated.mind');
-    const fresh = fromAgents.reduce((n, s) => n + (s.new ?? 0), 0);
     const parts = [`${num(e.inherited ?? 0)} beliefs inherited`];
-    const agents = `${fromAgents.length} agent${fromAgents.length === 1 ? '' : 's'}`;
-    if (e.sources) parts.push(fromAgents.every(s => s.new !== undefined) ? `${num(fresh)} new from ${agents}` : `from ${agents}`);
+    if (e.beliefsBefore !== undefined && e.inherited !== undefined) parts.push(`${num(e.inherited - e.beliefsBefore)} more than before`);
+    if (e.sources) parts.push(`from ${fromAgents.length} agent${fromAgents.length === 1 ? '' : 's'}`);
     if (e.demonstrationSessions) parts.push(`${e.demonstrationSessions} recorded sessions`);
     return parts.join(', ');
   }
   if (e.event === 'reset') {
     const minds = e.mindsForgotten || [];
     const size = minds.reduce((n, m) => n + Math.max(0, m.bytes ?? 0), 0);
-    return `${minds.length} mind${minds.length === 1 ? '' : 's'} forgotten${size ? ` (${kb(size)})` : ''}` +
+    return (e.mindsForgotten ? `${minds.length} mind${minds.length === 1 ? '' : 's'} forgotten${size ? ` (${kb(size)})` : ''}` : 'minds not kept') +
       (e.charactersDeleted !== undefined ? `, ${e.charactersDeleted} characters deleted` : '') +
       (e.error ? ` - failed: ${e.error}` : '');
   }
@@ -729,10 +728,11 @@ function eventDetail(r) {
   const notes = [e.evidence, e.note].filter(Boolean).map(n => `<p class="why">${esc(n)}</p>`).join('');
   const minds = list => `<ul style="margin:0;padding:0;list-style:none">${list.map(m => `<li><code>${esc(m.file)}</code> <span class="muted">${kb(m.bytes)}${m.tick !== undefined ? `, tick ${num(m.tick)}` : ''}</span></li>`).join('')}</ul>`;
   if (e.event === 'condense') {
-    const rows = (e.sources || []).map(s => `<tr><td><code>${esc(s.file)}</code></td><td class="num">${kb(s.bytes ?? -1)}</td><td class="num">${num(s.beliefsRead)}</td><td class="num">${num(s.new)}</td><td class="num">${num(s.agreed)}</td></tr>`).join('');
+    const n = v => v === undefined ? '<span class="muted">?</span>' : num(v);
+    const rows = (e.sources || []).map(s => `<tr><td><code>${esc(s.file)}</code></td><td class="num">${kb(s.bytes ?? -1)}</td><td class="num">${n(s.beliefsRead)}</td><td class="num">${n(s.notInLastInheritance)}</td><td class="num">${n(s.firstToSay)}</td><td class="num">${n(s.agreed)}</td></tr>`).join('');
     return `${notes}${look}
       <div class="muted" style="margin-bottom:8px">Inheritance ${kb(e.inheritanceBytesBefore ?? -1)} &rarr; ${kb(e.inheritanceBytesAfter ?? -1)}${e.agreedOn !== undefined ? `, ${num(e.agreedOn)} beliefs said by more than one source` : ''}${e.previousInheritance ? `. The one it replaced is kept as <code>${esc(e.previousInheritance)}</code>` : ''}</div>
-      ${rows ? `<table><thead><tr><th>Source</th><th>Size</th><th>Beliefs</th><th>New to the line</th><th>Agreed with an earlier source</th></tr></thead><tbody>${rows}</tbody></table>` : ''}`;
+      ${rows ? `<table><thead><tr><th>Source</th><th>Size</th><th>Beliefs</th><th title="what it held that the inheritance before this condense did not">Not in the last inheritance</th><th title="depends on the order sources were merged in">First to say</th><th>Agreed with an earlier source</th></tr></thead><tbody>${rows}</tbody></table>` : ''}`;
   }
   if (e.event === 'reset' || e.event === 'backup') return `${notes}${minds(e.mindsForgotten || e.minds || [])}`;
   return notes || '<span class="muted">nothing more recorded</span>';

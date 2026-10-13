@@ -391,7 +391,8 @@ public class Population {
         Long before = bytes.get(INHERITANCE);
         String archived = generations.archive(standing);
 
-        Inheritance.Merged merged = Inheritance.merge(sources, standing, "Inherited");
+        // The standing inheritance is its own baseline: the merge reads it before writing over it.
+        Inheritance.Merged merged = Inheritance.merge(sources, standing, "Inherited", standing);
 
         List<Map<String, Object>> contributed = new ArrayList<>();
         for (Inheritance.Contribution c : merged.sources()) {
@@ -399,8 +400,9 @@ public class Population {
             one.put("file", c.file());
             one.put("bytes", bytes.getOrDefault(c.file(), -1L));
             one.put("beliefsRead", c.beliefsRead());
-            one.put("new", c.beliefsKept());
+            one.put("firstToSay", c.beliefsKept());
             one.put("agreed", c.agreed());
+            one.put("notInLastInheritance", c.notInBaseline());
             contributed.add(one);
         }
         Map<String, Object> entry = new LinkedHashMap<>();
@@ -409,6 +411,9 @@ public class Population {
         entry.put("inherited", merged.beliefsKept());
         entry.put("agreedOn", merged.agreed());
         entry.put("inheritanceBytesBefore", before == null ? 0 : before);
+        entry.put("beliefsBefore", merged.sources().stream()
+                .filter(c -> c.file().equals(INHERITANCE)).mapToInt(Inheritance.Contribution::beliefsRead)
+                .findFirst().orElse(0));
         entry.put("inheritanceBytesAfter", Generations.MindFile.of(standing).bytes());
         entry.put("previousInheritance", archived);
         if (demonstrations != null) {
