@@ -240,6 +240,15 @@ public class LlmPolicy implements Policy {
         Reply parsed = Reply.parse(unreadReply, world);
         unreadReply = null;
 
+        // A calling to go and get comes before anything the model has in mind. It was asked
+        // about the moment, and the moment had three agents with the stats for their jobs
+        // walking into houses, hunting on a hill and riding to the wrong town.
+        if (fallback instanceof ReflexPolicy reflexes && reflexes.jobAdvancementPending()) {
+            parsed.learned().forEach(triple ->
+                    mind.infer(triple.subject(), triple.predicate(), triple.object(), tick));
+            return fellBack(mind, world, tick, "a calling to see to first");
+        }
+
         // The lasting half of the answer. A model asked once every thirty decisions cannot
         // usefully pick a single action - by the time it replies, the monster it was looking
         // at is dead - but what it wants the agent to be doing outlives the moment, so it

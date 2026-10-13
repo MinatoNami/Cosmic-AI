@@ -1415,6 +1415,25 @@ class ReflexPolicyTest {
         assertEquals("map:20000", policy.errandMap(), "the statue, not Roger");
     }
 
+    /** With its calling to go and get, where a model would rather it went waits. */
+    @Test
+    void aModelsDestinationWaitsWhileACallingIsPending() {
+        aJunction();
+        mind.saw("npc:9201124", "present_in", "map:20000", 3);
+        mind.hear("npc:9201124", "wants_first", "level 10, DEX 25", 3);
+        mind.saw("npc:9201124", "offers_calling", "bowman", 3);
+        world.update(new Observation.MapEntered(10, 10000, 0));
+        world.update(new Observation.StatsChanged(10, Map.of("LEVEL", 17, "JOB", 0, "STR", 57, "DEX", 40)));
+        ReflexPolicy policy = new ReflexPolicy(new Random(1), Disposition.WANDERER);
+        policy.decide(mind, world, 11);
+        assertTrue(policy.jobAdvancementPending());
+
+        policy.headFor("map:30000", "the model liked it");
+
+        assertFalse(policy.destination().filter("map:30000"::equals).isPresent(),
+                "the Bowman's statue first");
+    }
+
     @Test
     void thirtyOfWhatWasAskedForIsWhatWasAskedFor() {
         java.util.function.IntUnaryOperator twelveMarbles = id -> id == 4031013 ? 12 : 0;

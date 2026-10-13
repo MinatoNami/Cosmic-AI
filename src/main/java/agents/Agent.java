@@ -1097,6 +1097,16 @@ public class Agent implements Runnable {
             reply(dialogue.style(), isAQuestion(dialogue.style()) ? NPC_NO : NPC_CLOSE, NO_SELECTION);
             return;
         }
+        // And a calling that suits it, asked outright, is a yes - not a question for a model
+        // that might think the moment wrong.
+        if (world.job() == 0 && offered.isPresent() && isAQuestion(dialogue.style())
+                && (disposition.callingsThatSuit().contains(offered.get())
+                    || world.level() >= agents.mind.Disposition.ANY_CALLING_AFTER)) {
+            log.info("{} says yes to npc:{} - a {} is what it wants to be", mind.name(), dialogue.npcId(), offered.get());
+            noteAnswer(dialogue.npcId(), dialogue.style(), NPC_YES_OR_NEXT);
+            reply(dialogue.style(), NPC_YES_OR_NEXT, NO_SELECTION);
+            return;
+        }
         // Nor somebody whose offer goes somewhere with nothing to do - unless that is no worse
         // than here. Rooney in Sleepywood offers HappyVille: nothing to hunt and no way out
         // but asking, and three agents took him up on it over and over for eight hours,

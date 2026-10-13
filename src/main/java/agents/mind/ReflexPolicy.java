@@ -2247,6 +2247,9 @@ public class ReflexPolicy implements Policy {
      * rather than finishing a walk to a door that led somewhere else.
      */
     public void headFor(String map, String why) {
+        if (jobAdvancementPending() && !map.equals(errandMap) && !map.equals(sentMap)) {
+            return;         // somewhere else can wait until it has its calling
+        }
         setOffFor(map, why, true);
         doorInMind = null;
         committedPortal = null;
@@ -2420,7 +2423,26 @@ public class ReflexPolicy implements Policy {
         if (errandNpc < 0 && sentMap == null && !cutOffFrom.isEmpty()) {
             askForARideBack(mind, here);
         }
+        // Where the model wanted to go waits too: Agent3, with the INT for Magician, was
+        // taking a taxi to Kerning City because that was the model's pick.
+        if (jobAdvancementPending() && destinationFromModel) {
+            destination = null;
+            destinationFromModel = false;
+        }
     }
+
+    /**
+     * Whether what it is doing is going for its calling: a beginner's errand to somebody who
+     * offers one, a ride back towards one, or going back to its trainer having grown. While it
+     * is, nothing a model suggests takes it anywhere else.
+     */
+    public boolean jobAdvancementPending() {
+        return (errandForACalling && errandNpc >= 0)
+                || (rideWanted >= 0 && !cutOffFrom.isEmpty())
+                || TRAINER_WHY.equals(sentWhy);
+    }
+
+    private static final String TRAINER_WHY = "the one who trained you, and you have grown since";
 
     /** Where a calling it wants is, when it cannot walk there from here. */
     private final Set<String> cutOffFrom = new HashSet<>();
@@ -2745,7 +2767,7 @@ public class ReflexPolicy implements Policy {
         errandNpc = npcIdIn(trainedBy.object());
         if (!map.get().equals(here)) {
             sentMap = map.get();
-            sentWhy = "the one who trained you, and you have grown since";
+            sentWhy = TRAINER_WHY;
         }
     }
 
