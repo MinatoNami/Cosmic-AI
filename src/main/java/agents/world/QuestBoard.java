@@ -47,6 +47,17 @@ public class QuestBoard {
         return endedByNpc.getOrDefault(npcId, List.of());
     }
 
+    /** Who finishes a quest - the NPC wearing its marker - or -1 if the data does not say. */
+    public static synchronized int enderOf(int questId) {
+        loadOnce();
+        for (Map.Entry<Integer, List<Integer>> npc : endedByNpc.entrySet()) {
+            if (npc.getValue().contains(questId)) {
+                return npc.getKey();
+            }
+        }
+        return -1;
+    }
+
     private static void loadOnce() {
         if (offeredByNpc == null) {
             load();

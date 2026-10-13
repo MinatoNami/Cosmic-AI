@@ -39,6 +39,17 @@ public sealed interface Intent {
         }
     }
 
+    /** Hits a box or anything else that breaks, walking up to it first. */
+    record HitReactor(int objectId, Point position) implements Intent {
+        public String name() {
+            return "HitReactor";
+        }
+
+        public Map<String, Object> detail() {
+            return Map.of("reactor", objectId);
+        }
+    }
+
     record PickUp(int objectId, Point position) implements Intent {
         public String name() {
             return "PickUp";

@@ -123,6 +123,33 @@ class ReflexPolicyTest {
         assertEquals(2100, handIn.npcId());
     }
 
+    /** Pio's recycled goods come out of the boxes in Amherst; a box in sight, with a quest on, gets broken. */
+    @Test
+    void breaksABoxWithAQuestUnderWay() {
+        mind.take(new Observation.QuestStateChanged(2, 1008, 1));
+        world.update(new Observation.ReactorAppeared(3, 8001, 2001, 0, new Point(10, 0)));
+
+        Intent intent = new ReflexPolicy(new Random(1), Disposition.FORAGER).decide(mind, world, 3).intent();
+
+        assertEquals(8001, assertInstanceOf(Intent.HitReactor.class, intent).objectId());
+    }
+
+    /**
+     * Roger, who finishes the apple quest, is a map away: that is an errand. Nothing took
+     * agents back to whoever they owed, so they only finished what they stumbled on.
+     */
+    @Test
+    void goesToWhoeverFinishesAQuestItHasGoing() {
+        aJunction();
+        mind.take(new Observation.QuestStateChanged(4, 1021, 1));
+        mind.saw("npc:2000", "present_in", "map:20000", 4);
+        world.update(new Observation.MapEntered(5, 10000, 0));
+        ReflexPolicy policy = new ReflexPolicy(new Random(1), Disposition.WANDERER);
+        policy.decide(mind, world, 6);
+
+        assertEquals("map:20000", policy.errandMap());
+    }
+
     /** Roger is waiting for his apple to be eaten; the quest is offered back once it has been. */
     @Test
     void doesNotHandInWhileTheNpcIsWaitingOnIt() {

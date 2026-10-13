@@ -846,9 +846,6 @@ public class Agent implements Runnable {
     }
 
     private boolean businessHereFirst(int npcId) {
-        if (stayedFor.merge(npcId, 1, Integer::sum) > STAY_FOR_AT_MOST) {
-            return false;   // asked enough times; whatever it was waiting for is not coming
-        }
         java.util.Map<Integer, String> states = new java.util.HashMap<>();
         Set<Integer> asked = new HashSet<>();
         Set<Integer> offeredBack = new HashSet<>();
@@ -869,10 +866,61 @@ public class Agent implements Runnable {
                 default -> { }
             }
         }
+        // Finishing a quest is staying paying off, so the count of refusals starts again.
+        int done = (int) states.values().stream().filter("2"::equals).count();
+        if (done != questsDoneWhenRefusing) {
+            stayedFor.clear();
+            questsDoneWhenRefusing = done;
+        }
+        if (stayedFor.merge(npcId, 1, Integer::sum) > STAY_FOR_AT_MOST) {
+            return false;   // refused enough times with nothing finished; it is not coming
+        }
         Set<Integer> inSight = new HashSet<>();
         world.visibleNpcs().forEach(npc -> inSight.add(npc.typeId()));
-        return businessHereFirst(npcId, states, asked, offeredBack, inSight);
+        return businessHereFirst(npcId, states, asked, offeredBack, inSight)
+                || questToFinishOnFoot(states);
     }
+
+    /**
+     * A quest under way whose finisher it has seen somewhere it can walk to from here. Being
+     * offered passage away from them is not the moment to go: the whole new generation stood
+     * at the Maple Island ferry with Roger's apple, Nina's brother and Pio's recycling open,
+     * their finishers a few maps away, and only a quest somebody in sight finished held them.
+     */
+    private boolean questToFinishOnFoot(java.util.Map<Integer, String> states) {
+        String here = KnownWorld.mapRef(world.mapId());
+        java.util.Map<String, KnownWorld.Hop> reach = null;
+        for (java.util.Map.Entry<Integer, String> quest : states.entrySet()) {
+            if (!"1".equals(quest.getValue())) {
+                continue;
+            }
+            int ender = agents.world.QuestBoard.enderOf(quest.getKey());
+            if (ender < 0) {
+                continue;
+            }
+            String npc = "npc:" + ender;
+            Optional<String> map = mind.semantic().liveBeliefs().stream()
+                    .filter(b -> b.subject().equals(npc)
+                            && (b.predicate().equals("present_in") || b.predicate().equals("talks_in")))
+                    .map(Belief::object)
+                    .findFirst();
+            if (map.isEmpty()) {
+                continue;
+            }
+            if (map.get().equals(here)) {
+                return true;
+            }
+            if (reach == null) {
+                reach = KnownWorld.rememberedBy(mind.semantic().liveBeliefs()).reachableFrom(here);
+            }
+            if (reach.containsKey(map.get())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private int questsDoneWhenRefusing = -1;
 
     /**
      * Something the one asking offers that was never taken, or a quest under way that somebody
@@ -907,9 +955,9 @@ public class Agent implements Runnable {
     }
 
     /**
-     * How many times one NPC's offer is turned down for this. Some offered quests can never
-     * be started - a level too low, a job not had - and those would otherwise keep an agent
-     * refusing the one way on for good.
+     * How many times one NPC's offer is turned down for this with no quest finished in
+     * between. Some quests can never be finished - a level too low, a job not had, things
+     * nobody drops - and those would otherwise keep an agent refusing the one way on for good.
      */
     private static final int STAY_FOR_AT_MOST = 4;
     private final java.util.Map<Integer, Integer> stayedFor = new java.util.HashMap<>();

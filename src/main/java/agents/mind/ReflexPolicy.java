@@ -564,6 +564,7 @@ public class ReflexPolicy implements Policy {
             doorInMind = null;
             journeyKind = null;         // and nothing here is where we were going
             gaveUpOn.clear();           // and nowhere here is somewhere we failed to reach
+            boxHits.clear();            // and every box here is new
             arrivedAt = world.selfPosition();
             // Write down which doors this place has. Noticing the exits of the room you are
             // standing in is looking, not deduction - and it is the one thing that lets an
@@ -600,6 +601,7 @@ public class ReflexPolicy implements Policy {
 
         List<Choice> choices = new ArrayList<>();
         lootNearby(choices, world, self, tick);
+        somethingToBreak(choices, world, self, unfinished);
         somethingToFight(choices, world, self);
         unfinishedBusiness(choices, world, self, unfinished);
         someoneToTalkTo(choices, world, mind, self);
@@ -864,6 +866,47 @@ public class ReflexPolicy implements Policy {
                             + NEGLECT_MATTERS * neglect("loot") + urgeFor("loot"), null));
         });
     }
+
+    /**
+     * A box, a barrel, anything in the map that breaks.
+     *
+     * Nothing showed them to the agents at all, so a quest whose things come out of boxes -
+     * Pio's recycled goods, from the boxes in Amherst - could never be finished, and every
+     * agent left Maple Island with it open. Breaking one is how to find out what is inside;
+     * with a quest under way it is worth a good deal more, since that is where quest things
+     * come from when no monster drops them. A box that has not broken after a dozen hits is
+     * left alone: some things in a map only look breakable.
+     */
+    private void somethingToBreak(List<Choice> choices, WorldModel world, Point self, Set<Integer> unfinished) {
+        world.visibleReactors().stream()
+                .filter(box -> boxHits.getOrDefault(box.objectId(), 0) < HITS_PER_BOX)
+                .min(Comparator.comparingDouble(box -> box.position().distance(self)))
+                .ifPresent(box -> {
+                    double near = nearness(box.position().distance(self), disposition.scavengeRange());
+                    if (near <= 0) {
+                        return;
+                    }
+                    double score = (0.2 + disposition.greed() + (unfinished.isEmpty() ? 0 : QUEST_BOXES)) * near
+                            + NEGLECT_MATTERS * neglect("box") + urgeFor("box");
+                    boolean atIt = box.position().distance(self) < MELEE_RANGE;
+                    int oid = box.objectId();
+                    choices.add(new Choice("box", new Intent.HitReactor(oid, box.position()),
+                            atIt ? "break this open" : "go and break that open", score,
+                            () -> {
+                                if (atIt) {
+                                    boxHits.merge(oid, 1, Integer::sum);
+                                }
+                            }));
+                });
+    }
+
+    /** Hits each box gets before it is taken not to be breakable. */
+    private static final int HITS_PER_BOX = 12;
+
+    /** How much more a box is worth with a quest under way. */
+    private static final double QUEST_BOXES = 0.6;
+
+    private final Map<Integer, Integer> boxHits = new HashMap<>();
 
     private void somethingToFight(List<Choice> choices, WorldModel world, Point self) {
         world.nearestMonster().ifPresent(monster -> {
@@ -2321,6 +2364,17 @@ public class ReflexPolicy implements Policy {
                 break;
             }
         }
+        // A quest under way, whose finisher is somewhere it can walk to, comes before any
+        // price that is not a calling. Nothing took an agent to anybody it owed except
+        // stumbling on them: Roger in Snail Garden and Sen in his house in Mushroom Town were
+        // never gone back to, and every agent stood at the ferry with both quests open.
+        if (bestRank < BEST_ERRAND) {
+            Optional<String[]> owed = questToHandIn(mind, world, here);
+            if (owed.isPresent()) {
+                errandNpc = Integer.parseInt(owed.get()[0]);
+                errandMap = owed.get()[1].equals(here) ? null : owed.get()[1];
+            }
+        }
         // Being sent somewhere, or having grown enough to go back to its trainer, comes before
         // anything somebody merely named a price for. It used to be asked only when no price
         // was payable - and with money, one always is: a level-35 Bowman with 394,000 mesos
@@ -2334,6 +2388,45 @@ public class ReflexPolicy implements Policy {
         } else {
             errandNpc = payableNpc;
         }
+    }
+
+    /**
+     * The nearest finisher of a quest under way, as {npc id, map}, among those it has seen and
+     * can walk to - not one it is waiting on, has just offered the quest back to, or has given
+     * up offering it to at this level.
+     */
+    private Optional<String[]> questToHandIn(Mind mind, WorldModel world, String here) {
+        Set<String> waiting = waitingOn(mind);
+        Map<String, KnownWorld.Hop> reach = null;
+        String[] best = null;
+        int bestHops = Integer.MAX_VALUE;
+        for (int quest : startedQuests(mind)) {
+            int ender = QuestBoard.enderOf(quest);
+            if (ender < 0 || waiting.contains("npc:" + ender) || !offWorriedCooldown(quest)
+                    || givenUpAtThisLevel(quest, world.level())) {
+                continue;
+            }
+            Optional<String> map = lastSeenIn(mind, "npc:" + ender);
+            if (map.isEmpty()) {
+                continue;
+            }
+            int hops = 0;
+            if (!map.get().equals(here)) {
+                if (reach == null) {
+                    reach = KnownWorld.rememberedBy(mind.semantic().liveBeliefs()).reachableFrom(here, Set.of());
+                }
+                KnownWorld.Hop hop = reach.get(map.get());
+                if (hop == null) {
+                    continue;
+                }
+                hops = hop.hops();
+            }
+            if (hops < bestHops) {
+                bestHops = hops;
+                best = new String[] {String.valueOf(ender), map.get()};
+            }
+        }
+        return Optional.ofNullable(best);
     }
 
     /** A beginner's errand to somebody offering a calling that suits it: nothing beats it. */

@@ -37,6 +37,7 @@ public class WorldModel {
     private final ArrivalPoints arrivals;
 
     private final Map<Integer, Entity> monsters = new LinkedHashMap<>();
+    private final Map<Integer, Entity> reactors = new LinkedHashMap<>();
     private final Map<Integer, Entity> npcs = new LinkedHashMap<>();
     private final Map<Integer, Entity> drops = new LinkedHashMap<>();
     private final Map<Integer, String> players = new HashMap<>();
@@ -103,6 +104,9 @@ public class WorldModel {
                 }
             }
             case Observation.InventoryFull full -> inventoryFullAt = full.tick();
+            case Observation.ReactorAppeared reactor ->
+                    reactors.put(reactor.objectId(), new Entity(reactor.objectId(), reactor.reactorId(), reactor.position()));
+            case Observation.ReactorVanished gone -> reactors.remove(gone.objectId());
             case Observation.PlayerAppeared player -> players.put(player.characterId(), player.name());
             case Observation.PlayerLeft left -> {
                 players.remove(left.characterId());
@@ -139,6 +143,7 @@ public class WorldModel {
             monsters.clear();
             monsterHealth.clear();
             npcs.clear();
+            reactors.clear();
             drops.clear();
             mesoDrops.clear();
             players.clear();
@@ -282,6 +287,11 @@ public class WorldModel {
 
     public Optional<Entity> nearestNpc() {
         return nearest(npcs.values());
+    }
+
+    /** Boxes and the like in sight, things that can be hit and are not monsters. */
+    public List<Entity> visibleReactors() {
+        return List.copyOf(reactors.values());
     }
 
     public List<Entity> visibleNpcs() {

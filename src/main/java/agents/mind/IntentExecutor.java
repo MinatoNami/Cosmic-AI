@@ -106,6 +106,12 @@ public class IntentExecutor {
                             attack.position().x >= world.selfPosition().x));
                 }
             }
+            case Intent.HitReactor box -> {
+                moveTo(box.position(), world);
+                if (within(box.position(), HAND_REACH, world)) {
+                    session.send(ClientPackets.hitReactor(box.objectId(), box.position().x < world.selfPosition().x));
+                }
+            }
             case Intent.PickUp pickUp -> {
                 moveTo(pickUp.position(), world);
                 if (within(pickUp.position(), HAND_REACH, world)) {

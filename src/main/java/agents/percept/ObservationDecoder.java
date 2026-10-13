@@ -129,6 +129,12 @@ public class ObservationDecoder {
         if (opcode == SendOpcode.REMOVE_ITEM_FROM_MAP.getValue()) {
             return decodeDropRemoved(tick, p);
         }
+        if (opcode == SendOpcode.REACTOR_SPAWN.getValue()) {
+            return decodeReactorSpawn(tick, p);
+        }
+        if (opcode == SendOpcode.REACTOR_DESTROY.getValue()) {
+            return new Observation.ReactorVanished(tick, p.readInt());
+        }
         if (opcode == SendOpcode.OPEN_NPC_SHOP.getValue()) {
             return decodeShop(tick, p);
         }
@@ -459,6 +465,16 @@ public class ObservationDecoder {
     }
 
     private static final int KILL_DISAPPEAR = 0;
+
+    /** @see tools.PacketCreator#spawnReactor */
+    private Observation decodeReactorSpawn(long tick, InPacket p) {
+        int objectId = p.readInt();
+        int reactorId = p.readInt();
+        int state = p.readByte();
+        int x = p.readShort();
+        int y = p.readShort();
+        return new Observation.ReactorAppeared(tick, objectId, reactorId, state, new Point(x, y));
+    }
 
     /** @see tools.PacketCreator#dropItemFromMapObject */
     private Observation decodeDrop(long tick, InPacket p) {

@@ -59,6 +59,18 @@ public sealed interface Observation {
     record MonsterVanished(long tick, int objectId) implements Observation {
     }
 
+    /**
+     * Something in the map that can be hit and is not a monster: a box, a barrel, a plant. On
+     * Maple Island the boxes in Amherst are where Pio's recycled goods come from, and nothing
+     * told the agents they were there at all.
+     */
+    record ReactorAppeared(long tick, int objectId, int reactorId, int state, Point position) implements Observation {
+    }
+
+    /** A box broken, or otherwise gone. */
+    record ReactorVanished(long tick, int objectId) implements Observation {
+    }
+
     /** Something with an object id moved. Covers other players and monsters alike. */
     record ThingMoved(long tick, int objectId, Point position) implements Observation {
     }

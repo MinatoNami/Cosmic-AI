@@ -320,6 +320,21 @@ public final class ClientPackets {
     }
 
     /** @see net.server.channel.handlers.ItemPickupHandler */
+    /**
+     * Hits a box, a barrel or anything else in the map that breaks.
+     *
+     * @see net.server.channel.handlers.ReactorHitHandler
+     */
+    public static Packet hitReactor(int objectId, boolean facingLeft) {
+        OutPacket p = packet(RecvOpcode.DAMAGE_REACTOR);
+        p.writeInt(objectId);
+        p.writeInt(facingLeft ? 1 : 0);
+        p.writeShort(0);                // stance
+        p.writeInt(0);                  // delay
+        p.writeInt(0);                  // no skill: a plain swing
+        return p;
+    }
+
     public static Packet pickUpItem(int objectId, Point position) {
         OutPacket p = packet(RecvOpcode.ITEM_PICKUP);
         p.writeInt(0);                  // timestamp
