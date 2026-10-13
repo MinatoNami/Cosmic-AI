@@ -1088,7 +1088,13 @@ public class Agent implements Runnable {
         // Spinel's way back from Zipangu is a list - "Yes, I'm done with traveling. Can I go
         // back?" or "No, I'd like to continue exploring" - and a list is otherwise walked away
         // from, so nobody ever came back from a world tour.
-        if (dialogue.npcId() == policy.rideWanted()) {
+        // Not a ride that is a calling it does not want: the Thief's statue offers its ride as
+        // "I can send you to the hideout if you want to be a Thief", and a wanderer cut out
+        // to be a Bowman rode it, then turned the Dark Lord down when it got there.
+        boolean unwantedCalling = callingHere.isPresent() && world.job() == 0
+                && !disposition.callingsThatSuit().contains(callingHere.get())
+                && world.level() < agents.mind.Disposition.ANY_CALLING_AFTER;
+        if (dialogue.npcId() == policy.rideWanted() && !unwantedCalling) {
             if (dialogue.style() == MENU) {
                 int going = optionThatGoes(dialogue.text(), policy.rideTo());
                 if (going >= 0) {
