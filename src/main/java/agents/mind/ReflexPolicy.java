@@ -463,6 +463,9 @@ public class ReflexPolicy implements Policy {
     private boolean shortOfStats;
     private static final int SECOND_JOB_AT = 30;
 
+    /** What talking to somebody new is worth, as a share, while levels are what it needs. */
+    private static final double LEVELLING_TALK = 0.3;
+
     static boolean shortOfMoney(Mind mind, WorldModel world) {
         int mesos = world.inventory().meso();
         if (mesos < 0) {
@@ -1461,7 +1464,11 @@ public class ReflexPolicy implements Policy {
             }
             // Something on offer is worth crossing a map for; a chat is worth a wander.
             double appeal = cameBackFor ? 1.0
-                    : offer.isPresent() ? 0.7 : 0.2 + disposition.curiosity() * 0.3;
+                    : (offer.isPresent() ? 0.7 : 0.2 + disposition.curiosity() * 0.3)
+                    // Needing levels, a new quest or a new face is worth much less than a hunt:
+                    // a Bowman and a Magician at 17 spent twenty minutes taking quests in
+                    // Henesys and Lith Harbor, where nothing gives experience but talking.
+                    * (shortOfStats ? LEVELLING_TALK : 1);
             double score = appeal + NEGLECT_MATTERS * neglect("talk") + urgeFor("talk")
                     + commitmentTo("talk", npc.position());
 
@@ -2101,9 +2108,10 @@ public class ReflexPolicy implements Policy {
     private Places.Weights weights(boolean seekingACalling) {
         return new Places.Weights(
                 2.0,                                        // a door never opened
-                1.2 + disposition.curiosity() * 0.6         // somebody never spoken to,
-                        + (seekingACalling ? 2.0 : 0),      // who might be the one to train it
-                0.8,                                        // somebody worth hearing again
+                (1.2 + disposition.curiosity() * 0.6        // somebody never spoken to,
+                        + (seekingACalling ? 2.0 : 0))      // who might be the one to train it
+                        * (shortOfStats && !seekingACalling ? LEVELLING_TALK : 1),  // less when levels are what it needs
+                0.8 * (shortOfStats ? LEVELLING_TALK : 1),  // somebody worth hearing again
                 3.0,                                        // somebody owed a visit
                 3.5,                                        // a shop, when the bag is full
                 (0.4 + disposition.aggression() * 1.2)      // something to hunt,
