@@ -37,7 +37,7 @@ public class SemanticMemory {
             // What drinking something did, which the latest try overrules: one that seemed
             // to do nothing while a monster was hitting harder than it healed must not stay
             // believed useless alongside the time it plainly worked.
-            "restores_hp", "restores_mp",
+            "restores_hp", "restores_mp", "offers_calling",
             // The share of a job's ability points people put into each stat: one number,
             // which the latest recordings revise rather than add to.
             "ap_share_str", "ap_share_dex", "ap_share_int", "ap_share_luk",

@@ -163,6 +163,12 @@ public final class Training {
      * short of half the character's level.
      */
     int statToRaise(WorldModel world) {
+        if (world.job() == 0) {
+            Optional<Integer> forACalling = shortForACalling(world);
+            if (forACalling.isPresent()) {
+                return forACalling.get();
+            }
+        }
         Map<Integer, Integer> shown = sharesShownFor(world.job());
         if (!shown.isEmpty()) {
             return furthestShort(world, shown);
@@ -244,6 +250,47 @@ public final class Training {
                 })
                 .filter(java.util.Objects::nonNull)
                 .toList();
+    }
+
+    /**
+     * What each calling asks of a beginner, as the job statues in Lith Harbor say it: "level
+     * 10, DEX 25" and so on.
+     */
+    static final Map<String, int[]> CALLING_NEEDS = Map.of(
+            "warrior", new int[]{STR, 35},
+            "bowman", new int[]{DEX, 25},
+            "thief", new int[]{DEX, 25},
+            "magician", new int[]{INT, 20},
+            "pirate", new int[]{DEX, 20});
+
+    /**
+     * The stat a beginner is short of for a calling that suits it, when it has the stats for
+     * none of them yet - the nearest one. A forager, cut out to be a Thief, reached level 20
+     * with LUK 45 and DEX 14, eleven short of what the Thief's statue asks, and was offered
+     * nothing it would take.
+     */
+    Optional<Integer> shortForACalling(WorldModel world) {
+        int bestStat = -1;
+        int bestShort = Integer.MAX_VALUE;
+        for (String calling : disposition.callingsThatSuit()) {
+            int[] needs = CALLING_NEEDS.get(calling);
+            if (needs == null) {
+                continue;
+            }
+            int have = world.stat(name(needs[0]));
+            if (have < 0) {
+                return Optional.empty();        // stats not known yet; nothing to go on
+            }
+            int shortBy = needs[1] - have;
+            if (shortBy <= 0) {
+                return Optional.empty();        // it has the stats for one already
+            }
+            if (shortBy < bestShort) {
+                bestShort = shortBy;
+                bestStat = needs[0];
+            }
+        }
+        return bestStat < 0 ? Optional.empty() : Optional.of(bestStat);
     }
 
     /** Main stat and backing stat for a job, or for a beginner, for the kind of agent it is. */

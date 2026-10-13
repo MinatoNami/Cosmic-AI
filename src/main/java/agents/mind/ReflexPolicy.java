@@ -2272,6 +2272,7 @@ public class ReflexPolicy implements Policy {
         Set<String> stranders = strandedBy(mind);
         String here = KnownWorld.mapRef(world.mapId());
         Set<String> reachable = null;
+        int bestRank = -1;
         for (Belief belief : mind.semantic().liveBeliefs()) {
             if (!belief.predicate().equals("wants_first")
                     || !belief.subject().startsWith("npc:")) {
@@ -2305,16 +2306,18 @@ public class ReflexPolicy implements Policy {
                     continue;
                 }
             }
-            boolean aCalling = world.job() == 0 && STAT_ASKED.matcher(belief.object()).find();
-            if (errandNpc >= 0 && !aCalling) {
-                continue;       // already holding one, and this is no better
+            int rank = errandRank(mind, world, belief);
+            if (rank < 0 || rank <= bestRank) {
+                continue;       // not one to run, or no better than the one it holds
             }
+            bestRank = rank;
             errandNpc = npcId;
             errandMap = whereItWas.get().equals(here) ? null : whereItWas.get();
-            if (world.job() == 0 ? aCalling : true) {
+            if (rank == BEST_ERRAND || world.job() != 0) {
                 // One errand at a time; a plan you keep changing is not one. But a beginner
-                // holds out for whoever named the stats a calling asks for: the first payable
-                // errand Agent0 and Agent2 found was a taxi fare and a hotel bill.
+                // holds out for whoever offers a calling that suits it: the first payable
+                // errands Agent0 and Agent2 found were a taxi fare and a hotel bill, and the
+                // first statue Agent0 qualified for was the Pirate's.
                 break;
             }
         }
@@ -2331,6 +2334,40 @@ public class ReflexPolicy implements Policy {
         } else {
             errandNpc = payableNpc;
         }
+    }
+
+    /** A beginner's errand to somebody offering a calling that suits it: nothing beats it. */
+    private static final int BEST_ERRAND = 3;
+
+    /**
+     * How much a payable errand is worth running, or -1 for not at all.
+     *
+     * Past its first job anything payable will do. A beginner wants its calling: whoever
+     * offers one that suits its temperament first; whoever named the stats a calling asks for
+     * but has not yet said which, next, since going is how it finds out; anybody else after.
+     * Somebody known to offer a calling that does not suit it is not worth the walk - until it
+     * has gone so long without one that any will do.
+     */
+    private int errandRank(Mind mind, WorldModel world, Belief asked) {
+        if (world.job() != 0) {
+            return 0;
+        }
+        Optional<String> calling = callingOfferedBy(mind, asked.subject());
+        if (calling.isPresent()) {
+            if (disposition.callingsThatSuit().contains(calling.get())) {
+                return BEST_ERRAND;
+            }
+            return world.level() >= Disposition.ANY_CALLING_AFTER ? 1 : -1;
+        }
+        return STAT_ASKED.matcher(asked.object()).find() ? 2 : 0;
+    }
+
+    /** The calling an NPC has been heard offering, if any. */
+    private static Optional<String> callingOfferedBy(Mind mind, String npcRef) {
+        return mind.semantic().liveBeliefs().stream()
+                .filter(b -> b.subject().equals(npcRef) && b.predicate().equals("offers_calling"))
+                .map(Belief::object)
+                .findFirst();
     }
 
     /** Where somebody sent the agent, or its trainer when it has grown, and why. Null if nowhere. */

@@ -60,6 +60,7 @@ public final class Inheritance {
             "strands_you",   // who sends you somewhere there is no leaving
             "takes_you_to",  // where somebody's offer of passage actually goes
             "nothing_to_do", // somewhere with nothing to hunt and nowhere new to walk to
+            "offers_calling", // which calling somebody offers a beginner
             // Every bit as true of the world, and the first things a recording of somebody
             // playing can teach: what a monster is worth, and whether it fights back.
             "gives_exp",

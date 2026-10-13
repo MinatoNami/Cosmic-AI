@@ -63,6 +63,13 @@ public record Disposition(String name, double wanderlust, double aggression, dou
         return suit.isEmpty() ? java.util.Set.of("warrior", "bowman", "thief", "magician", "pirate") : suit;
     }
 
+    /**
+     * The level past which a beginner takes whatever calling it is offered. Until then it
+     * holds out for one that suits it - it was fifteen, and agents with the stats for a
+     * calling that suited them became whatever the first statue they reached offered.
+     */
+    public static final int ANY_CALLING_AFTER = 30;
+
     /** Hands out dispositions in turn, so a small population covers all of them. */
     public static Disposition forAgent(int index) {
         return ROTATION[Math.floorMod(index, ROTATION.length)];

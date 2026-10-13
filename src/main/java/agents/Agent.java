@@ -719,9 +719,6 @@ public class Agent implements Runnable {
     private static final int STEPS_BETWEEN_CASTS = 5;
     private static final long RECAST_EARLY_MILLIS = 3000;
 
-    /** Past this level, a calling that does not suit it is better than none. */
-    private static final int ANY_CALLING_AFTER = 15;
-
     private static final java.util.regex.Pattern CALLING = java.util.regex.Pattern.compile(
             "(?i)(?:be(?:come)? an?|be the)\\s*(?:#[a-z])*\\s*(warrior|bowman|magician|thief|pirate)");
 
@@ -926,9 +923,13 @@ public class Agent implements Runnable {
         // decided to become a bowman?" and "It is an important and final choice", and a fighter
         // did. So whatever kind of line offers the wrong calling, the conversation is closed.
         Optional<String> offered = callingOffered(dialogue.text());
+        if (offered.isPresent() && world.job() == 0) {
+            // Which calling somebody offers is what lets the next errand be to the right one.
+            mind.saw("npc:" + dialogue.npcId(), "offers_calling", offered.get(), perceiver.currentTick());
+        }
         if (world.job() == 0 && offered.isPresent()
                 && !disposition.callingsThatSuit().contains(offered.get())
-                && world.level() < ANY_CALLING_AFTER) {
+                && world.level() < agents.mind.Disposition.ANY_CALLING_AFTER) {
             log.info("{} turns down npc:{} - a {} is not for it", mind.name(), dialogue.npcId(), offered.get());
             reply(dialogue.style(), isAQuestion(dialogue.style()) ? NPC_NO : NPC_CLOSE, NO_SELECTION);
             return;

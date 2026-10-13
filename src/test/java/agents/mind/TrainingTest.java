@@ -75,6 +75,22 @@ class TrainingTest {
                 ClientPackets.distributeAp(Training.STR)), "the server places a beginner's first ten levels");
     }
 
+    /** Agent2's case: a forager, cut out to be a Thief, at level 20 with LUK 45 and DEX 14. */
+    @Test
+    void aBeginnerShortOfTheCallingThatSuitsItRaisesWhatItIsShortOf() {
+        WorldModel world = character(0, 20, Map.of("AVAILABLEAP", 5, "STR", 57, "DEX", 14, "INT", 4, "LUK", 45));
+
+        assertTrue(is(training(Disposition.FORAGER).step(world), ClientPackets.distributeAp(Training.DEX)),
+                "the Thief asks for DEX 25");
+    }
+
+    @Test
+    void aBeginnerWithTheStatsForItsCallingSpendsAsBefore() {
+        WorldModel world = character(0, 20, Map.of("AVAILABLEAP", 5, "STR", 57, "DEX", 40, "INT", 4, "LUK", 4));
+
+        assertTrue(training(Disposition.WANDERER).shortForACalling(world).isEmpty(), "DEX 40 is a Bowman already");
+    }
+
     /** Agent1's case: a beginner at 27 with 80 points and nowhere they went. */
     @Test
     void anOlderBeginnerSpendsByTemperament() {

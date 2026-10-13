@@ -1333,6 +1333,24 @@ class ReflexPolicyTest {
         assertEquals("map:20000", policy.errandMap(), "the Warrior Statue, whose STR 35 it has");
     }
 
+    /** A wanderer is cut out to be a Bowman; the Pirate's statue, nearer, is not for it. */
+    @Test
+    void aBeginnerGoesToTheCallingThatSuitsIt() {
+        aJunction();
+        mind.saw("npc:9201127", "present_in", "map:30000", 2);
+        mind.hear("npc:9201127", "wants_first", "level 10, DEX 20", 2);
+        mind.saw("npc:9201127", "offers_calling", "pirate", 2);
+        mind.saw("npc:9201124", "present_in", "map:20000", 3);
+        mind.hear("npc:9201124", "wants_first", "level 10, DEX 25", 3);
+        mind.saw("npc:9201124", "offers_calling", "bowman", 3);
+        world.update(new Observation.MapEntered(10, 10000, 0));
+        world.update(new Observation.StatsChanged(10, Map.of("LEVEL", 17, "JOB", 0, "STR", 57, "DEX", 40)));
+        ReflexPolicy policy = new ReflexPolicy(new Random(1), Disposition.WANDERER);
+        policy.decide(mind, world, 11);
+
+        assertEquals("map:20000", policy.errandMap(), "the Bowman's statue");
+    }
+
     @Test
     void thirtyOfWhatWasAskedForIsWhatWasAskedFor() {
         java.util.function.IntUnaryOperator twelveMarbles = id -> id == 4031013 ? 12 : 0;
