@@ -51,7 +51,7 @@ public final class KnownWorld {
     }
 
     /** How far a search over the whole world map goes. */
-    private static final int ATLAS_HOPS = 12;
+    private static final int ATLAS_HOPS = 30;
 
     /** Each map's exits as this agent understands them, worked out once per reading. */
     private final Map<String, Map<String, String>> understood = new HashMap<>();

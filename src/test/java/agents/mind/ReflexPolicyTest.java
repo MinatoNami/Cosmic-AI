@@ -1284,6 +1284,55 @@ class ReflexPolicyTest {
                 "level 30 since they last spoke: back to the one who trained it");
     }
 
+    /**
+     * A fare it can pay is no reason to put off its second job. Agent1, level 35 with 394,000
+     * mesos, held the Lith Harbor taxi's fare as its errand for good and never went back to
+     * Athena Pierce.
+     */
+    @Test
+    void goesBackToItsTrainerBeforeAnyFareItCanPay() {
+        aJunction();
+        mind.take(new Observation.MapEntered(4, 20000, 0));
+        mind.take(new Observation.DialogueShown(4, 1022000, "Go, young Warrior!", 0));
+        mind.saw("self", "trained_by", "npc:1022000", 4);
+        mind.saw("npc:1002002", "present_in", "map:30000", 4);
+        mind.hear("npc:1002002", "wants_first", "1500 mesos", 4);
+        mind.take(new Observation.MapEntered(5, 10000, 0));
+        mind.take(new Observation.StatsChanged(9, Map.of("LEVEL", 30, "JOB", 100, "MESO", 394000)));
+        world.update(new Observation.MapEntered(10, 10000, 0));
+        world.update(new Observation.StatsChanged(10, Map.of("LEVEL", 30, "JOB", 100)));
+        ReflexPolicy policy = new ReflexPolicy(new Random(1), Disposition.WANDERER);
+        policy.decide(mind, world, 10);
+        policy.cameInAt(new Point(-500, 0));
+
+        assertEquals("west00", policy.pickDoor(JUNCTION_DOORS, mind, 10000, "player:1").name(),
+                "the trainer is west; the taxi fare east waits");
+    }
+
+    /**
+     * A beginner holds out for whoever named the stats a calling asks for, and an NPC it cannot
+     * get back to is no errand at all. Agent0, rich on Victoria at level 17, held Shanks's fare
+     * home as its errand - one-way, unreachable - and never went to the job statues.
+     */
+    @Test
+    void aBeginnerGoesToTheStatueNotTheFareOrTheFerryHome() {
+        aJunction();
+        mind.saw("npc:22000", "present_in", "map:60000", 1);
+        mind.hear("npc:22000", "wants_first", "150 mesos", 1);
+        mind.saw("npc:1002002", "present_in", "map:30000", 2);
+        mind.hear("npc:1002002", "wants_first", "1500 mesos", 2);
+        mind.saw("npc:9201123", "present_in", "map:20000", 3);
+        mind.hear("npc:9201123", "wants_first", "level 10, STR 35", 3);
+        world.update(new Observation.MapEntered(10, 10000, 0));
+        world.update(new Observation.StatsChanged(10, Map.of("LEVEL", 17, "JOB", 0, "STR", 57, "DEX", 40)));
+        world.update(new Observation.InventoryShown(10, 120000, Map.of(1, 24, 2, 24, 3, 24, 4, 24, 5, 24), List.of()));
+        mind.take(new Observation.StatsChanged(10, Map.of("LEVEL", 17, "JOB", 0, "MESO", 120000)));
+        ReflexPolicy policy = new ReflexPolicy(new Random(1), Disposition.WANDERER);
+        policy.decide(mind, world, 11);
+
+        assertEquals("map:20000", policy.errandMap(), "the Warrior Statue, whose STR 35 it has");
+    }
+
     @Test
     void thirtyOfWhatWasAskedForIsWhatWasAskedFor() {
         java.util.function.IntUnaryOperator twelveMarbles = id -> id == 4031013 ? 12 : 0;

@@ -352,6 +352,11 @@ public class ReflexPolicy implements Policy {
     private String errandMap;
     private int errandNpc = -1;
 
+    /** Where the errand it holds is, for tests. */
+    String errandMap() {
+        return errandMap;
+    }
+
     /**
      * The map the agent is on its way to, which it keeps heading for until it gets there.
      *
@@ -1433,7 +1438,7 @@ public class ReflexPolicy implements Policy {
             boredom = 0;
         }
         double score = boredom
-                + (errandMap != null || !shopMaps.isEmpty() ? ERRAND : 0)
+                + (errandMap != null || sentMap != null || !shopMaps.isEmpty() ? ERRAND : 0)
                 // A map that has killed it twice at about this level is a map to get out of.
                 + (deathsHere >= 2 ? LEAVE_A_KILLING_GROUND : 0);
 
@@ -2266,6 +2271,7 @@ public class ReflexPolicy implements Policy {
         int mesos = mesosHeld(mind);
         Set<String> stranders = strandedBy(mind);
         String here = KnownWorld.mapRef(world.mapId());
+        Set<String> reachable = null;
         for (Belief belief : mind.semantic().liveBeliefs()) {
             if (!belief.predicate().equals("wants_first")
                     || !belief.subject().startsWith("npc:")) {
@@ -2287,13 +2293,44 @@ public class ReflexPolicy implements Policy {
             if (whereItWas.isEmpty()) {
                 continue;       // heard the condition, never saw where; nothing to walk to
             }
-            errandNpc = npcId;
             if (!whereItWas.get().equals(here)) {
-                errandMap = whereItWas.get();
+                // Somewhere it cannot get back to is not an errand, and holding it hides the
+                // ones it could run: Shanks's fare home, payable for ever once Agent0 was rich
+                // and on Victoria, took the one errand slot from the four job statues whose
+                // conditions it met, and it reached level seventeen without a job.
+                if (reachable == null) {
+                    reachable = KnownWorld.rememberedBy(mind.semantic().liveBeliefs()).reachableFrom(here, Set.of()).keySet();
+                }
+                if (!reachable.contains(whereItWas.get())) {
+                    continue;
+                }
             }
-            return;             // one errand at a time; a plan you keep changing is not one
+            boolean aCalling = world.job() == 0 && STAT_ASKED.matcher(belief.object()).find();
+            if (errandNpc >= 0 && !aCalling) {
+                continue;       // already holding one, and this is no better
+            }
+            errandNpc = npcId;
+            errandMap = whereItWas.get().equals(here) ? null : whereItWas.get();
+            if (world.job() == 0 ? aCalling : true) {
+                // One errand at a time; a plan you keep changing is not one. But a beginner
+                // holds out for whoever named the stats a calling asks for: the first payable
+                // errand Agent0 and Agent2 found was a taxi fare and a hotel bill.
+                break;
+            }
         }
+        // Being sent somewhere, or having grown enough to go back to its trainer, comes before
+        // anything somebody merely named a price for. It used to be asked only when no price
+        // was payable - and with money, one always is: a level-35 Bowman with 394,000 mesos
+        // held the Lith Harbor taxi's fare as its errand for good, and never went back to
+        // Athena Pierce for its second job.
+        int payableNpc = errandNpc;
+        errandNpc = -1;
         whereItWasSent(mind, world, here, tick);
+        if (sentMap != null || errandNpc >= 0) {
+            errandMap = null;
+        } else {
+            errandNpc = payableNpc;
+        }
     }
 
     /** Where somebody sent the agent, or its trainer when it has grown, and why. Null if nowhere. */
@@ -2334,7 +2371,7 @@ public class ReflexPolicy implements Policy {
                 && !followed(mind, instruction.object(), instruction.lastSeen())) {
             String target = instruction.object();
             Optional<String> map = target.startsWith("map:") ? Optional.of(target) : lastSeenIn(mind, target);
-            if (map.isPresent()) {
+            if (map.isPresent() && canGetTo(mind, here, map.get())) {
                 if (target.startsWith("npc:")) {
                     errandNpc = npcIdIn(target);
                 }
@@ -2370,6 +2407,15 @@ public class ReflexPolicy implements Policy {
             sentMap = map.get();
             sentWhy = "the one who trained you, and you have grown since";
         }
+    }
+
+    /**
+     * Whether a map can be walked to from here, as far as it knows. Somewhere behind an NPC's
+     * warp - a Boss Rush resting room, the far side of a one-way ferry - is not an errand.
+     */
+    private static boolean canGetTo(Mind mind, String here, String map) {
+        return map.equals(here)
+                || KnownWorld.rememberedBy(mind.semantic().liveBeliefs()).reachableFrom(here, Set.of()).containsKey(map);
     }
 
     /** Whether an instruction heard at a tick has been carried out since. */
@@ -2493,7 +2539,7 @@ public class ReflexPolicy implements Policy {
     private static final Pattern LEVEL_ASKED =
             Pattern.compile("(?:level|lv\\.?)\\s*(\\d+)", Pattern.CASE_INSENSITIVE);
     private static final Pattern MESOS_ASKED =
-            Pattern.compile("([\\d,]+)\\s*mesos?", Pattern.CASE_INSENSITIVE);
+            Pattern.compile("(\\d[\\d,]*)\\s*mesos?", Pattern.CASE_INSENSITIVE);
 
     /** What the agent last knew about its own purse, which the server tells it as a stat. */
     private static int mesosHeld(Mind mind) {
