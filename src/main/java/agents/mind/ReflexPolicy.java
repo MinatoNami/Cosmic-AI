@@ -566,6 +566,7 @@ public class ReflexPolicy implements Policy {
             gaveUpOn.clear();           // and nowhere here is somewhere we failed to reach
             boxHits.clear();            // and every box here is new
             rideWanted = -1;            // and whoever it meant to ask is behind it
+            rideTo = null;
             arrivedAt = world.selfPosition();
             // Write down which doors this place has. Noticing the exits of the room you are
             // standing in is looking, not deduction - and it is the one thing that lets an
@@ -1496,6 +1497,10 @@ public class ReflexPolicy implements Policy {
         }
         double score = boredom
                 + (errandMap != null || sentMap != null || !shopMaps.isEmpty() ? ERRAND : 0)
+                // A calling elsewhere outweighs anything to chat about here. Henesys has quests
+                // on every corner, and a talker with the INT for Magician started and handed
+                // them in one after another, the Magician's statue a door-score away for good.
+                + (errandMap != null && errandForACalling ? CALLING_PULL : 0)
                 // A map that has killed it twice at about this level is a map to get out of.
                 + (deathsHere >= 2 ? LEAVE_A_KILLING_GROUND : 0);
 
@@ -2331,6 +2336,7 @@ public class ReflexPolicy implements Policy {
         Set<String> reachable = null;
         int bestRank = -1;
         cutOffFrom.clear();
+        errandForACalling = false;
         for (Belief belief : mind.semantic().liveBeliefs()) {
             if (!belief.predicate().equals("wants_first")
                     || !belief.subject().startsWith("npc:")) {
@@ -2372,6 +2378,7 @@ public class ReflexPolicy implements Policy {
                 continue;       // not one to run, or no better than the one it holds
             }
             bestRank = rank;
+            errandForACalling = rank >= CALLING_ERRAND && world.job() == 0;
             errandNpc = npcId;
             errandMap = whereItWas.get().equals(here) ? null : whereItWas.get();
             if (rank == BEST_ERRAND || world.job() != 0) {
@@ -2425,6 +2432,13 @@ public class ReflexPolicy implements Policy {
     public int rideWanted() {
         return rideWanted;
     }
+
+    @Override
+    public String rideTo() {
+        return rideTo;
+    }
+
+    private String rideTo;
 
     /** When it last went to ask each NPC for a ride, so one that will not take it is not pestered. */
     private final Map<Integer, Integer> rideAskedAt = new HashMap<>();
@@ -2491,6 +2505,7 @@ public class ReflexPolicy implements Policy {
         errandNpc = bestNpc;
         errandMap = bestNear.equals(here) ? null : bestNear;
         rideWanted = bestNpc;
+        rideTo = null;          // wherever they go back to will do
     }
 
     /** Where somebody is known to have taken people. */
@@ -2525,12 +2540,17 @@ public class ReflexPolicy implements Policy {
             return false;
         }
         String here = KnownWorld.mapRef(world.mapId());
-        KnownWorld.Hop hop = KnownWorld.rememberedBy(mind.semantic().liveBeliefs())
-                .reachableFrom(here, Set.of()).get(destination);
+        KnownWorld known = KnownWorld.rememberedBy(mind.semantic().liveBeliefs());
+        KnownWorld.Hop hop = known.reachableFrom(here, Set.of()).get(destination);
         if (hop == null || !KnownWorld.isRide(hop.firstDoor())) {
             return false;
         }
         int npcId = npcIdIn(hop.firstDoor());
+        if (decisionsMade - rideAskedAt.getOrDefault(npcId, -ASK_FOR_A_RIDE_AGAIN) < ASK_FOR_A_RIDE_AGAIN
+                && rideWanted != npcId) {
+            return false;       // asked them lately and it came to nothing
+        }
+        String landing = known.exitTo(here, hop.firstDoor()).orElse(null);
         Optional<WorldModel.Entity> npc = world.visibleNpcs().stream().filter(n -> n.typeId() == npcId).findFirst();
         if (npc.isEmpty()) {
             return false;
@@ -2543,6 +2563,7 @@ public class ReflexPolicy implements Policy {
                 "ask for a ride towards " + destination, score,
                 () -> {
                     rideWanted = npcId;
+                    rideTo = landing;
                     if (close) {
                         rideAskedAt.put(npcId, decisionsMade);
                         greetedAt.put(npcId, decisionsMade);
@@ -2611,6 +2632,12 @@ public class ReflexPolicy implements Policy {
 
     /** A beginner's errand to somebody offering a calling that suits it: nothing beats it. */
     private static final int BEST_ERRAND = 3;
+
+    /** Whether the errand held is to somebody about a calling. */
+    private boolean errandForACalling;
+
+    /** What a calling elsewhere adds to leaving: more than any conversation here is worth. */
+    private static final double CALLING_PULL = 1.0;
 
     /** A beginner's errand to somebody who named a calling's stats, offer not yet heard. */
     private static final int CALLING_ERRAND = 2;

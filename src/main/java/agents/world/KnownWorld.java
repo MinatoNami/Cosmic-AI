@@ -276,6 +276,11 @@ public final class KnownWorld {
         return maps;
     }
 
+    /** Where a door - or somebody's ride - from a map goes, as far as it knows. */
+    public Optional<String> exitTo(String mapRef, String door) {
+        return Optional.ofNullable(exitsFrom(mapRef).get(door));
+    }
+
     /** Whether a step on a route is somebody to ask rather than a door to walk through. */
     public static boolean isRide(String door) {
         return door != null && door.startsWith("npc:");

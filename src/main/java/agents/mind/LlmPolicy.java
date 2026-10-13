@@ -588,6 +588,11 @@ public class LlmPolicy implements Policy {
     }
 
     @Override
+    public String rideTo() {
+        return fallback.rideTo();
+    }
+
+    @Override
     public void rethink() {
         fallback.rethink();
     }

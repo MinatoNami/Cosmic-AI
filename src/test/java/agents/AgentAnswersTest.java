@@ -136,6 +136,8 @@ class AgentAnswersTest {
         assertEquals(0, Agent.optionThatGoes("How's the traveling? Are you enjoying it?#b\r\n#L0#Yes, I'm done with "
                 + "traveling. Can I go back to #m104000000#?\r\n#L1#No, I'd like to continue exploring this place."));
         assertEquals(-1, Agent.optionThatGoes("#L0#Tell me about this place#l\r\n#L1#Never mind#l"));
+        assertEquals(2, Agent.optionThatGoes("Where to?\r\n#L0##m104000000# (100 mesos)#l\r\n#L1##m102000000# "
+                + "(100 mesos)#l\r\n#L2##m101000000# (80 mesos)#l", "map:101000000"), "a taxi's list is towns");
     }
 
     /** What the job statues and instructors offer, read from their own words. */

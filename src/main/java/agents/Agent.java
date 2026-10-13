@@ -1064,7 +1064,7 @@ public class Agent implements Runnable {
         // from, so nobody ever came back from a world tour.
         if (dialogue.npcId() == policy.rideWanted()) {
             if (dialogue.style() == MENU) {
-                int going = optionThatGoes(dialogue.text());
+                int going = optionThatGoes(dialogue.text(), policy.rideTo());
                 if (going >= 0) {
                     wentAlongWith = dialogue.npcId();
                     acceptedAtStep = steps;
@@ -1235,6 +1235,23 @@ public class Agent implements Runnable {
 
     /** The option in a list that says yes to going, or -1. */
     static int optionThatGoes(String said) {
+        return optionThatGoes(said, null);
+    }
+
+    /**
+     * The option in a list naming where it wants to go - a taxi's list is towns, each as its
+     * map - or failing that the one that says yes to going; -1 if none does.
+     */
+    static int optionThatGoes(String said, String toMap) {
+        if (toMap != null && toMap.startsWith("map:")) {
+            String named = "#m" + toMap.substring(4) + "#";
+            java.util.regex.Matcher option = OPTION.matcher(said);
+            while (option.find()) {
+                if (option.group(2).contains(named)) {
+                    return Integer.parseInt(option.group(1));
+                }
+            }
+        }
         java.util.regex.Matcher option = OPTION.matcher(said);
         while (option.find()) {
             if (GOING.matcher(option.group(2)).find()) {
