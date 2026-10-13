@@ -270,6 +270,11 @@ public final class Training {
      * nothing it would take.
      */
     Optional<Integer> shortForACalling(WorldModel world) {
+        return shortForACalling(disposition, world);
+    }
+
+    /** As above, for any temperament. */
+    static Optional<Integer> shortForACalling(Disposition disposition, WorldModel world) {
         int bestStat = -1;
         int bestShort = Integer.MAX_VALUE;
         for (String calling : disposition.callingsThatSuit()) {

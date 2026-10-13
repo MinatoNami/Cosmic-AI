@@ -281,6 +281,17 @@ public final class KnownWorld {
         return Optional.ofNullable(exitsFrom(mapRef).get(door));
     }
 
+    /**
+     * Places agents are not to go: Happyville and the Christmas maps around it (209000000 to
+     * 209099999). Nothing to hunt, quests that never end, and no way out but asking - agents
+     * spent whole days there, three at a time, and a fighter with the stats for Warrior an
+     * afternoon.
+     */
+    public static boolean isOffLimits(String mapRef) {
+        int id = idOf(mapRef);
+        return id >= 209000000 && id <= 209099999;
+    }
+
     /** Whether a step on a route is somebody to ask rather than a door to walk through. */
     public static boolean isRide(String door) {
         return door != null && door.startsWith("npc:");
@@ -520,7 +531,8 @@ public final class KnownWorld {
             for (Map.Entry<String, String> exit : exitsFrom(here.map()).entrySet()) {
                 String door = exit.getKey();
                 String destination = exit.getValue();
-                if (avoiding.contains(destination) || !canWalkTo(here.map(), here.entrance(), here == start, door)) {
+                if (avoiding.contains(destination) || isOffLimits(destination)
+                        || !canWalkTo(here.map(), here.entrance(), here == start, door)) {
                     continue;
                 }
                 Arrived next = new Arrived(destination, arrivalAt(here.map(), door, destination));

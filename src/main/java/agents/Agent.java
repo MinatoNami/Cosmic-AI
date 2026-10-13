@@ -1084,6 +1084,22 @@ public class Agent implements Runnable {
         if (callingHere.isPresent() && world.job() == 0) {
             mind.saw("npc:" + dialogue.npcId(), "offers_calling", callingHere.get(), perceiver.currentTick());
         }
+        // Somewhere off limits, a way out is a yes whatever else is on offer; an offer going
+        // somewhere off limits is a no whatever the policy wants.
+        String hereRef = KnownWorld.mapRef(world.mapId());
+        if (isAQuestion(dialogue.style())) {
+            if (KnownWorld.isOffLimits(hereRef) && LEAVING.matcher(dialogue.text()).find()) {
+                log.info("{} takes npc:{} up on a way out of map {}", mind.name(), dialogue.npcId(), world.mapId());
+                noteAnswer(dialogue.npcId(), dialogue.style(), NPC_YES_OR_NEXT);
+                reply(dialogue.style(), NPC_YES_OR_NEXT, NO_SELECTION);
+                return;
+            }
+            if (leadsOffLimits(dialogue.npcId(), dialogue.text())) {
+                log.info("{} turns down npc:{} - it goes somewhere off limits", mind.name(), dialogue.npcId());
+                reply(dialogue.style(), NPC_NO, NO_SELECTION);
+                return;
+            }
+        }
         // A ride the policy has decided to take: yes, and from a list the option that goes.
         // Spinel's way back from Zipangu is a list - "Yes, I'm done with traveling. Can I go
         // back?" or "No, I'd like to continue exploring" - and a list is otherwise walked away
@@ -1278,6 +1294,26 @@ public class Agent implements Runnable {
             "#L(\\d+)#(.*?)(?=#l|#L\\d+#|\\r|\\n|$)", java.util.regex.Pattern.DOTALL);
     private static final java.util.regex.Pattern GOING = java.util.regex.Pattern.compile(
             "(?i)\\b(yes|take me|go back|go to|let'?s go|i'?ll go)\\b");
+
+    private static final java.util.regex.Pattern LEAVING = java.util.regex.Pattern.compile(
+            "(?i)\\b(get out|leave|go back|return|take you back)\\b");
+    private static final java.util.regex.Pattern OFF_LIMITS_NAMED = java.util.regex.Pattern.compile(
+            "(?i)happyville|#m2090\\d{5}#");
+
+    /** Whether an offer goes somewhere off limits, by where this NPC is known to take people or by what it says. */
+    private boolean leadsOffLimits(int npcId, String said) {
+        if (OFF_LIMITS_NAMED.matcher(said).find() && !KnownWorld.isOffLimits(KnownWorld.mapRef(world.mapId()))) {
+            return true;
+        }
+        String npc = "npc:" + npcId;
+        java.util.Set<String> goes = new java.util.HashSet<>();
+        for (Belief belief : mind.semantic().liveBeliefs()) {
+            if (belief.subject().equals(npc) && belief.predicate().equals("takes_you_to")) {
+                goes.add(belief.object());
+            }
+        }
+        return !goes.isEmpty() && goes.stream().allMatch(KnownWorld::isOffLimits);
+    }
 
     /** The option in a list that says yes to going, or -1. */
     static int optionThatGoes(String said) {

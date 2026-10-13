@@ -459,6 +459,9 @@ public class ReflexPolicy implements Policy {
      */
     private boolean shortOfMoney;
 
+    /** A beginner without the stats yet for any calling that suits it. */
+    private boolean shortOfStats;
+
     static boolean shortOfMoney(Mind mind, WorldModel world) {
         int mesos = world.inventory().meso();
         if (mesos < 0) {
@@ -511,6 +514,11 @@ public class ReflexPolicy implements Policy {
     public Decision decide(Mind mind, WorldModel world, long tick) {
         currentTick = tick;
         shortOfMoney = shortOfMoney(mind, world);
+        // Short of the stats for any calling that suits it is short of levels, and levels come
+        // from hunting: a wanderer five DEX short of Bowman stayed at level 13 for two hours,
+        // travelling and talking, while the levels that would have brought the DEX went unearned.
+        shortOfStats = world.job() == 0 && world.level() >= 10
+                && Training.shortForACalling(disposition, world).isPresent();
         standingAt = world.selfPosition();
         boolean wasStranded = strandedHere;
         strandedHere = world.monsterCount() == 0 && decisionsHere > STRANDED_AFTER && nothingNewOnFoot(mind, world);
@@ -913,13 +921,13 @@ public class ReflexPolicy implements Policy {
     private void somethingToFight(List<Choice> choices, WorldModel world, Point self) {
         world.nearestMonster().ifPresent(monster -> {
             double distance = monster.position().distance(self);
-            double near = nearness(distance, shortOfMoney
+            double near = nearness(distance, shortOfMoney || shortOfStats
                     ? Math.max(disposition.pursuitRange(), BROKE_PURSUIT) : disposition.pursuitRange());
             if (near <= 0) {
                 return;
             }
             double score = (0.2 + disposition.aggression()) * near
-                    + (shortOfMoney ? SHORT_OF_MONEY * near : 0)
+                    + (shortOfMoney || shortOfStats ? SHORT_OF_MONEY * near : 0)
                     + NEGLECT_MATTERS * neglect("fight") + urgeFor("fight")
                     + commitmentTo("fight", monster.position());
             // From as far as its attack reaches: a Bowman shoots from where it stands.
@@ -2043,7 +2051,7 @@ public class ReflexPolicy implements Policy {
                 3.0,                                        // somebody owed a visit
                 3.5,                                        // a shop, when the bag is full
                 (0.4 + disposition.aggression() * 1.2)      // something to hunt,
-                        * (shortOfMoney ? MONEY_MAKES_HUNTING : 1),  // and much more when broke
+                        * (shortOfMoney || shortOfStats ? MONEY_MAKES_HUNTING : 1),  // and much more when broke or short of a calling
                 1.5,                                        // somewhere never stood in
                 0.3,                                        // the less visited, the better
                 0.35,                                       // each door of walking
@@ -2468,6 +2476,9 @@ public class ReflexPolicy implements Policy {
         if (errandNpc < 0 && sentMap == null && !cutOffFrom.isEmpty()) {
             askForARideBack(mind, here);
         }
+        if (KnownWorld.isOffLimits(here)) {
+            leaveOffLimits(mind, world, here);
+        }
         // Where the model wanted to go waits too: Agent3, with the INT for Magician, was
         // taking a taxi to Kerning City because that was the model's pick.
         if (jobAdvancementPending() && destinationFromModel) {
@@ -2584,6 +2595,30 @@ public class ReflexPolicy implements Policy {
             }
         }
         return to;
+    }
+
+    /**
+     * Somewhere it is not to be: finding the way out is the errand, before anything else.
+     * Somebody here known to take people somewhere else first; anybody here not yet asked
+     * otherwise, since asking is the only way out of Happyville.
+     */
+    private void leaveOffLimits(Mind mind, WorldModel world, String here) {
+        Optional<WorldModel.Entity> out = world.visibleNpcs().stream()
+                .filter(npc -> ridesKnownFor(mind, "npc:" + npc.typeId()).stream()
+                        .anyMatch(to -> !KnownWorld.isOffLimits(to)))
+                .findFirst()
+                .or(() -> world.visibleNpcs().stream()
+                        .filter(npc -> decisionsMade - rideAskedAt.getOrDefault(npc.typeId(), -ASK_FOR_A_RIDE_AGAIN)
+                                >= ASK_FOR_A_RIDE_AGAIN)
+                        .findFirst());
+        out.ifPresent(npc -> {
+            errandNpc = npc.typeId();
+            errandMap = null;
+            sentMap = null;
+            rideWanted = npc.typeId();
+            rideTo = null;
+            errandForACalling = true;       // leaving here comes before anything here
+        });
     }
 
     /** Everyone it has seen or heard of standing anywhere. */

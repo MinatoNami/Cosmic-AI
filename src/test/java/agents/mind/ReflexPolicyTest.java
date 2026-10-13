@@ -1434,6 +1434,26 @@ class ReflexPolicyTest {
                 "the Bowman's statue first");
     }
 
+    /** Happyville is off limits: no route goes through it, nor ends there. */
+    @Test
+    void happyvilleIsNeverSomewhereToGo() {
+        assertTrue(KnownWorld.isOffLimits("map:209000000"));
+        assertFalse(KnownWorld.isOffLimits("map:100000000"));
+    }
+
+    /** Five DEX short of Bowman, a wanderer hunts what it would otherwise walk past. */
+    @Test
+    void aBeginnerShortOfItsCallingsStatsGoesHunting() {
+        world.update(new Observation.StatsChanged(1, Map.of("LEVEL", 13, "JOB", 0, "STR", 57, "DEX", 20, "INT", 4, "LUK", 4)));
+        world.update(new Observation.MonsterAppeared(2, 9001, 100100, new Point(400, 0)));
+        ReflexPolicy wanderer = new ReflexPolicy(new Random(1), Disposition.WANDERER);
+
+        Intent intent = wanderer.decide(mind, world, 3).intent();
+
+        assertTrue(intent instanceof Intent.MoveTo move && move.destination().x == 400
+                || intent instanceof Intent.Attack, "after the snail: " + intent);
+    }
+
     @Test
     void thirtyOfWhatWasAskedForIsWhatWasAskedFor() {
         java.util.function.IntUnaryOperator twelveMarbles = id -> id == 4031013 ? 12 : 0;
