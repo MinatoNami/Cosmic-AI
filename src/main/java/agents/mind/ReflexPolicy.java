@@ -2581,6 +2581,11 @@ public class ReflexPolicy implements Policy {
         if (destination == null) {
             return false;
         }
+        // Not with whoever it came for standing here: the cab from Henesys brought two agents
+        // to the job statues in Lith Harbor, and the next cab out outscored walking over.
+        if (errandNpc >= 0 && errandMap == null) {
+            return false;
+        }
         String here = KnownWorld.mapRef(world.mapId());
         KnownWorld known = KnownWorld.rememberedBy(mind.semantic().liveBeliefs());
         KnownWorld.Hop hop = known.reachableFrom(here, Set.of()).get(destination);
