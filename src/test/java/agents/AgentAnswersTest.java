@@ -144,6 +144,11 @@ class AgentAnswersTest {
                 "Once you train hard enough, you will be entitled to occupy a job. You can become a Bowman in "
                         + "Henesys, a Magician in Ellinia, a Warrior in Perion, and a Thief in Kerning City..."),
                 "telling of every calling is offering none");
+        assertEquals(java.util.Optional.empty(), Agent.callingOffered(
+                "Level isn't the only thing that determines the advancement, though. You also need to boost up the "
+                        + "levels of a particular ability based on the occupation. For example, to be a warrior, your "
+                        + "STR has to be over 35, and so forth, you know what I'm saying?"),
+                "advice about a calling is not an offer of one");
     }
 
     /** "Come back at level ten" written down as it was said, stats and all. */

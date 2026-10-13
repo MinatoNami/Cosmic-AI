@@ -733,8 +733,36 @@ public class Agent implements Runnable {
         // took it for an offer of the first, cut it off, and wrote it down as offering Bowman.
         long named = CALLING_NAME.matcher(said).results()
                 .map(name -> name.group().toLowerCase()).distinct().count();
-        return named > 1 ? Optional.empty() : Optional.of(calling.group(1).toLowerCase());
+        if (named > 1) {
+            return Optional.empty();
+        }
+        // And an offer is put to you: "want to be", "wanna be", "decided to become".
+        // Explaining is not offering - "for example, to be a warrior, your STR has to be over
+        // 35" is a Maple Island helper's advice, and a talker cut it off as a Warrior's offer.
+        int start = Math.max(0, lastSentenceEnd(said, calling.start()));
+        int end = said.length();
+        for (int i = calling.end(); i < said.length(); i++) {
+            if (".!?".indexOf(said.charAt(i)) >= 0) {
+                end = i + 1;
+                break;
+            }
+        }
+        String sentence = said.substring(start, end);
+        boolean putToYou = OFFERING.matcher(sentence).find();
+        return putToYou ? Optional.of(calling.group(1).toLowerCase()) : Optional.empty();
     }
+
+    private static int lastSentenceEnd(String said, int before) {
+        for (int i = before - 1; i >= 0; i--) {
+            if (".!?".indexOf(said.charAt(i)) >= 0) {
+                return i + 1;
+            }
+        }
+        return 0;
+    }
+
+    private static final java.util.regex.Pattern OFFERING = java.util.regex.Pattern.compile(
+            "(?i)\\b(want|wanna|decided|would you|will you|ready to|like to)\\b");
 
     private static final java.util.regex.Pattern CALLING_NAME = java.util.regex.Pattern.compile(
             "(?i)(warrior|bowman|magician|thief|pirate)");
