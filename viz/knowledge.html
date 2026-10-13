@@ -756,7 +756,8 @@ function snapshotLabel(snap, events) {
   // The condense that made it is the one recorded within a few minutes of its file time.
   const made = Date.parse(snap.madeAt);
   const by = events.find(r => r.e.event === 'condense' && Math.abs(r.at - made) < 5 * 60000);
-  return `${snap.name === 'current' ? 'Standing now' : 'Past'} - made ${when(snap.madeAt)}${by ? ` by generation ${by.gen}` : ''} (${kb(snap.bytes)})`;
+  const how = !by ? '' : by.e.foldedFrom ? ` from ${by.e.foldedFrom.replace(/^minds\.backup-/, '')}` : ` by generation ${by.gen}`;
+  return `${snap.name === 'current' ? 'Standing now' : 'Past'} - made ${when(snap.madeAt)}${how} (${kb(snap.bytes)})`;
 }
 
 function renderComparison(events) {
@@ -769,13 +770,14 @@ function renderComparison(events) {
   const lists = {
     added: d.added.map(b => ({ b })),
     removed: d.removed.map(b => ({ b })),
-    agreed: d.changed.map(x => ({ b: x.belief, before: x.evidenceBefore })),
+    stronger: d.changed.filter(x => x.belief.evidence > x.evidenceBefore).map(x => ({ b: x.belief, before: x.evidenceBefore })),
+    weaker: d.changed.filter(x => x.belief.evidence < x.evidenceBefore).map(x => ({ b: x.belief, before: x.evidenceBefore })),
   };
   const byPredicate = new Map();
   for (const [mode, list] of Object.entries(lists)) {
     for (const x of list) {
       const p = x.b.predicate;
-      if (!byPredicate.has(p)) byPredicate.set(p, { added: 0, removed: 0, agreed: 0 });
+      if (!byPredicate.has(p)) byPredicate.set(p, { added: 0, removed: 0, stronger: 0, weaker: 0 });
       byPredicate.get(p)[mode]++;
     }
   }
@@ -786,7 +788,7 @@ function renderComparison(events) {
     .map((x, i) => ({ key: `${c.mode}:${i}:${x.b.subjectRef}:${x.b.predicate}:${x.b.objectRef}`, ...x }));
   const modeTile = (mode, n, label, detail) => `<button class="tile" data-mode="${mode}" style="${c.mode === mode ? 'border-color: var(--accent)' : ''}"><div class="n">${num(n)}</div><div class="l">${label}</div><div class="d">${detail}</div></button>`;
   const preds = [...byPredicate.entries()].sort((a, b) => (b[1][c.mode] - a[1][c.mode]) || a[0].localeCompare(b[0])).filter(([, n]) => n[c.mode] > 0);
-  const title = { added: 'Beliefs it gained', removed: 'Beliefs it lost', agreed: 'Beliefs more sources now agree on' }[c.mode];
+  const title = { added: 'Beliefs it gained', removed: 'Beliefs it lost', stronger: 'Beliefs resting on more sources', weaker: 'Beliefs resting on fewer sources' }[c.mode];
 
   return `
   <section class="card">
@@ -797,7 +799,8 @@ function renderComparison(events) {
         <div class="tile" style="cursor: default"><div class="n">${num(d.beliefsBefore)} &rarr; ${num(d.beliefsAfter)}</div><div class="l">beliefs</div><div class="d">${num(d.unchanged)} unchanged</div></div>
         ${modeTile('added', d.added.length, 'gained', 'in the later one only')}
         ${modeTile('removed', d.removed.length, 'lost', 'in the earlier one only')}
-        ${modeTile('agreed', d.changed.length, 'more agreed', 'held by both, now resting on more sources')}
+        ${modeTile('stronger', lists.stronger.length, 'more sources', 'held by both, said by more of them')}
+        ${modeTile('weaker', lists.weaker.length, 'fewer sources', 'held by both, said by fewer of them')}
       </div>
       <div class="controls" style="margin-top: 12px">
         <span class="chip ${c.predicate ? '' : 'on'}" data-predicate="" style="background: var(--panel-2)">every kind <b>${num(lists[c.mode].length)}</b></span>
@@ -806,7 +809,7 @@ function renderComparison(events) {
       <div class="controls" style="margin-top: 10px"><input type="search" id="dq" placeholder="Search the changes: a map, a person, a monster, an item..." value="${esc(c.query)}"></div>
     </div>
   </section>
-  ${table('diff', title, c.mode === 'agreed' ? 'sources before &rarr; after' : 'how many sources said it', rows, [
+  ${table('diff', title, c.mode === 'stronger' || c.mode === 'weaker' ? 'sources before &rarr; after' : 'how many sources said it', rows, [
     { label: 'About', value: r => r.b.subject, html: r => esc(r.b.subject) },
     { label: 'Believes', value: r => r.b.predicate, html: r => said(r.b.predicate) },
     { label: 'What', value: r => r.b.object, html: r => esc(r.b.object) },
