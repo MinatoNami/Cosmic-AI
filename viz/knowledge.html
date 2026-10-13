@@ -719,7 +719,9 @@ function eventSummary(e) {
 /* The inheritance a condense made, and the one before it, for a one-click comparison. */
 function madeBy(r) {
   const snaps = state.gens?.inheritances || [];
-  const i = snaps.findIndex(s => Math.abs(Date.parse(s.madeAt) - r.at) < 5 * 60000);
+  const near = snaps.map((s, i) => ({ i, off: Math.abs(Date.parse(s.madeAt) - r.at) })).filter(x => x.off < 5 * 60000)
+    .sort((x, y) => x.off - y.off);
+  const i = near.length ? near[0].i : -1;
   return i > 0 ? { from: snaps[i - 1].name, to: snaps[i].name } : null;
 }
 
@@ -755,7 +757,9 @@ function renderTimeline(rows) {
 function snapshotLabel(snap, events) {
   // The condense that made it is the one recorded within a few minutes of its file time.
   const made = Date.parse(snap.madeAt);
-  const by = events.find(r => r.e.event === 'condense' && Math.abs(r.at - made) < 5 * 60000);
+  // The closest one, not the first: a rebuild makes several within a minute.
+  const by = events.filter(r => r.e.event === 'condense' && Math.abs(r.at - made) < 5 * 60000)
+    .sort((x, y) => Math.abs(x.at - made) - Math.abs(y.at - made))[0];
   const how = !by ? '' : by.e.foldedFrom ? ` from ${by.e.foldedFrom.replace(/^minds\.backup-/, '')}` : ` by generation ${by.gen}`;
   return `${snap.name === 'current' ? 'Standing now' : 'Past'} - made ${when(snap.madeAt)}${how} (${kb(snap.bytes)})`;
 }
