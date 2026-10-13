@@ -1921,6 +1921,10 @@ public class ReflexPolicy implements Policy {
         if (destination != null && decisionsMade - destinationSince > DESTINATION_PATIENCE) {
             destination = null;
         }
+        // Going for its calling, somewhere else it set off for can wait.
+        if (destination != null && jobAdvancementPending() && errandMap != null && !errandMap.equals(destination)) {
+            destination = null;
+        }
         if (destination != null) {
             Optional<WorldModel.PortalTarget> door = firstDoorTo(known, here, destination, portals);
             if (door.isPresent()) {
@@ -1928,9 +1932,19 @@ public class ReflexPolicy implements Policy {
                         + (destinationFromModel ? " (model's choice)" : "") + ": " + destinationWhy;
                 return door;
             }
+            if (rideFirst(known, here, destination)) {
+                return Optional.empty();    // the way there is somebody's ride, not a door
+            }
             destination = null;         // no longer a way there from here
         }
         for (Places.Place place : places(known, here, mind)) {
+            if (KnownWorld.isRide(place.firstDoor())) {
+                // The way there starts with somebody's ride. Skipping it for the best place a
+                // door leads to sent a Magician-to-be to Kerning City and the Nautilus, past
+                // the cab that goes to Lith Harbor and the Magician's statue.
+                setOffFor(place.map(), String.join(", ", place.reasons()), false);
+                return Optional.empty();
+            }
             Optional<WorldModel.PortalTarget> door = portals.stream()
                     .filter(portal -> portal.name().equals(place.firstDoor()))
                     .findFirst();
@@ -1943,6 +1957,12 @@ public class ReflexPolicy implements Policy {
             return door;
         }
         return Optional.empty();
+    }
+
+    /** Whether the way to somewhere starts with somebody's ride. */
+    private static boolean rideFirst(KnownWorld known, String here, String to) {
+        KnownWorld.Hop hop = known.reachableFrom(here, Set.of()).get(to);
+        return hop != null && KnownWorld.isRide(hop.firstDoor());
     }
 
     private Optional<WorldModel.PortalTarget> firstDoorTo(KnownWorld known, String here, String to,
