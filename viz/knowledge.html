@@ -711,6 +711,7 @@ function eventSummary(e) {
       (e.error ? ` - failed: ${e.error}` : '');
   }
   if (e.event === 'restore') return `put back ${e.restored}`;
+  if (e.event === 'rebuild') return `started again from ${e.base}, folding in ${(e.from || []).join(', ')}`;
   if (e.event === 'backup') return `${(e.minds || []).length} minds copied to ${e.folder}`;
   return '';
 }
@@ -740,8 +741,8 @@ function eventDetail(r) {
 }
 
 function renderTimeline(rows) {
-  const tone = { condense: 'good', reset: 'bad', backup: 'plain', restore: 'warn' };
-  const word = { condense: 'condensed', reset: 'reset', backup: 'backed up', restore: 'restored' };
+  const tone = { condense: 'good', reset: 'bad', backup: 'plain', restore: 'warn', rebuild: 'info' };
+  const word = { condense: 'condensed', reset: 'reset', backup: 'backed up', restore: 'restored', rebuild: 'rebuilt' };
   return table('timeline', 'Generations', 'every condense and reset, newest first; open one for what went in', rows, [
     // Ties broken by ledger order, so a reset recorded after a condense stays after it.
     { label: 'When', value: r => r.at + Number(r.key) / 1000, html: r => `${r.e.timeKnown === false ? '<span class="muted">about</span> ' : ''}${esc(when(r.e.at))}` },

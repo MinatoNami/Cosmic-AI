@@ -60,6 +60,7 @@ public class ControlApi {
         http.createContext("/api/condense", this::condense);
         http.createContext("/api/generations", this::generations);
         http.createContext("/api/inheritance/compare", this::compareInheritances);
+        http.createContext("/api/inheritance/rebuild", this::rebuildInheritance);
         http.createContext("/api/beliefs/", this::beliefs);
         http.createContext("/api/trace/", this::trace);
         http.createContext("/", this::page);
@@ -190,6 +191,28 @@ public class ControlApi {
         send(exchange, 200, Map.of(
                 "events", population.generations().read(),
                 "inheritances", population.inheritances()));
+    }
+
+    /** POST ?base=<archived inheritance>&from=<backup folder>,<backup folder>,... in order. */
+    private void rebuildInheritance(HttpExchange exchange) throws IOException {
+        if (!"POST".equals(exchange.getRequestMethod())) {
+            send(exchange, 405, Map.of("error", "POST"));
+            return;
+        }
+        Map<String, String> query = query(exchange.getRequestURI());
+        List<String> folders = java.util.Arrays.stream(query.getOrDefault("from", "").split(","))
+                .map(String::trim).filter(f -> !f.isEmpty()).toList();
+        try {
+            List<agents.memory.Inheritance.Merged> steps = population.rebuild(query.get("base"), folders);
+            agents.memory.Inheritance.Merged last = steps.get(steps.size() - 1);
+            send(exchange, 200, Map.of("steps", steps.size(), "inherited", last.beliefsKept(),
+                    "note", "rebuilt from " + query.get("base") + " through " + String.join(", ", folders)));
+        } catch (IllegalArgumentException e) {
+            send(exchange, 400, Map.of("error", String.valueOf(e.getMessage())));
+        } catch (RuntimeException e) {
+            log.error("Rebuild failed", e);
+            send(exchange, 500, Map.of("error", String.valueOf(e.getMessage())));
+        }
     }
 
     /** ?from=&to= - snapshot names as /api/generations lists them, "current" for the standing one. */

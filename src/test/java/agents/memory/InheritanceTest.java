@@ -229,7 +229,9 @@ class InheritanceTest {
     /** A mind born holding an inheritance: these beliefs rest only on what it was told. */
     private Path bornKnowing(String agent, String[][] witnessed, String[][] sawItself) {
         EpisodicMemory episodic = new EpisodicMemory();
-        long saw = episodic.restore(1, "MapEntered", "MapEntered[mapId=10000]").id();
+        // Only a mind that saw something has an episode of its own; an inheritance has none.
+        long saw = sawItself.length == 0 ? -1
+                : episodic.restore(1, "MapEntered", "MapEntered[mapId=10000]").id();
         SemanticMemory semantic = new SemanticMemory();
         for (String[] t : witnessed) {
             for (int i = 3; i < t.length; i++) {
@@ -312,5 +314,26 @@ class InheritanceTest {
         assertEquals(1, evidence(next, "map:10000", "has_door", "west00"));
         assertEquals(1, evidence(next, "monster:100100", "gives_exp", "3"));
         assertEquals(3, merged.beliefsKept());
+    }
+
+    @Test
+    void aRebuiltChainDoesNotCountAnAgentForWhatItWasBornKnowing() {
+        // The agent was born under an old label for the same witness the rebuilt inheritance
+        // names differently. Matched on labels it would read as a second witness.
+        Path rebuilt = bornKnowing("inherited", new String[][]{
+                {"map:10000", "has_door", "east00", "Agent0.mind, minds.backup-2026-09-28-generation"},
+        }, new String[0][]);
+        Path agent = bornKnowing("Agent0", new String[][]{
+                {"map:10000", "has_door", "east00", "Agent0.mind"},
+                {"map:10000", "has_door", "north00", "Agent0.mind"},
+        }, new String[][]{{"map:20000", "has_door", "west00"}});
+
+        Inheritance.merge(List.of(agent, rebuilt), minds.resolve("next.mind"), "Inherited",
+                rebuilt, "minds.backup-2026-10-03-generation");
+
+        SemanticMemory next = read(minds.resolve("next.mind"));
+        assertEquals(1, evidence(next, "map:10000", "has_door", "east00"));
+        // Not in any inheritance here, so what it was told is all there is: kept, as told.
+        assertEquals(1, evidence(next, "map:10000", "has_door", "north00"));
     }
 }

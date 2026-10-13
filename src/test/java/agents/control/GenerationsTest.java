@@ -217,4 +217,57 @@ class GenerationsTest {
         }
         assertTrue(population.generations().read().isEmpty());
     }
+
+    @Test
+    void theInheritanceCanBeRebuiltFromAnArchivedOneThroughBackups() throws Exception {
+        // The first inheritance, archived as it would have been.
+        mindOf(Population.INHERITANCE, new String[][]{{"map:10000", "has_door", "east00"}});
+        Path first = data.resolve(Generations.PAST_INHERITANCES).resolve("inherited.20260922T025453Z.mind");
+        Files.createDirectories(first.getParent());
+        Files.copy(data.resolve("minds").resolve(Population.INHERITANCE), first);
+        // Two generations' minds, backed up.
+        for (String[] gen : new String[][]{{"minds.backup-2026-09-28-generation", "west00"},
+                {"minds.backup-2026-10-13-generation", "north00"}}) {
+            mindOf("Agent0.mind", new String[][]{{"map:10000", "has_door", gen[1]}});
+            Files.createDirectories(data.resolve(gen[0]));
+            Files.move(data.resolve("minds").resolve("Agent0.mind"), data.resolve(gen[0]).resolve("Agent0.mind"));
+        }
+        // And a standing inheritance that is to be replaced.
+        mindOf(Population.INHERITANCE, new String[][]{{"map:10000", "has_door", "stale00"}});
+        Population population = new Population("localhost", 0, data);
+
+        population.rebuild("inherited.20260922T025453Z.mind",
+                List.of("minds.backup-2026-09-28-generation", "minds.backup-2026-10-13-generation"));
+
+        assertEquals(List.of("rebuild", "condense", "condense"),
+                population.generations().read().stream().map(e -> e.get("event")).toList());
+        Population.InheritanceDiff now = population.compare("inherited.20260922T025453Z.mind", "current");
+        assertEquals(List.of("north00", "west00"), now.added().stream().map(Population.BeliefView::object).sorted().toList());
+        assertEquals(3, now.beliefsAfter(), "the stale one is gone; it was not in the chain");
+        assertNotNull(population.generations().read().get(0).get("previousInheritance"));
+    }
+
+    @Test
+    void aRebuildWithABadStepChangesNothing() throws Exception {
+        mindOf(Population.INHERITANCE, new String[][]{{"map:10000", "has_door", "east00"}});
+        Path first = data.resolve(Generations.PAST_INHERITANCES).resolve("inherited.20260922T025453Z.mind");
+        Files.createDirectories(first.getParent());
+        Files.copy(data.resolve("minds").resolve(Population.INHERITANCE), first);
+        Population population = new Population("localhost", 0, data);
+        long before = Files.size(data.resolve("minds").resolve(Population.INHERITANCE));
+
+        for (Runnable bad : List.<Runnable>of(
+                () -> population.rebuild("current", List.of("minds.backup-x")),
+                () -> population.rebuild("inherited.20260922T025453Z.mind", List.of()),
+                () -> population.rebuild("inherited.20260922T025453Z.mind", List.of("minds.backup-missing")))) {
+            try {
+                bad.run();
+                throw new AssertionError("rebuilt");
+            } catch (IllegalArgumentException expected) {
+                // refused
+            }
+        }
+        assertTrue(population.generations().read().isEmpty());
+        assertEquals(before, Files.size(data.resolve("minds").resolve(Population.INHERITANCE)));
+    }
 }

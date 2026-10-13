@@ -444,6 +444,50 @@ public class Population {
         return fold(sources, null, folder);
     }
 
+    /**
+     * Makes the inheritance again: from an archived one, folding in backed-up generations in
+     * the order given.
+     *
+     * For when the way minds are merged has changed and the inheritance should be what the
+     * new way makes of the same generations. Everything is checked before anything is
+     * touched, the inheritance it replaces is archived first, and every step goes in the
+     * ledger, so a rebuild can be compared with what it replaced and undone by restoring it.
+     */
+    public synchronized List<Inheritance.Merged> rebuild(String base, List<String> folders) {
+        Path standing = minds.resolve(INHERITANCE);
+        Path from = generations.resolve(base, standing);
+        if (from == null || Generations.STANDING.equals(base)) {
+            throw new IllegalArgumentException("not an archived inheritance: " + base);
+        }
+        if (folders.isEmpty()) {
+            throw new IllegalArgumentException("nothing to fold in");
+        }
+        for (String folder : folders) {
+            if (!BACKUP.matcher(folder).matches()
+                    || Inheritance.mindsIn(minds.getParent().resolve(folder), INHERITANCE).isEmpty()) {
+                throw new IllegalArgumentException("not a backup folder with minds in it: " + folder);
+            }
+        }
+        String replaced = generations.archive(standing);
+        try {
+            Files.createDirectories(minds);
+            Files.copy(from, standing, java.nio.file.StandardCopyOption.REPLACE_EXISTING,
+                    java.nio.file.StandardCopyOption.COPY_ATTRIBUTES);
+        } catch (IOException e) {
+            throw new UncheckedIOException("Could not start again from " + base, e);
+        }
+        Map<String, Object> entry = new LinkedHashMap<>();
+        entry.put("base", base);
+        entry.put("from", folders);
+        entry.put("previousInheritance", replaced);
+        generations.record("rebuild", entry);
+        List<Inheritance.Merged> steps = new ArrayList<>();
+        for (String folder : folders) {
+            steps.add(condenseFrom(folder));
+        }
+        return steps;
+    }
+
     private Inheritance.Merged fold(List<Path> sources, Demonstrations.Read demonstrations,
                                     String foldedFrom) {
         Path standing = minds.resolve(INHERITANCE);

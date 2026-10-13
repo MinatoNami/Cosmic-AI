@@ -167,6 +167,22 @@ public final class Inheritance {
         int minds = 0;
         List<Contribution> contributions = new ArrayList<>();
 
+        // What the inheritances among the sources already hold. An agent was born holding an
+        // inheritance, and what it only inherited is in that inheritance, which is itself a
+        // source here (or an older one, folded into a source here). The inheritance carries
+        // the witnesses; the agent repeating them would be counted again, and wrongly if its
+        // labels are older than the inheritance's - as they are when a chain is rebuilt.
+        Set<String> coveredByInheritance = new java.util.HashSet<>();
+        for (Path source : sources) {
+            EpisodicMemory theirEpisodes = new EpisodicMemory();
+            SemanticMemory theirBeliefs = new SemanticMemory();
+            if (Files.isRegularFile(source)
+                    && MindSnapshot.load(source, theirEpisodes, theirBeliefs) != null
+                    && isInheritance(theirEpisodes)) {
+                theirBeliefs.liveBeliefs().forEach(b -> coveredByInheritance.add(said(b)));
+            }
+        }
+
         for (Path source : sources) {
             if (!Files.isRegularFile(source)) {
                 continue;
@@ -177,6 +193,7 @@ public final class Inheritance {
                 continue;
             }
             minds++;
+            boolean anInheritance = isInheritance(theirEpisodes);
             int theirRead = 0;
             int theirKept = 0;
             int theirAgreed = 0;
@@ -192,15 +209,12 @@ public final class Inheritance {
                 }
                 String triple = said(belief);
                 Set<String> already = witnessesOf.computeIfAbsent(triple, t -> new java.util.LinkedHashSet<>());
-                if (already.isEmpty()) {
-                    theirKept++;
-                } else {
-                    theirAgreed++;
-                }
+                boolean first = already.isEmpty();
                 if (!before.contains(triple)) {
                     theirNovel++;
                 }
-                for (String witness : witnessesFor(belief, theirEpisodes, own)) {
+                boolean passOn = anInheritance || !coveredByInheritance.contains(triple);
+                for (String witness : witnessesFor(belief, theirEpisodes, own, passOn)) {
                     if (!already.add(witness)) {
                         continue;
                     }
@@ -208,6 +222,13 @@ public final class Inheritance {
                             w -> episodic.restore(0, INHERITED, w).id());
                     inherited.assertTriple(belief.subject(), belief.predicate(), belief.object(),
                             told, 0, Belief.Provenance.HEARSAY);
+                }
+                // First to say it only if it actually said it: an agent passing on what an
+                // inheritance here already holds agrees with it, it does not introduce it.
+                if (first && !already.isEmpty()) {
+                    theirKept++;
+                } else {
+                    theirAgreed++;
                 }
             }
             read += theirRead;
@@ -225,13 +246,22 @@ public final class Inheritance {
 
     private static final String INHERITED = "Inherited";
 
+    /** A mind that is nothing but what it was told: an inheritance, not an agent's life. */
+    private static boolean isInheritance(EpisodicMemory episodes) {
+        List<Episode> all = episodes.all();
+        return !all.isEmpty() && all.stream().allMatch(e ->
+                e.observation() instanceof agents.percept.Observation.Recalled r
+                        && INHERITED.equals(r.type()));
+    }
+
     /**
      * Who a source's belief rests on: the witnesses it inherited it from, and the source
      * itself if it has any evidence of its own. An episode it no longer remembers is taken
      * to be its own - what a bounded mind forgets first is what it saw, not what it was born
      * knowing.
      */
-    private static List<String> witnessesFor(Belief belief, EpisodicMemory theirs, String own) {
+    private static List<String> witnessesFor(Belief belief, EpisodicMemory theirs, String own,
+                                             boolean passOn) {
         List<String> witnesses = new ArrayList<>();
         boolean saw = false;
         for (long id : belief.supportedBy()) {
@@ -241,7 +271,7 @@ public final class Inheritance {
                             && INHERITED.equals(r.type()))
                     .map(o -> ((agents.percept.Observation.Recalled) o).detail());
             if (told.isPresent()) {
-                if (!witnesses.contains(told.get())) {
+                if (passOn && !witnesses.contains(told.get())) {
                     witnesses.add(told.get());
                 }
             } else {

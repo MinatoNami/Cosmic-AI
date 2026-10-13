@@ -88,8 +88,14 @@ public class Generations {
             return null;
         }
         try {
-            String archived = "inherited." + STAMP.format(
-                    Files.getLastModifiedTime(inheritance).toInstant()) + ".mind";
+            String stamp = STAMP.format(Files.getLastModifiedTime(inheritance).toInstant());
+            String archived = "inherited." + stamp + ".mind";
+            // Two made within the same second - a rebuild's steps can be - must not overwrite
+            // one another. The same one archived twice may.
+            for (int n = 2; Files.exists(past.resolve(archived))
+                    && Files.size(past.resolve(archived)) != Files.size(inheritance); n++) {
+                archived = "inherited." + stamp + "-" + n + ".mind";
+            }
             Files.createDirectories(past);
             // With its file time, which is when it was made: the page reads that back as the
             // snapshot's date, and a copy stamped with today labelled an old inheritance as new.
@@ -139,7 +145,7 @@ public class Generations {
     }
 
     private static final java.util.regex.Pattern ARCHIVED =
-            java.util.regex.Pattern.compile("inherited\\.\\d{8}T\\d{6}Z\\.mind");
+            java.util.regex.Pattern.compile("inherited\\.\\d{8}T\\d{6}Z(-\\d{1,3})?\\.mind");
 
     /**
      * The file behind a snapshot's name, or null for a name that is not one.
