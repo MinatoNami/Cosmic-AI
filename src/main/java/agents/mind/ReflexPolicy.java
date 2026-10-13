@@ -2762,6 +2762,11 @@ public class ReflexPolicy implements Policy {
         if (world.job() != 0) {
             return 0;
         }
+        String npc = asked.subject();
+        if (mind.semantic().liveBeliefs().stream()
+                .anyMatch(b -> b.subject().equals(npc) && b.predicate().equals("sent_you_on"))) {
+            return -1;      // it has done its part: sent the agent on to whoever gives the calling
+        }
         Optional<String> calling = callingOfferedBy(mind, asked.subject());
         if (calling.isPresent()) {
             if (disposition.callingsThatSuit().contains(calling.get())) {

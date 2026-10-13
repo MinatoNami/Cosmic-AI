@@ -910,6 +910,15 @@ public class Agent implements Runnable {
             // And from where: the same NPC can stand in several places and take you somewhere
             // different from each, which is what lets a route use the ride.
             mind.saw(KnownWorld.rideRef(lastMap, wentAlongWith), "ride_to", "map:" + map, perceiver.currentTick());
+            // Somebody offering a calling who then took it somewhere has sent it on to whoever
+            // gives it: the Warrior's statue's part is done once it has sent a fighter to Perion,
+            // and still holding it as the errand had the fighter take the cab straight back.
+            String guide = "npc:" + wentAlongWith;
+            boolean offersACalling = mind.semantic().liveBeliefs().stream()
+                    .anyMatch(b -> b.subject().equals(guide) && b.predicate().equals("offers_calling"));
+            if (offersACalling && world.job() == 0) {
+                mind.infer(guide, "sent_you_on", "map:" + map, perceiver.currentTick());
+            }
         }
         lastMap = map;
     }
