@@ -449,6 +449,7 @@ public class Agent implements Runnable {
         this.disposition = disposition;
         this.training = new agents.mind.Training(disposition, () -> mind.semantic().liveBeliefs());
         this.executor = new IntentExecutor(connection.session());
+        this.executor.actingFor(mind.name());
         // Seeded from the name so a given agent paces the same way run to run, and two
         // agents never pace identically.
         this.voice = new Voice(new Random(mind.name().hashCode()));

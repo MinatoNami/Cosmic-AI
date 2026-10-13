@@ -1007,7 +1007,9 @@ public class ReflexPolicy implements Policy {
         Set<String> keepers = toSell ? shopkeepers(mind)
                 : Wardrobe.needsAWeapon(world) ? weaponSellers(mind, world)
                 : Fighting.wantsAmmunition(world) ? ammunitionSellers(mind, world)
-                : stocking(mind, knownHealers(mind));
+                : knownHealers(mind).stream().anyMatch(item -> world.inventory().count(itemIdIn(item)) > 0)
+                        ? stocking(mind, knownManaRestorers(mind))
+                        : stocking(mind, knownHealers(mind));
         keepers.removeAll(noUseNow(mind, world));
         Optional<WorldModel.Entity> keeper = world.visibleNpcs().stream()
                 .filter(npc -> keepers.contains("npc:" + npc.typeId()))
@@ -1061,9 +1063,29 @@ public class ReflexPolicy implements Policy {
             return true;
         }
         Set<String> healers = knownHealers(mind);
-        return !healers.isEmpty()
+        if (!healers.isEmpty()
                 && healers.stream().allMatch(item -> world.inventory().count(itemIdIn(item)) == 0)
-                && !stocking(mind, healers).isEmpty();
+                && !stocking(mind, healers).isEmpty()) {
+            return true;
+        }
+        // And with a job, something for mana: its attacks are skills now, paid for in MP, and
+        // with nothing to drink for it a Magician is left swinging a wand.
+        Set<String> mana = knownManaRestorers(mind);
+        return world.job() > 0 && !mana.isEmpty()
+                && mana.stream().allMatch(item -> world.inventory().count(itemIdIn(item)) == 0)
+                && !stocking(mind, mana).isEmpty();
+    }
+
+    /** Items the agent has seen restore its mana, as refs. */
+    private static Set<String> knownManaRestorers(Mind mind) {
+        Set<String> restorers = new HashSet<>();
+        for (Belief belief : mind.semantic().liveBeliefs()) {
+            if (belief.predicate().equals("restores_mp") && belief.object().equals("true")
+                    && itemIdIn(belief.subject()) > 0) {
+                restorers.add(belief.subject());
+            }
+        }
+        return restorers;
     }
 
     /** Items the agent has seen restore its health, as refs. */

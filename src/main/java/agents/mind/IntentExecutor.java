@@ -18,6 +18,18 @@ import java.util.Optional;
  * melee swing looks like on the wire stays here.
  */
 public class IntentExecutor {
+
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(IntentExecutor.class);
+
+    /** Attack skills used so far, so each is reported the first time. */
+    private final java.util.Set<Integer> skillsUsed = new java.util.HashSet<>();
+
+    /** Whose hands these are, for the log. */
+    private String who = "agent";
+
+    public void actingFor(String name) {
+        who = name;
+    }
     /**
      * How fast a character walks, in pixels per second. Roughly what the game gives a
      * beginner at base speed.
@@ -101,6 +113,9 @@ public class IntentExecutor {
                     moveTo(attack.position(), world);
                 }
                 if (Fighting.canHit(how, world.selfPosition(), attack.position(), ATTACK_REACH)) {
+                    if (how.skillId() > 0 && skillsUsed.add(how.skillId())) {
+                        log.info("{} attacks with skill:{} (level {})", who, how.skillId(), how.level());
+                    }
                     session.send(ClientPackets.attack(how.kind(), how.skillId(), attack.objectId(),
                             attack.position(), claims(how, world),
                             attack.position().x >= world.selfPosition().x));
