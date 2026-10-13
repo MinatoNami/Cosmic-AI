@@ -2356,8 +2356,9 @@ public class ReflexPolicy implements Policy {
         int mesos = mesosHeld(mind);
         Set<String> stranders = strandedBy(mind);
         String here = KnownWorld.mapRef(world.mapId());
-        Set<String> reachable = null;
+        Map<String, KnownWorld.Hop> reachable = null;
         int bestRank = -1;
+        int bestHops = Integer.MAX_VALUE;
         cutOffFrom.clear();
         errandForACalling = false;
         for (Belief belief : mind.semantic().liveBeliefs()) {
@@ -2387,9 +2388,9 @@ public class ReflexPolicy implements Policy {
                 // and on Victoria, took the one errand slot from the four job statues whose
                 // conditions it met, and it reached level seventeen without a job.
                 if (reachable == null) {
-                    reachable = KnownWorld.rememberedBy(mind.semantic().liveBeliefs()).reachableFrom(here, Set.of()).keySet();
+                    reachable = KnownWorld.rememberedBy(mind.semantic().liveBeliefs()).reachableFrom(here, Set.of());
                 }
-                if (!reachable.contains(whereItWas.get())) {
+                if (!reachable.containsKey(whereItWas.get())) {
                     if (world.job() == 0 && STAT_ASKED.matcher(belief.object()).find()) {
                         cutOffFrom.add(whereItWas.get());   // a calling it cannot walk to
                     }
@@ -2397,10 +2398,18 @@ public class ReflexPolicy implements Policy {
                 }
             }
             int rank = errandRank(mind, world, belief);
-            if (rank < 0 || rank <= bestRank) {
+            // Equal to the one it holds, the one standing here is the better: the Thief's
+            // statue sent Agent2 to the Dark Lord's room, and with the two of them ranked the
+            // same it walked straight out again, back towards the statue.
+            int hops = whereItWas.get().equals(here) ? 0
+                    : reachable == null || !reachable.containsKey(whereItWas.get()) ? Integer.MAX_VALUE
+                    : reachable.get(whereItWas.get()).hops();
+            boolean nearerTie = rank == bestRank && hops < bestHops;
+            if (rank < 0 || (rank <= bestRank && !nearerTie)) {
                 continue;       // not one to run, or no better than the one it holds
             }
             bestRank = rank;
+            bestHops = hops;
             errandForACalling = rank >= CALLING_ERRAND && world.job() == 0;
             errandNpc = npcId;
             errandMap = whereItWas.get().equals(here) ? null : whereItWas.get();

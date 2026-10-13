@@ -1058,6 +1058,13 @@ public class Agent implements Runnable {
             reply(dialogue.style(), NPC_NO, NO_SELECTION);
             return;
         }
+        // Which calling somebody offers is what lets the next errand be to the right one - noted
+        // before anything answers, since a ride taken from a statue answered first and the
+        // Thief's statue was never written down as offering Thief.
+        Optional<String> callingHere = callingOffered(dialogue.text());
+        if (callingHere.isPresent() && world.job() == 0) {
+            mind.saw("npc:" + dialogue.npcId(), "offers_calling", callingHere.get(), perceiver.currentTick());
+        }
         // A ride the policy has decided to take: yes, and from a list the option that goes.
         // Spinel's way back from Zipangu is a list - "Yes, I'm done with traveling. Can I go
         // back?" or "No, I'd like to continue exploring" - and a list is otherwise walked away
@@ -1086,10 +1093,6 @@ public class Agent implements Runnable {
         // decided to become a bowman?" and "It is an important and final choice", and a fighter
         // did. So whatever kind of line offers the wrong calling, the conversation is closed.
         Optional<String> offered = callingOffered(dialogue.text());
-        if (offered.isPresent() && world.job() == 0) {
-            // Which calling somebody offers is what lets the next errand be to the right one.
-            mind.saw("npc:" + dialogue.npcId(), "offers_calling", offered.get(), perceiver.currentTick());
-        }
         if (world.job() == 0 && offered.isPresent()
                 && !disposition.callingsThatSuit().contains(offered.get())
                 && world.level() < agents.mind.Disposition.ANY_CALLING_AFTER) {
