@@ -53,9 +53,15 @@ public final class MindSnapshot {
                 out.newLine();
 
                 for (Episode episode : episodic.all()) {
+                    // Something recalled is written as what it was, not as a recollection of
+                    // it: otherwise every save wraps it once more, and a dialogue line five
+                    // restarts old was five "Recalled[...]" deep with its words buried inside.
+                    String type = episode.observation() instanceof agents.percept.Observation.Recalled recalled
+                            ? recalled.type() : episode.observation().getClass().getSimpleName();
+                    String detail = episode.observation() instanceof agents.percept.Observation.Recalled recalled
+                            ? recalled.detail() : episode.observation().toString();
                     out.write(join("e", String.valueOf(episode.id()), String.valueOf(episode.tick()),
-                            text(episode.observation().getClass().getSimpleName()),
-                            text(episode.observation().toString())));
+                            text(type), text(detail)));
                     out.newLine();
                 }
                 for (Belief belief : semantic.all()) {

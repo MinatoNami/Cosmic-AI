@@ -151,6 +151,14 @@ public class SemanticMemory {
         };
     }
 
+    /**
+     * Stops holding a belief without anything to replace it: what it rested on turned out
+     * not to say what it was taken to say.
+     */
+    public synchronized void retract(long beliefId, long tick) {
+        byId(beliefId).filter(Belief::isLive).ifPresent(old -> replace(old, old.invalidatedAt(tick, -1)));
+    }
+
     private void replace(Belief old, Belief updated) {
         beliefs.set((int) old.id(), updated);
     }

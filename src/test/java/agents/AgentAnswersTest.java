@@ -149,6 +149,9 @@ class AgentAnswersTest {
                         + "levels of a particular ability based on the occupation. For example, to be a warrior, your "
                         + "STR has to be over 35, and so forth, you know what I'm saying?"),
                 "advice about a calling is not an offer of one");
+        assertEquals(java.util.Optional.empty(), Agent.callingOffered(
+                "You want to become a #bWarrior#k? Hmmm, then I suggest you head over to #bPerion#k."),
+                "sent on to somebody else is advice");
     }
 
     /** "Come back at level ten" written down as it was said, stats and all. */

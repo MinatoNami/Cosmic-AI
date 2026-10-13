@@ -461,6 +461,7 @@ public class Agent implements Runnable {
     public void run() {
         String name = mind.name();
         log.info("{} is awake, policy {}", name, policy.name());
+        rereadOfferedCallings();
         // What it was in the middle of doing for somebody did not survive the restart; nobody
         // should go on waiting for it.
         for (Belief belief : mind.semantic().liveBeliefs()) {
@@ -749,8 +750,14 @@ public class Agent implements Runnable {
         }
         String sentence = said.substring(start, end);
         boolean putToYou = OFFERING.matcher(sentence).find();
-        return putToYou ? Optional.of(calling.group(1).toLowerCase()) : Optional.empty();
+        // Pointing you to somebody else is advice: "You want to become a Warrior? Hmmm, then I
+        // suggest you head over to Perion" is a Maple Island helper's answer to a question.
+        boolean sendsYouOn = ADVICE.matcher(said).find();
+        return putToYou && !sendsYouOn ? Optional.of(calling.group(1).toLowerCase()) : Optional.empty();
     }
+
+    private static final java.util.regex.Pattern ADVICE = java.util.regex.Pattern.compile(
+            "(?i)\\b(suggest|head over|head to|you should go|go and see|look for)\\b");
 
     private static int lastSentenceEnd(String said, int before) {
         for (int i = before - 1; i >= 0; i--) {
@@ -766,6 +773,51 @@ public class Agent implements Runnable {
 
     private static final java.util.regex.Pattern CALLING_NAME = java.util.regex.Pattern.compile(
             "(?i)(warrior|bowman|magician|thief|pirate)");
+
+    /**
+     * Reads again, with today's reading, the words each "offers a calling" belief rests on,
+     * and lets go of any that no longer say so.
+     *
+     * The reading has been wrong before: Maple Island's guide telling of every calling was
+     * taken as offering Bowman, and a helper's "to be a warrior, your STR has to be over 35"
+     * as offering Warrior. Fixing the reader stops new mistakes; this undoes the old ones
+     * before they are passed down. A belief with no words of its own to go back to - one
+     * inherited, say - is kept.
+     */
+    private void rereadOfferedCallings() {
+        long now = perceiver.currentTick();
+        for (Belief belief : mind.semantic().liveBeliefs()) {
+            if (!belief.predicate().equals("offers_calling")) {
+                continue;
+            }
+            List<String> said = new java.util.ArrayList<>();
+            for (long episodeId : belief.supportedBy()) {
+                mind.episodic().byId(episodeId).flatMap(episode -> spokenIn(episode.observation()))
+                        .ifPresent(said::add);
+            }
+            if (!said.isEmpty() && said.stream().noneMatch(line -> callingOffered(line).isPresent())) {
+                mind.semantic().retract(belief.id(), now);
+                log.info("{} no longer believes {} offers {}: \"{}\" was not an offer", mind.name(),
+                        belief.subject(), belief.object(), said.get(0).length() > 60 ? said.get(0).substring(0, 60) + "..." : said.get(0));
+            }
+        }
+    }
+
+    private static final java.util.regex.Pattern RECALLED_LINE = java.util.regex.Pattern.compile(
+            "text=(.*), style=-?\\d+\\]?$", java.util.regex.Pattern.DOTALL);
+
+    /** What an NPC said in an episode, whether seen this run or recalled from a saved mind. */
+    static Optional<String> spokenIn(agents.percept.Observation observation) {
+        if (observation instanceof agents.percept.Observation.DialogueShown dialogue) {
+            return Optional.of(dialogue.text());
+        }
+        if (observation instanceof agents.percept.Observation.Recalled recalled
+                && recalled.type().equals("DialogueShown")) {
+            java.util.regex.Matcher line = RECALLED_LINE.matcher(recalled.detail());
+            return line.find() ? Optional.of(line.group(1)) : Optional.empty();
+        }
+        return Optional.empty();
+    }
 
     /** "Train yourself further until you reach #blevel 10, DEX 25#k": a condition, in so many words. */
     private static final java.util.regex.Pattern COME_BACK_AT = java.util.regex.Pattern.compile(

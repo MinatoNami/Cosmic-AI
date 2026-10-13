@@ -45,11 +45,24 @@ public class EpisodicMemory {
 
     /** Puts back an episode from a saved mind, under the id it had. */
     public Episode restore(long id, long tick, String type, String detail) {
+        // Minds saved before recollections were written as what they were have them nested,
+        // one "Recalled[...]" per save; take them back down to the thing itself.
+        while ("Recalled".equals(type)) {
+            java.util.regex.Matcher inner = NESTED.matcher(detail);
+            if (!inner.matches()) {
+                break;
+            }
+            type = inner.group(1);
+            detail = inner.group(2);
+        }
         Episode episode = new Episode(id, tick, new Observation.Recalled(tick, type, detail));
         episodes.put(id, episode);
         nextId = Math.max(nextId, id + 1);
         return episode;
     }
+
+    private static final java.util.regex.Pattern NESTED = java.util.regex.Pattern.compile(
+            "Recalled\\[tick=-?\\d+, type=(\\w+), detail=(.*)\\]", java.util.regex.Pattern.DOTALL);
 
     public Optional<Episode> byId(long id) {
         return Optional.ofNullable(episodes.get(id));
