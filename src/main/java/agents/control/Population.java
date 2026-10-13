@@ -458,7 +458,10 @@ public class Population {
         String archived = generations.archive(standing);
 
         // The standing inheritance is its own baseline: the merge reads it before writing over it.
-        Inheritance.Merged merged = Inheritance.merge(sources, standing, "Inherited", standing);
+        // Labelled so its witnesses can be told from any other merge's agents of the same name.
+        String label = foldedFrom != null ? foldedFrom
+                : "condensed " + java.time.Instant.now();
+        Inheritance.Merged merged = Inheritance.merge(sources, standing, "Inherited", standing, label);
 
         List<Map<String, Object>> contributed = new ArrayList<>();
         for (Inheritance.Contribution c : merged.sources()) {

@@ -225,4 +225,92 @@ class InheritanceTest {
         assertEquals(1, agent1.notInBaseline());
         assertEquals(0, line.notInBaseline());
     }
+
+    /** A mind born holding an inheritance: these beliefs rest only on what it was told. */
+    private Path bornKnowing(String agent, String[][] witnessed, String[][] sawItself) {
+        EpisodicMemory episodic = new EpisodicMemory();
+        long saw = episodic.restore(1, "MapEntered", "MapEntered[mapId=10000]").id();
+        SemanticMemory semantic = new SemanticMemory();
+        for (String[] t : witnessed) {
+            for (int i = 3; i < t.length; i++) {
+                long told = episodic.restore(0, "Inherited", "Inherited[from " + t[i] + "]").id();
+                semantic.assertTriple(t[0], t[1], t[2], told, 0, Belief.Provenance.HEARSAY);
+            }
+        }
+        for (String[] t : sawItself) {
+            semantic.assertTriple(t[0], t[1], t[2], saw, 1, Belief.Provenance.FIRST_HAND);
+        }
+        Path file = minds.resolve(agent + ".mind");
+        MindSnapshot.save(file, agent, 500, episodic, semantic);
+        return file;
+    }
+
+    private int evidence(SemanticMemory memory, String subject, String predicate, String object) {
+        return memory.liveBeliefs().stream().filter(b -> b.subject().equals(subject)
+                && b.predicate().equals(predicate) && b.object().equals(object))
+                .mapToInt(b -> b.supportedBy().size()).findFirst().orElse(0);
+    }
+
+    @Test
+    void aPreviousInheritanceKeepsEveryWitnessItHad() {
+        Path old = bornKnowing("inherited", new String[][]{
+                {"map:10000", "has_door", "east00", "Agent0.mind", "Agent1.mind", "Agent2.mind"},
+        }, new String[0][]);
+        Path agent = mindOf("Agent0", new String[][]{{"map:20000", "has_door", "west00"}});
+
+        Inheritance.merge(List.of(agent, old), minds.resolve("next.mind"), "Inherited", old, "test");
+
+        assertEquals(3, evidence(read(minds.resolve("next.mind")), "map:10000", "has_door", "east00"),
+                "three agents said it; merging again must not make that one");
+    }
+
+    @Test
+    void anAgentRepeatingWhatItWasToldIsNotAnotherWitness() {
+        Path old = bornKnowing("inherited", new String[][]{
+                {"map:10000", "has_door", "east00", "Agent0.mind", "Agent1.mind"},
+        }, new String[0][]);
+        Path told = bornKnowing("Agent0", new String[][]{
+                {"map:10000", "has_door", "east00", "Agent0.mind", "Agent1.mind"},
+        }, new String[0][]);
+
+        Inheritance.merge(List.of(told, old), minds.resolve("next.mind"), "Inherited", old, "test");
+
+        assertEquals(2, evidence(read(minds.resolve("next.mind")), "map:10000", "has_door", "east00"));
+    }
+
+    @Test
+    void anAgentThatSawItForItselfIsOneMoreWitness() {
+        Path old = bornKnowing("inherited", new String[][]{
+                {"map:10000", "has_door", "east00", "Agent0.mind", "Agent1.mind"},
+        }, new String[0][]);
+        Path saw = bornKnowing("Agent0", new String[][]{
+                {"map:10000", "has_door", "east00", "Agent0.mind", "Agent1.mind"},
+        }, new String[][]{{"map:10000", "has_door", "east00"}});
+
+        Inheritance.merge(List.of(saw, old), minds.resolve("next.mind"), "Inherited", old, "test");
+
+        assertEquals(3, evidence(read(minds.resolve("next.mind")), "map:10000", "has_door", "east00"),
+                "its own sighting, named for this merge, joins the two it was told by");
+    }
+
+    @Test
+    void foldingInAGenerationNeverWeakensABelief() {
+        Path standing = bornKnowing("inherited", new String[][]{
+                {"map:10000", "has_door", "east00", "Agent0.mind", "Agent1.mind", "Agent2.mind", "inherited.mind"},
+                {"map:10000", "has_door", "west00", "Agent0.mind"},
+        }, new String[0][]);
+        // An older generation's agent, born holding an older inheritance, that never went west.
+        Path older = bornKnowing("Agent0", new String[][]{
+                {"map:10000", "has_door", "east00", "Agent0.mind"},
+        }, new String[][]{{"monster:100100", "gives_exp", "3"}});
+
+        Inheritance.Merged merged = Inheritance.merge(List.of(older, standing),
+                minds.resolve("next.mind"), "Inherited", standing, "minds.backup-2026-10-03-generation");
+
+        SemanticMemory next = read(minds.resolve("next.mind"));
+        assertEquals(4, evidence(next, "map:10000", "has_door", "east00"));
+        assertEquals(1, evidence(next, "map:10000", "has_door", "west00"));
+        assertEquals(1, evidence(next, "monster:100100", "gives_exp", "3"));
+        assertEquals(3, merged.beliefsKept());
+    }
 }

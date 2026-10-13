@@ -4,6 +4,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -112,6 +113,36 @@ public final class Inheritance {
 
     /** @param baseline the inheritance before this merge, to measure each source against */
     public static Merged merge(List<Path> sources, Path destination, String name, Path baseline) {
+        return merge(sources, destination, name, baseline,
+                "condensed " + java.time.Instant.now());
+    }
+
+    /**
+     * Merges, counting witnesses rather than files.
+     *
+     * The evidence behind an inherited belief is the predecessors who said it, one episode
+     * each. Counting files instead had two faults. A previous inheritance read as a single
+     * witness, so a belief four agents had agreed on came out of the next merge resting on
+     * one - every condense quietly undid the agreement of the ones before, and folding in a
+     * generation that had little new to add left 1,823 beliefs weaker than it found them.
+     * And an agent repeating what it was born being told counted as a fresh witness, though
+     * it had seen nothing.
+     *
+     * <p>So each belief is traced to who actually said it. Something an agent saw for itself
+     * is a witness of its own, named after the file and this merge's label so that it can
+     * never be mistaken for another generation's agent of the same name. Something it holds
+     * only because it inherited it passes through as the witnesses it inherited it from, and
+     * a previous inheritance's beliefs keep every witness they had. A belief can only gain
+     * support in a merge, never lose it.
+     *
+     * <p>Witnesses passed through are known only by their labels, and inheritances made before
+     * labels were unique named theirs by file alone - "Agent0.mind" in one generation and
+     * the next. Two such are taken to be one. That undercounts, which is the safe way round.
+     *
+     * @param label what this merge is, to tell its witnesses from any other merge's
+     */
+    public static Merged merge(List<Path> sources, Path destination, String name, Path baseline,
+                               String label) {
         Set<String> before = new java.util.HashSet<>();
         if (baseline != null && Files.isRegularFile(baseline)) {
             EpisodicMemory ignored = new EpisodicMemory();
@@ -122,12 +153,13 @@ public final class Inheritance {
                 }
             }
         }
-        // One episode per predecessor, not one for the whole inheritance. Two agents that
-        // independently found the same door are two pieces of evidence for it, and they only
-        // read as two if they are two separate moments of being told - a single shared
-        // episode makes the second one a duplicate and the belief no better supported than
-        // if one agent had said it twice.
+        // One episode per witness, never shared: two agents that independently found the same
+        // door only read as two pieces of evidence if they are two separate moments of being
+        // told.
         EpisodicMemory episodic = new EpisodicMemory();
+        Map<String, Long> witnessEpisodes = new java.util.HashMap<>();
+        Map<String, Set<String>> witnessesOf = new java.util.HashMap<>();
+        Set<String> ownLabels = new java.util.HashSet<>();
         SemanticMemory inherited = new SemanticMemory();
         int read = 0;
         int kept = 0;
@@ -149,23 +181,33 @@ public final class Inheritance {
             int theirKept = 0;
             int theirAgreed = 0;
             int theirNovel = 0;
-            long told = episodic.restore(0, "Inherited",
-                    "Inherited[from " + source.getFileName() + "]").id();
+            String own = INHERITED + "[from " + source.getFileName() + ", " + label + "]";
+            for (int n = 2; !ownLabels.add(own); n++) {
+                own = INHERITED + "[from " + source.getFileName() + " #" + n + ", " + label + "]";
+            }
             for (Belief belief : theirBeliefs.liveBeliefs()) {
                 theirRead++;
                 if (!WORTH_KEEPING.contains(belief.predicate())) {
                     continue;
                 }
-                SemanticMemory.Assertion assertion = inherited.assertTriple(
-                        belief.subject(), belief.predicate(), belief.object(),
-                        told, 0, Belief.Provenance.HEARSAY);
-                if (assertion.isNew()) {
+                String triple = said(belief);
+                Set<String> already = witnessesOf.computeIfAbsent(triple, t -> new java.util.LinkedHashSet<>());
+                if (already.isEmpty()) {
                     theirKept++;
                 } else {
                     theirAgreed++;
                 }
-                if (!before.contains(said(belief))) {
+                if (!before.contains(triple)) {
                     theirNovel++;
+                }
+                for (String witness : witnessesFor(belief, theirEpisodes, own)) {
+                    if (!already.add(witness)) {
+                        continue;
+                    }
+                    long told = witnessEpisodes.computeIfAbsent(witness,
+                            w -> episodic.restore(0, INHERITED, w).id());
+                    inherited.assertTriple(belief.subject(), belief.predicate(), belief.object(),
+                            told, 0, Belief.Provenance.HEARSAY);
                 }
             }
             read += theirRead;
@@ -179,6 +221,37 @@ public final class Inheritance {
         // new life and not a continuation of anybody's.
         MindSnapshot.save(destination, name, 0, episodic, inherited);
         return new Merged(minds, read, kept, agreed, contributions);
+    }
+
+    private static final String INHERITED = "Inherited";
+
+    /**
+     * Who a source's belief rests on: the witnesses it inherited it from, and the source
+     * itself if it has any evidence of its own. An episode it no longer remembers is taken
+     * to be its own - what a bounded mind forgets first is what it saw, not what it was born
+     * knowing.
+     */
+    private static List<String> witnessesFor(Belief belief, EpisodicMemory theirs, String own) {
+        List<String> witnesses = new ArrayList<>();
+        boolean saw = false;
+        for (long id : belief.supportedBy()) {
+            var told = theirs.byId(id)
+                    .map(Episode::observation)
+                    .filter(o -> o instanceof agents.percept.Observation.Recalled r
+                            && INHERITED.equals(r.type()))
+                    .map(o -> ((agents.percept.Observation.Recalled) o).detail());
+            if (told.isPresent()) {
+                if (!witnesses.contains(told.get())) {
+                    witnesses.add(told.get());
+                }
+            } else {
+                saw = true;
+            }
+        }
+        if (saw) {
+            witnesses.add(0, own);
+        }
+        return witnesses;
     }
 
     private static String said(Belief b) {
