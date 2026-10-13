@@ -137,6 +137,45 @@ class SurvivalTest {
         assertTrue(step().isPresent());
     }
 
+    private void vitals(int hp, int maxHp, int mp, int maxMp) {
+        see(new Observation.StatsChanged(++tick, Map.of("HP", hp, "MAXHP", maxHp, "MP", mp, "MAXMP", maxMp)));
+    }
+
+    /**
+     * A red potion drunk for mana, at full health, while mana trickles back by itself: neither
+     * the trickle nor the full health is the potion's doing. The Bowman that learnt otherwise
+     * drank red potions at full health for hours.
+     */
+    @Test
+    void manaComingBackByItselfIsNotThePotion() {
+        carrying(new Item(2, 1, RED_POTION, 50, null));
+        vitals(851, 851, 30, 300);
+        assertEquals(Optional.of(RED_POTION), step());
+
+        vitals(851, 851, 33, 300);
+        for (int i = 0; i < Survival.WATCH_STEPS + 1; i++) {
+            step();
+        }
+
+        assertEquals("false", belief("item:" + RED_POTION, "restores_mp"));
+        assertEquals(null, belief("item:" + RED_POTION, "restores_hp"), "health was never in question");
+    }
+
+    /** A belief seen only once is still checked each time it is acted on, and gives way. */
+    @Test
+    void aDrinkBelievedOnceIsWatchedUntilItIsBorneOut() {
+        carrying(new Item(2, 1, RED_POTION, 50, null));
+        mind.infer("item:" + RED_POTION, "restores_mp", "true", tick);
+        vitals(851, 851, 30, 300);
+        assertEquals(Optional.of(RED_POTION), step());
+
+        for (int i = 0; i < Survival.WATCH_STEPS + 1; i++) {
+            step();
+        }
+
+        assertEquals("false", belief("item:" + RED_POTION, "restores_mp"));
+    }
+
     @Test
     void theDeadDrinkNothing() {
         carrying(new Item(2, 1, RED_POTION, 5, null));

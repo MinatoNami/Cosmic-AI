@@ -53,6 +53,17 @@ public final class Survival {
     private Trial trial;
     private int cooldown;
 
+    /**
+     * The least rise that counts as the drink working. Health and mana come back by themselves
+     * a little at a time, and a rise that small during the watch was being credited to whatever
+     * had just been drunk: a Bowman came to believe red potions restore mana, and drank them
+     * at full health two hundred times in three hours.
+     */
+    static final int WORKED = 25;
+
+    /** How many times a drink must be seen working before it is no longer watched. */
+    static final int SETTLED_AFTER = 3;
+
     /** How often the threshold people drink at is read again from what the agent believes. */
     static final int RETHINK_THRESHOLD_EVERY = 200;
 
@@ -94,7 +105,11 @@ public final class Survival {
                 .max(Comparator.comparingInt(Item::quantity));
         if (known.isPresent()) {
             cooldown = BETWEEN_DRINKS;
-            return Optional.of(known.get().itemId());
+            int itemId = known.get().itemId();
+            if (trial == null && !settled(mind, itemId, need)) {
+                trial = new Trial(itemId, need, world.hp(), world.stat("MP"), world.stat("MAXMP"), WATCH_STEPS);
+            }
+            return Optional.of(itemId);
         }
         Optional<Item> untried = drinkable.stream()
                 .filter(item -> !triedFor(mind, item.itemId(), need))
@@ -153,26 +168,26 @@ public final class Survival {
     }
 
     /**
-     * Decides what the item being tried did, from what happened to health and mana since.
+     * Decides what the item being tried did for what it was drunk for, from what happened to
+     * that since.
      *
-     * A rise is a yes. No rise by the end of the watch is a no - for health, which it was
-     * drunk to restore; and for mana only if there was mana missing to restore, since a full
-     * bar going nowhere says nothing.
+     * Only that: health that rose while a potion was drunk for mana says nothing about the
+     * potion, and neither does health that did not rise because it was full. A rise is a yes
+     * once it is more than coming back by itself would give; none by the end of the watch is
+     * a no.
      */
     private void judge(Mind mind, WorldModel world, long tick) {
         if (trial == null) {
             return;
         }
         String item = "item:" + trial.itemId();
-        boolean hpRose = world.hp() > trial.hpBefore();
-        boolean mpRose = world.stat("MP") > trial.mpBefore();
-        if (hpRose || mpRose) {
-            if (hpRose) {
-                mind.infer(item, "restores_hp", "true", tick);
-            }
-            if (mpRose) {
-                mind.infer(item, "restores_mp", "true", tick);
-            }
+        String predicate = "restores_" + trial.need();
+        boolean forHealth = "hp".equals(trial.need());
+        int before = forHealth ? trial.hpBefore() : trial.mpBefore();
+        int now = forHealth ? world.hp() : world.stat("MP");
+        int room = forHealth ? world.maxHp() - before : trial.mpMax() - before;
+        if (before >= 0 && now - before >= Math.max(1, Math.min(WORKED, room / 2))) {
+            mind.infer(item, predicate, "true", tick);
             trial = null;
             return;
         }
@@ -180,11 +195,16 @@ public final class Survival {
         if (trial.stepsLeft() > 0) {
             return;
         }
-        mind.infer(item, "restores_hp", "false", tick);
-        if (trial.mpBefore() >= 0 && trial.mpBefore() < trial.mpMax()) {
-            mind.infer(item, "restores_mp", "false", tick);
+        if (before >= 0 && room > 0) {
+            mind.infer(item, predicate, "false", tick);
         }
         trial = null;
+    }
+
+    /** Whether a drink has been seen to work often enough to stop checking that it does. */
+    private static boolean settled(Mind mind, int itemId, String need) {
+        return beliefAbout(mind, itemId, need)
+                .anyMatch(b -> b.object().equals("true") && b.supportedBy().size() >= SETTLED_AFTER);
     }
 
     /** Potions and food: the kinds of item the client groups for drinking and eating. */
