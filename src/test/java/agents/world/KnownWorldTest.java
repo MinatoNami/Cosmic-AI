@@ -622,4 +622,32 @@ class KnownWorldTest {
             KnownWorld.useAtlas(null);
         }
     }
+
+    /** A ride taken once is a way there: Spinel at the Shrine back to Lith Harbor. */
+    @Test
+    void aRideTakenFromSomewhereIsAWayOnFromThere() {
+        believe(KnownWorld.rideRef(800000000, 9000020), "ride_to", KnownWorld.mapRef(104000000));
+        doorLedTo(104000000, "east00", 104010000);
+
+        java.util.Map<String, KnownWorld.Hop> reach = world().reachableFrom(KnownWorld.mapRef(800000000));
+
+        org.junit.jupiter.api.Assertions.assertEquals("npc:9000020",
+                reach.get(KnownWorld.mapRef(104000000)).firstDoor());
+        org.junit.jupiter.api.Assertions.assertTrue(reach.containsKey(KnownWorld.mapRef(104010000)));
+    }
+
+    /** Somebody seen in several places takes you somewhere different from each: no guessing which. */
+    @Test
+    void aRideWithoutItsStartIsTrustedOnlyFromTheOnePlaceTheyStand() {
+        believe("npc:22000", "present_in", KnownWorld.mapRef(60000));
+        believe("npc:22000", "takes_you_to", KnownWorld.mapRef(104000000));
+        believe("npc:9000020", "present_in", KnownWorld.mapRef(100000000));
+        believe("npc:9000020", "present_in", KnownWorld.mapRef(800000000));
+        believe("npc:9000020", "takes_you_to", KnownWorld.mapRef(800000000));
+
+        org.junit.jupiter.api.Assertions.assertTrue(world().reachableFrom(KnownWorld.mapRef(60000))
+                .containsKey(KnownWorld.mapRef(104000000)), "Shanks stands in one place");
+        org.junit.jupiter.api.Assertions.assertFalse(world().reachableFrom(KnownWorld.mapRef(100000000))
+                .containsKey(KnownWorld.mapRef(800000000)), "Spinel stands in several");
+    }
 }

@@ -40,6 +40,10 @@ public final class KnownWorld {
     /** Doors that led somewhere: source map -> door name -> destination map. */
     private final Map<String, Map<String, String>> exits = new HashMap<>();
 
+    /** NPC rides, by the map they start from: npc ref to the map they take you to. */
+    private final Map<String, Map<String, String>> rides = new HashMap<>();
+    private final Map<String, Set<String>> takesYouTo = new HashMap<>();
+
     /**
      * The world map, when the agents are given one: ordinary portals and where they lead, read
      * from the game data. Null in tests, which build small worlds of their own.
@@ -144,6 +148,15 @@ public final class KnownWorld {
                     }
                 }
                 case "wants_first" -> world.namedAPrice.add(belief.subject());
+                case "ride_to" -> {
+                    String from = mapOf(belief.subject());
+                    String npc = doorOf(belief.subject());
+                    if (from != null && npc != null && !from.equals(belief.object())) {
+                        world.rides.computeIfAbsent(from, m -> new TreeMap<>()).put(npc, belief.object());
+                    }
+                }
+                case "takes_you_to" -> world.takesYouTo
+                        .computeIfAbsent(belief.subject(), npc -> new HashSet<>()).add(belief.object());
                 case "talks_in" -> {
                     // First-hand only. An inherited conversation is one a predecessor had:
                     // this agent has never met them, and going to find out what they say is
@@ -192,6 +205,21 @@ public final class KnownWorld {
                 world.exits.computeIfAbsent(map, m -> new TreeMap<>()).put(door, belief.object());
             }
         });
+        // A ride written down before rides kept where they started is still a ride, from the
+        // one place the NPC is known to stand. Somebody seen in several places is left out:
+        // Spinel stands in every town and takes you somewhere different from each.
+        world.takesYouTo.forEach((npc, destinations) -> {
+            Set<String> standsIn = world.whereStands(npc);
+            if (standsIn.size() != 1) {
+                return;
+            }
+            String from = standsIn.iterator().next();
+            for (String to : destinations) {
+                if (!to.equals(from) && !NOWHERE.equals(to)) {
+                    world.rides.computeIfAbsent(from, m -> new TreeMap<>()).putIfAbsent(npc, to);
+                }
+            }
+        });
         return world;
     }
 
@@ -231,8 +259,31 @@ public final class KnownWorld {
             }
         });
         exits.getOrDefault(mapRef, Map.of()).forEach(merged::putIfAbsent);
+        // Somebody who takes you elsewhere is a way out like a door, named for who they are.
+        rides.getOrDefault(mapRef, Map.of()).forEach(merged::putIfAbsent);
         understood.put(mapRef, merged);
         return merged;
+    }
+
+    /** Every map somebody has been seen or heard in. */
+    public Set<String> whereStands(String npcRef) {
+        Set<String> maps = new HashSet<>();
+        peopleIn.forEach((map, people) -> {
+            if (people.contains(npcRef)) {
+                maps.add(map);
+            }
+        });
+        return maps;
+    }
+
+    /** Whether a step on a route is somebody to ask rather than a door to walk through. */
+    public static boolean isRide(String door) {
+        return door != null && door.startsWith("npc:");
+    }
+
+    /** The ref under which a ride from one map, with one NPC, is written down. */
+    public static String rideRef(int fromMapId, int npcId) {
+        return portalRef(fromMapId, "npc:" + npcId);
     }
 
     private boolean onTheWorldMap(String mapRef, String door) {

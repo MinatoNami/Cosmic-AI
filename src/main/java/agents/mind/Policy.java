@@ -69,5 +69,13 @@ public interface Policy {
     default void rethink() {
     }
 
+    /**
+     * The NPC whose offer of a ride this policy has decided to take, or -1. Whoever answers
+     * the conversation says yes to them, and picks the option that goes.
+     */
+    default int rideWanted() {
+        return -1;
+    }
+
     String name();
 }

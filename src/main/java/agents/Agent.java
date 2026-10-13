@@ -893,6 +893,9 @@ public class Agent implements Runnable {
         }
         if (lastMap > 0 && wentAlongWith > 0 && steps - acceptedAtStep <= TAKEN_WITHIN) {
             mind.saw("npc:" + wentAlongWith, "takes_you_to", "map:" + map, perceiver.currentTick());
+            // And from where: the same NPC can stand in several places and take you somewhere
+            // different from each, which is what lets a route use the ride.
+            mind.saw(KnownWorld.rideRef(lastMap, wentAlongWith), "ride_to", "map:" + map, perceiver.currentTick());
         }
         lastMap = map;
     }
@@ -1055,6 +1058,27 @@ public class Agent implements Runnable {
             reply(dialogue.style(), NPC_NO, NO_SELECTION);
             return;
         }
+        // A ride the policy has decided to take: yes, and from a list the option that goes.
+        // Spinel's way back from Zipangu is a list - "Yes, I'm done with traveling. Can I go
+        // back?" or "No, I'd like to continue exploring" - and a list is otherwise walked away
+        // from, so nobody ever came back from a world tour.
+        if (dialogue.npcId() == policy.rideWanted()) {
+            if (dialogue.style() == MENU) {
+                int going = optionThatGoes(dialogue.text());
+                if (going >= 0) {
+                    wentAlongWith = dialogue.npcId();
+                    acceptedAtStep = steps;
+                    log.info("{} asks npc:{} for the ride (option {})", mind.name(), dialogue.npcId(), going);
+                    reply(MENU, NPC_YES_OR_NEXT, going);
+                    return;
+                }
+            } else if (isAQuestion(dialogue.style())) {
+                noteAnswer(dialogue.npcId(), dialogue.style(), NPC_YES_OR_NEXT);
+                log.info("{} takes npc:{} up on the ride", mind.name(), dialogue.npcId());
+                reply(dialogue.style(), NPC_YES_OR_NEXT, NO_SELECTION);
+                return;
+            }
+        }
         // Nor a calling that does not suit it. The job statues in Lith Harbor send a character
         // straight to an instructor, and a fighter one level short of Warrior took the
         // Magician's statue to Ellinia and turned the Magician down when it got there.
@@ -1203,6 +1227,22 @@ public class Agent implements Runnable {
 
     /** Mode -1: the dialogue window closed. Scripts dispose on it whatever they were waiting for. */
     private static final byte NPC_CLOSE = -1;
+
+    private static final java.util.regex.Pattern OPTION = java.util.regex.Pattern.compile(
+            "#L(\\d+)#(.*?)(?=#l|#L\\d+#|\\r|\\n|$)", java.util.regex.Pattern.DOTALL);
+    private static final java.util.regex.Pattern GOING = java.util.regex.Pattern.compile(
+            "(?i)\\b(yes|take me|go back|go to|let'?s go|i'?ll go)\\b");
+
+    /** The option in a list that says yes to going, or -1. */
+    static int optionThatGoes(String said) {
+        java.util.regex.Matcher option = OPTION.matcher(said);
+        while (option.find()) {
+            if (GOING.matcher(option.group(2)).find()) {
+                return Integer.parseInt(option.group(1));
+            }
+        }
+        return -1;
+    }
 
     /** sendSimple: a list of #L options. */
     private static final int MENU = 4;

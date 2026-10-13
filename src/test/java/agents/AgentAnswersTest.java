@@ -130,6 +130,14 @@ class AgentAnswersTest {
         assertFalse(Agent.leadsNowhereWorthGoing(22000, memory.liveBeliefs()), "never taken, so not known to be wasted");
     }
 
+    /** Spinel's way home from Zipangu is a list; the option that goes is the one to pick. */
+    @Test
+    void picksTheOptionThatGoes() {
+        assertEquals(0, Agent.optionThatGoes("How's the traveling? Are you enjoying it?#b\r\n#L0#Yes, I'm done with "
+                + "traveling. Can I go back to #m104000000#?\r\n#L1#No, I'd like to continue exploring this place."));
+        assertEquals(-1, Agent.optionThatGoes("#L0#Tell me about this place#l\r\n#L1#Never mind#l"));
+    }
+
     /** What the job statues and instructors offer, read from their own words. */
     @Test
     void readsWhichCallingIsOnOffer() {

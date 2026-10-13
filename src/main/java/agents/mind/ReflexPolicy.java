@@ -565,6 +565,7 @@ public class ReflexPolicy implements Policy {
             journeyKind = null;         // and nothing here is where we were going
             gaveUpOn.clear();           // and nowhere here is somewhere we failed to reach
             boxHits.clear();            // and every box here is new
+            rideWanted = -1;            // and whoever it meant to ask is behind it
             arrivedAt = world.selfPosition();
             // Write down which doors this place has. Noticing the exits of the room you are
             // standing in is looking, not deduction - and it is the one thing that lets an
@@ -1425,6 +1426,9 @@ public class ReflexPolicy implements Policy {
                     new Intent.TalkTo(npc.objectId(), npc.typeId(), npc.position()),
                     "say hello and see what happens", score,
                     () -> {
+                        if (npc.typeId() == rideWanted) {
+                            rideAskedAt.put(npc.typeId(), decisionsMade);
+                        }
                         greetedAt.put(npc.typeId(), decisionsMade);
                         greetingSentAt.putIfAbsent(npc.typeId(), decisionsMade);
                         spokeToSomeone();
@@ -1439,6 +1443,9 @@ public class ReflexPolicy implements Policy {
         // merely scoring the option, meant the commitment bonus applied on the very first
         // decision an agent ever made and the door beat everything for the rest of its life -
         // seven tests said so at once.
+        if (rideOnTheWay(choices, world, mind, self)) {
+            return;         // the way on is somebody to ask, not a door
+        }
         boolean alreadyOnTheWay = committedPortal != null;
         if (doorInMind == null) {
             doorInMind = chooseDoor(doorsWithinReach(world, self, mind), mind, world.mapId(),
@@ -2323,6 +2330,7 @@ public class ReflexPolicy implements Policy {
         String here = KnownWorld.mapRef(world.mapId());
         Set<String> reachable = null;
         int bestRank = -1;
+        cutOffFrom.clear();
         for (Belief belief : mind.semantic().liveBeliefs()) {
             if (!belief.predicate().equals("wants_first")
                     || !belief.subject().startsWith("npc:")) {
@@ -2353,6 +2361,9 @@ public class ReflexPolicy implements Policy {
                     reachable = KnownWorld.rememberedBy(mind.semantic().liveBeliefs()).reachableFrom(here, Set.of()).keySet();
                 }
                 if (!reachable.contains(whereItWas.get())) {
+                    if (world.job() == 0 && STAT_ASKED.matcher(belief.object()).find()) {
+                        cutOffFrom.add(whereItWas.get());   // a calling it cannot walk to
+                    }
                     continue;
                 }
             }
@@ -2399,7 +2410,149 @@ public class ReflexPolicy implements Policy {
         } else {
             errandNpc = payableNpc;
         }
+        if (errandNpc < 0 && sentMap == null && !cutOffFrom.isEmpty()) {
+            askForARideBack(mind, here);
+        }
     }
+
+    /** Where a calling it wants is, when it cannot walk there from here. */
+    private final Set<String> cutOffFrom = new HashSet<>();
+
+    /** The NPC whose ride it has decided to take, or -1. */
+    private int rideWanted = -1;
+
+    @Override
+    public int rideWanted() {
+        return rideWanted;
+    }
+
+    /** When it last went to ask each NPC for a ride, so one that will not take it is not pestered. */
+    private final Map<Integer, Integer> rideAskedAt = new HashMap<>();
+    private static final int ASK_FOR_A_RIDE_AGAIN = 300;
+
+    /**
+     * Cut off on foot from something it wants, goes to ask somebody for a ride back.
+     *
+     * Who: somebody it can walk to here who has also been seen somewhere else - somewhere the
+     * thing it wants can be walked to from. That is what a travel agent looks like from the
+     * outside, and nothing else told Agent1 that Spinel, who took it to Zipangu, stands at the
+     * Mushroom Shrine to take people back; it hunted far above itself in the forests there
+     * and died, with the Warrior's statue an island away.
+     */
+    private void askForARideBack(Mind mind, String here) {
+        KnownWorld known = KnownWorld.rememberedBy(mind.semantic().liveBeliefs());
+        Set<String> onFoot = known.reachableFrom(here, Set.of()).keySet();
+        Set<String> stranders = strandedBy(mind);
+        Map<String, Integer> doorsOnFrom = new HashMap<>();
+        int bestNpc = -1;
+        String bestNear = null;
+        int bestDoors = Integer.MAX_VALUE;
+        for (String npc : peopleKnownOf(mind)) {
+            int npcId = npcIdIn(npc);
+            if (npcId < 0 || stranders.contains(npc)
+                    || decisionsMade - rideAskedAt.getOrDefault(npcId, -ASK_FOR_A_RIDE_AGAIN) < ASK_FOR_A_RIDE_AGAIN) {
+                continue;
+            }
+            Set<String> standsIn = known.whereStands(npc);
+            Optional<String> near = standsIn.stream().filter(m -> m.equals(here) || onFoot.contains(m)).findFirst();
+            if (near.isEmpty()) {
+                continue;
+            }
+            // Where they are known to take people decides it; only somebody whose rides are
+            // unknown is judged by where else they stand. And the nearer the ride lands to
+            // what it wants, the better: Rooney stands in every town too, and his ride is to
+            // Happyville, from which the way on is another ride again.
+            Set<String> ridesTo = ridesKnownFor(mind, npc);
+            Set<String> landings = ridesTo.isEmpty() ? standsIn : ridesTo;
+            for (String landing : landings) {
+                if (landing.equals(here) || onFoot.contains(landing)) {
+                    continue;
+                }
+                int doors = doorsOnFrom.computeIfAbsent(landing, f -> {
+                    Map<String, KnownWorld.Hop> fromThere = known.reachableFrom(f, Set.of());
+                    int fewest = Integer.MAX_VALUE;
+                    for (String target : cutOffFrom) {
+                        int hops = target.equals(f) ? 0
+                                : fromThere.containsKey(target) ? fromThere.get(target).hops() : Integer.MAX_VALUE;
+                        fewest = Math.min(fewest, hops);
+                    }
+                    return fewest;
+                });
+                if (doors < bestDoors) {
+                    bestDoors = doors;
+                    bestNpc = npcId;
+                    bestNear = near.get();
+                }
+            }
+        }
+        if (bestNpc < 0) {
+            return;
+        }
+        errandNpc = bestNpc;
+        errandMap = bestNear.equals(here) ? null : bestNear;
+        rideWanted = bestNpc;
+    }
+
+    /** Where somebody is known to have taken people. */
+    private static Set<String> ridesKnownFor(Mind mind, String npc) {
+        Set<String> to = new HashSet<>();
+        for (Belief belief : mind.semantic().liveBeliefs()) {
+            if (belief.subject().equals(npc) && belief.predicate().equals("takes_you_to")) {
+                to.add(belief.object());
+            }
+        }
+        return to;
+    }
+
+    /** Everyone it has seen or heard of standing anywhere. */
+    private static Set<String> peopleKnownOf(Mind mind) {
+        Set<String> people = new java.util.TreeSet<>();
+        for (Belief belief : mind.semantic().liveBeliefs()) {
+            if (belief.subject().startsWith("npc:")
+                    && (belief.predicate().equals("present_in") || belief.predicate().equals("talks_in"))) {
+                people.add(belief.subject());
+            }
+        }
+        return people;
+    }
+
+    /**
+     * When the way to where it is going starts with somebody's ride, goes to them and asks,
+     * rather than looking for a door that is not the way.
+     */
+    private boolean rideOnTheWay(List<Choice> choices, WorldModel world, Mind mind, Point self) {
+        if (destination == null) {
+            return false;
+        }
+        String here = KnownWorld.mapRef(world.mapId());
+        KnownWorld.Hop hop = KnownWorld.rememberedBy(mind.semantic().liveBeliefs())
+                .reachableFrom(here, Set.of()).get(destination);
+        if (hop == null || !KnownWorld.isRide(hop.firstDoor())) {
+            return false;
+        }
+        int npcId = npcIdIn(hop.firstDoor());
+        Optional<WorldModel.Entity> npc = world.visibleNpcs().stream().filter(n -> n.typeId() == npcId).findFirst();
+        if (npc.isEmpty()) {
+            return false;
+        }
+        Point where = npc.get().position();
+        double score = ERRAND + RIDE;
+        boolean close = IntentExecutor.canSpeakTo(world.mapId(), self, where, NPC_RANGE);
+        choices.add(new Choice("door",
+                close ? new Intent.TalkTo(npc.get().objectId(), npcId, where) : new Intent.MoveTo(where),
+                "ask for a ride towards " + destination, score,
+                () -> {
+                    rideWanted = npcId;
+                    if (close) {
+                        rideAskedAt.put(npcId, decisionsMade);
+                        greetedAt.put(npcId, decisionsMade);
+                    }
+                }));
+        return true;
+    }
+
+    /** What taking a ride on the way is worth, over an errand. */
+    private static final double RIDE = 1.0;
 
     /**
      * The nearest finisher of a quest under way, as {npc id, map}, among those it has seen and
