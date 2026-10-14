@@ -467,6 +467,12 @@ public class ReflexPolicy implements Policy {
     /** What talking to somebody new is worth, as a share, while levels are what it needs. */
     private static final double LEVELLING_TALK = 0.3;
 
+    /** What somewhere new is worth as a reason to travel, as a share, while levelling. */
+    private static final double LEVELLING_EXPLORE = 0.3;
+
+    /** Strangers as a reason to travel while levelling: many of them have quests to give. */
+    private static final double LEVELLING_STRANGERS = 0.6;
+
     static boolean shortOfMoney(Mind mind, WorldModel world) {
         int mesos = world.inventory().meso();
         if (mesos < 0) {
@@ -531,7 +537,11 @@ public class ReflexPolicy implements Policy {
                 // And in a first job short of the second, which comes at level 30 and only by
                 // levels: a Bowman by temperament a wanderer stayed at 17 in Lith Harbor,
                 // walking from one stranger to the next, while the Warrior levelled past it.
-                || world.job() > 0 && world.job() % 100 == 0 && world.level() < SECOND_JOB_AT;
+                || world.job() > 0 && world.job() % 100 == 0 && world.level() < SECOND_JOB_AT
+                // And any job at all: past the first, levels are what everything waits on. A
+                // Bandit at 30 spent half its time walking between towns and the rest talking,
+                // six kills in three hours.
+                || world.job() > 0;
         // Where it last stood on a floor: halfway up a rope there is nothing underfoot to walk
         // to a door from, and judging the way out from there found none - a Warrior climbing
         // over the ship in Nautilus Harbor towards the road out dropped its trip back to its
@@ -1504,12 +1514,11 @@ public class ReflexPolicy implements Policy {
                 return;     // nothing new to say to this one, for now
             }
             // Something on offer is worth crossing a map for; a chat is worth a wander.
+            // Needing levels, a quest on offer keeps its worth - quests are experience too - but
+            // a chat with somebody new is worth much less than a hunt.
             double appeal = cameBackFor ? 1.0
-                    : (offer.isPresent() ? 0.7 : 0.2 + disposition.curiosity() * 0.3)
-                    // Needing levels, a new quest or a new face is worth much less than a hunt:
-                    // a Bowman and a Magician at 17 spent twenty minutes taking quests in
-                    // Henesys and Lith Harbor, where nothing gives experience but talking.
-                    * (shortOfStats ? LEVELLING_TALK : 1);
+                    : offer.isPresent() ? 0.7
+                    : (0.2 + disposition.curiosity() * 0.3) * (shortOfStats ? LEVELLING_TALK : 1);
             double score = appeal + NEGLECT_MATTERS * neglect("talk") + urgeFor("talk")
                     + commitmentTo("talk", npc.position());
 
@@ -2150,17 +2159,20 @@ public class ReflexPolicy implements Policy {
      * A fighter weighs a hunting ground far more heavily; a curious agent weighs strangers.
      */
     private Places.Weights weights(boolean seekingACalling) {
+        // Levelling, somewhere to hunt outweighs somewhere new: three agents spent half their
+        // time walking between towns, drawn by Kerning City's twelve unopened doors.
+        double exploring = shortOfStats && !jobAdvancementPending() ? LEVELLING_EXPLORE : 1;
         return new Places.Weights(
-                2.0,                                        // a door never opened
+                2.0 * exploring,                            // a door never opened
                 (1.2 + disposition.curiosity() * 0.6        // somebody never spoken to,
                         + (seekingACalling ? 2.0 : 0))      // who might be the one to train it
-                        * (shortOfStats && !seekingACalling ? LEVELLING_TALK : 1),  // less when levels are what it needs
+                        * (shortOfStats && !seekingACalling ? LEVELLING_STRANGERS : 1),  // a little less when levels are what it needs
                 0.8 * (shortOfStats ? LEVELLING_TALK : 1),  // somebody worth hearing again
                 3.0,                                        // somebody owed a visit
                 3.5,                                        // a shop, when the bag is full
                 (0.4 + disposition.aggression() * 1.2)      // something to hunt,
                         * (shortOfMoney || shortOfStats ? MONEY_MAKES_HUNTING : 1),  // and much more when broke or short of a calling
-                1.5,                                        // somewhere never stood in
+                1.5 * exploring,                            // somewhere never stood in
                 0.3,                                        // the less visited, the better
                 0.35,                                       // each door of walking
                 1.0,                                        // a room already seen all of
@@ -2401,6 +2413,9 @@ public class ReflexPolicy implements Policy {
     public void headFor(String map, String why) {
         if (jobAdvancementPending() && !map.equals(errandMap) && !map.equals(sentMap)) {
             return;         // somewhere else can wait until it has its calling
+        }
+        if (shortOfStats && !jobAdvancementPending()) {
+            return;         // levelling: where to hunt is the reflexes' to weigh, not a tour
         }
         setOffFor(map, why, true);
         doorInMind = null;
@@ -2650,6 +2665,17 @@ public class ReflexPolicy implements Policy {
 
     /** Whether where it is sent is where its trainer sent it. */
     private boolean sentByTrainer;
+
+    /** Whether a quest under way was given by this NPC or is finished by them. */
+    private static boolean questBusinessWith(Mind mind, String npcRef) {
+        int npc = npcIdIn(npcRef);
+        if (npc < 0) {
+            return false;
+        }
+        Set<Integer> started = startedQuests(mind);
+        return QuestBoard.offeredBy(npc).stream().anyMatch(started::contains)
+                || QuestBoard.endedBy(npc).stream().anyMatch(started::contains);
+    }
 
     /** Who trained it, as a ref, or null. */
     private static String trainerOf(Mind mind) {
@@ -3106,6 +3132,19 @@ public class ReflexPolicy implements Policy {
                 .toList();
         for (Belief instruction : instructions) {
             if (followed(mind, instruction.object(), instruction.lastSeen())) {
+                continue;
+            }
+            // Somebody offering a ride there is not sending you there: the Henesys cab's list of
+            // towns was written down as being sent to Lith Harbor, and a Bandit went there
+            // ninety-one times, asking the cab again each time it came back.
+            if (!ridesKnownFor(mind, instruction.subject()).isEmpty()) {
+                continue;       // a cab's list of towns is offers, every line of it
+            }
+            // Levelling, only directions that lead somewhere: from its trainer, or from somebody
+            // whose quest it has under way. Everybody who mentions a town was otherwise followed
+            // there - a Bandit went from Lith Harbor to Perion to Ellinia on passing remarks.
+            if (shortOfStats && !instruction.subject().equals(trainerOf(mind))
+                    && !questBusinessWith(mind, instruction.subject())) {
                 continue;
             }
             String target = instruction.object();
