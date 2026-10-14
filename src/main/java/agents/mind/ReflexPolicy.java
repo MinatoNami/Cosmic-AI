@@ -414,7 +414,7 @@ public class ReflexPolicy implements Policy {
         if (decisionsMade - checkedOnFootAt >= RECHECK_ON_FOOT || checkedOnFootIn != world.mapId()) {
             checkedOnFootAt = decisionsMade;
             checkedOnFootIn = world.mapId();
-            KnownWorld known = KnownWorld.rememberedBy(mind.semantic().liveBeliefs());
+            KnownWorld known = knownWorld(mind);
             String here = KnownWorld.mapRef(world.mapId());
             // Nothing unopened, and nothing to hunt anywhere it can walk to. A town with fields
             // next door is not stranding anybody, however well it is known.
@@ -520,6 +520,7 @@ public class ReflexPolicy implements Policy {
     @Override
     public Decision decide(Mind mind, WorldModel world, long tick) {
         currentTick = tick;
+        jobKnown = world.job();
         shortOfMoney = shortOfMoney(mind, world);
         // Short of the stats for any calling that suits it is short of levels, and levels come
         // from hunting: a wanderer five DEX short of Bowman stayed at level 13 for two hours,
@@ -958,8 +959,12 @@ public class ReflexPolicy implements Policy {
             if (near <= 0) {
                 return;
             }
-            double score = (0.2 + disposition.aggression()) * near
-                    + (shortOfMoney || shortOfStats ? SHORT_OF_MONEY * near : 0)
+            double score = ((0.2 + disposition.aggression()) * near
+                    + (shortOfMoney || shortOfStats ? SHORT_OF_MONEY * near : 0))
+                    // On its way to a calling elsewhere, what is on the road is worth a third:
+                    // a Warrior due its second job hunted its way across every field between
+                    // Henesys and Perion and never arrived.
+                    * (jobAdvancementPending() && (errandMap != null || sentMap != null) ? ON_THE_WAY : 1)
                     + NEGLECT_MATTERS * neglect("fight") + urgeFor("fight")
                     + commitmentTo("fight", monster.position());
             // From as far as its attack reaches: a Bowman shoots from where it stands.
@@ -1617,7 +1622,7 @@ public class ReflexPolicy implements Policy {
                 // A calling elsewhere outweighs anything to chat about here. Henesys has quests
                 // on every corner, and a talker with the INT for Magician started and handed
                 // them in one after another, the Magician's statue a door-score away for good.
-                + (errandMap != null && errandForACalling ? CALLING_PULL : 0)
+                + (errandMap != null && errandForACalling || sentMap != null && jobAdvancementPending() ? CALLING_PULL : 0)
                 // A map that has killed it twice at about this level is a map to get out of.
                 + (deathsHere >= 2 ? LEAVE_A_KILLING_GROUND : 0);
 
@@ -1861,7 +1866,7 @@ public class ReflexPolicy implements Policy {
         if (portals.isEmpty()) {
             return null;
         }
-        KnownWorld known = KnownWorld.rememberedBy(mind.semantic().liveBeliefs())
+        KnownWorld known = knownWorld(mind)
                 .standingAt(KnownWorld.mapRef(mapId), standingAt);
         portals = notBackIfBouncing(portals, known, mapId);
         Set<String> beenThere = mapsVisited(mind);
@@ -2371,7 +2376,7 @@ public class ReflexPolicy implements Policy {
      * agent knows the way to.
      */
     public List<Places.Place> placesWorthGoing(Mind mind, WorldModel world, int limit) {
-        KnownWorld known = KnownWorld.rememberedBy(mind.semantic().liveBeliefs())
+        KnownWorld known = knownWorld(mind)
                 .standingAt(KnownWorld.mapRef(world.mapId()), standingAt != null ? standingAt : world.selfPosition());
         String here = KnownWorld.mapRef(world.mapId());
         return places(known, here, mind).stream()
@@ -2509,7 +2514,7 @@ public class ReflexPolicy implements Policy {
                 // and on Victoria, took the one errand slot from the four job statues whose
                 // conditions it met, and it reached level seventeen without a job.
                 if (reachable == null) {
-                    reachable = KnownWorld.rememberedBy(mind.semantic().liveBeliefs()).reachableFrom(here, Set.of());
+                    reachable = knownWorld(mind).reachableFrom(here, Set.of());
                 }
                 if (!reachable.containsKey(whereItWas.get())) {
                     if (world.job() == 0 && STAT_ASKED.matcher(belief.object()).find()) {
@@ -2557,7 +2562,7 @@ public class ReflexPolicy implements Policy {
                         continue;
                     }
                     if (reachable == null) {
-                        reachable = KnownWorld.rememberedBy(mind.semantic().liveBeliefs()).reachableFrom(here, Set.of());
+                        reachable = knownWorld(mind).reachableFrom(here, Set.of());
                     }
                     int hops = instructorsRoom.equals(here) ? 0
                             : reachable.containsKey(instructorsRoom) ? reachable.get(instructorsRoom).hops() : -1;
@@ -2669,7 +2674,7 @@ public class ReflexPolicy implements Policy {
      * and died, with the Warrior's statue an island away.
      */
     private void askForARideBack(Mind mind, String here) {
-        KnownWorld known = KnownWorld.rememberedBy(mind.semantic().liveBeliefs());
+        KnownWorld known = knownWorld(mind);
         Set<String> onFoot = known.reachableFrom(here, Set.of()).keySet();
         Set<String> stranders = strandedBy(mind);
         Map<String, Integer> doorsOnFrom = new HashMap<>();
@@ -2743,6 +2748,32 @@ public class ReflexPolicy implements Policy {
         return rooms;
     }
 
+    /**
+     * What it knows of the world, less rides it cannot count on: one asked for lately that came
+     * to nothing, and - with a job - a statue's, which only beginners are given. A Thief due its
+     * second job routed from Lith Harbor through the Thief's statue's warp to the hideout, was
+     * not given it, and with no door to walk the way it meant went to and fro on last resorts.
+     */
+    private KnownWorld knownWorld(Mind mind) {
+        Set<String> refused = new HashSet<>();
+        rideAskedAt.forEach((npc, at) -> {
+            if (decisionsMade - at < ASK_FOR_A_RIDE_AGAIN) {
+                refused.add("npc:" + npc);
+            }
+        });
+        if (jobKnown > 0) {
+            for (Belief belief : mind.semantic().liveBeliefs()) {
+                if (belief.predicate().equals("offers_calling") || belief.predicate().equals("sent_you_on")) {
+                    refused.add(belief.subject());
+                }
+            }
+        }
+        return KnownWorld.rememberedBy(mind.semantic().liveBeliefs()).refusingRidesFrom(refused);
+    }
+
+    /** The job it last had, for choosing which rides it can count on. */
+    private int jobKnown;
+
     /** Where somebody is known to have taken people. */
     private static Set<String> ridesKnownFor(Mind mind, String npc) {
         Set<String> to = new HashSet<>();
@@ -2807,7 +2838,7 @@ public class ReflexPolicy implements Policy {
             return false;
         }
         String here = KnownWorld.mapRef(world.mapId());
-        KnownWorld known = KnownWorld.rememberedBy(mind.semantic().liveBeliefs());
+        KnownWorld known = knownWorld(mind);
         KnownWorld.Hop hop = known.reachableFrom(here, Set.of()).get(destination);
         if (hop == null || !KnownWorld.isRide(hop.firstDoor())) {
             return false;
@@ -2876,7 +2907,7 @@ public class ReflexPolicy implements Policy {
             int hops = 0;
             if (!map.get().equals(here)) {
                 if (reach == null) {
-                    reach = KnownWorld.rememberedBy(mind.semantic().liveBeliefs()).reachableFrom(here, Set.of());
+                    reach = knownWorld(mind).reachableFrom(here, Set.of());
                 }
                 KnownWorld.Hop hop = reach.get(map.get());
                 if (hop == null) {
@@ -2905,6 +2936,9 @@ public class ReflexPolicy implements Policy {
 
     /** Whether the errand held is to somebody about a calling. */
     private boolean errandForACalling;
+
+    /** What a monster on the road is worth, as a share, on the way to a calling. */
+    private static final double ON_THE_WAY = 0.3;
 
     /** What a calling elsewhere adds to leaving: more than any conversation here is worth. */
     private static final double CALLING_PULL = 1.0;
@@ -3011,9 +3045,9 @@ public class ReflexPolicy implements Policy {
      * Whether a map can be walked to from here, as far as it knows. Somewhere behind an NPC's
      * warp - a Boss Rush resting room, the far side of a one-way ferry - is not an errand.
      */
-    private static boolean canGetTo(Mind mind, String here, String map) {
+    private boolean canGetTo(Mind mind, String here, String map) {
         return map.equals(here)
-                || KnownWorld.rememberedBy(mind.semantic().liveBeliefs()).reachableFrom(here, Set.of()).containsKey(map);
+                || knownWorld(mind).reachableFrom(here, Set.of()).containsKey(map);
     }
 
     /** Whether it has grown enough since its trainer last spoke to it to go back; sets the errand if so. */

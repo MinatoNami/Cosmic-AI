@@ -40,6 +40,16 @@ public final class KnownWorld {
     /** Doors that led somewhere: source map -> door name -> destination map. */
     private final Map<String, Map<String, String>> exits = new HashMap<>();
 
+    /** NPCs whose rides are not to be counted on, as refs. */
+    private Set<String> refusedRides = Set.of();
+
+    /** The same world, without rides from these NPCs. */
+    public KnownWorld refusingRidesFrom(Set<String> npcRefs) {
+        refusedRides = Set.copyOf(npcRefs);
+        understood.clear();
+        return this;
+    }
+
     /** NPC rides, by the map they start from: npc ref to the map they take you to. */
     private final Map<String, Map<String, String>> rides = new HashMap<>();
     private final Map<String, Set<String>> takesYouTo = new HashMap<>();
@@ -259,8 +269,13 @@ public final class KnownWorld {
             }
         });
         exits.getOrDefault(mapRef, Map.of()).forEach(merged::putIfAbsent);
-        // Somebody who takes you elsewhere is a way out like a door, named for who they are.
-        rides.getOrDefault(mapRef, Map.of()).forEach(merged::putIfAbsent);
+        // Somebody who takes you elsewhere is a way out like a door, named for who they are -
+        // unless they will not take this agent, or would not lately.
+        rides.getOrDefault(mapRef, Map.of()).forEach((ride, to) -> {
+            if (!refusedRides.contains(rideNpc(ride))) {
+                merged.putIfAbsent(ride, to);
+            }
+        });
         understood.put(mapRef, merged);
         return merged;
     }
