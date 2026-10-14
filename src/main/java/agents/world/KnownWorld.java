@@ -152,7 +152,7 @@ public final class KnownWorld {
                     String from = mapOf(belief.subject());
                     String npc = doorOf(belief.subject());
                     if (from != null && npc != null && !from.equals(belief.object())) {
-                        world.rides.computeIfAbsent(from, m -> new TreeMap<>()).put(npc, belief.object());
+                        world.rides.computeIfAbsent(from, m -> new TreeMap<>()).put(rideTo(npc, belief.object()), belief.object());
                     }
                 }
                 case "takes_you_to" -> world.takesYouTo
@@ -216,7 +216,7 @@ public final class KnownWorld {
             String from = standsIn.iterator().next();
             for (String to : destinations) {
                 if (!to.equals(from) && !NOWHERE.equals(to)) {
-                    world.rides.computeIfAbsent(from, m -> new TreeMap<>()).putIfAbsent(npc, to);
+                    world.rides.computeIfAbsent(from, m -> new TreeMap<>()).putIfAbsent(rideTo(npc, to), to);
                 }
             }
         });
@@ -290,6 +290,21 @@ public final class KnownWorld {
     public static boolean isOffLimits(String mapRef) {
         int id = idOf(mapRef);
         return id >= 209000000 && id <= 209099999;
+    }
+
+    /**
+     * A ride as a way out, one per place it goes: the Henesys cab goes to five towns, and kept
+     * as one way out it went only to the first - a Thief asked it for Kerning City and was
+     * taken to Lith Harbor.
+     */
+    static String rideTo(String npc, String to) {
+        return npc + "@" + to;
+    }
+
+    /** The NPC a ride is with, as a ref. */
+    public static String rideNpc(String door) {
+        int at = door.indexOf('@');
+        return at < 0 ? door : door.substring(0, at);
     }
 
     /** Whether a step on a route is somebody to ask rather than a door to walk through. */

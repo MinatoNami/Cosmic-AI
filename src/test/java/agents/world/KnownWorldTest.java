@@ -632,7 +632,7 @@ class KnownWorldTest {
         java.util.Map<String, KnownWorld.Hop> reach = world().reachableFrom(KnownWorld.mapRef(800000000));
 
         org.junit.jupiter.api.Assertions.assertEquals("npc:9000020",
-                reach.get(KnownWorld.mapRef(104000000)).firstDoor());
+                KnownWorld.rideNpc(reach.get(KnownWorld.mapRef(104000000)).firstDoor()));
         org.junit.jupiter.api.Assertions.assertTrue(reach.containsKey(KnownWorld.mapRef(104010000)));
     }
 
@@ -649,5 +649,18 @@ class KnownWorldTest {
                 .containsKey(KnownWorld.mapRef(104000000)), "Shanks stands in one place");
         org.junit.jupiter.api.Assertions.assertFalse(world().reachableFrom(KnownWorld.mapRef(100000000))
                 .containsKey(KnownWorld.mapRef(800000000)), "Spinel stands in several");
+    }
+
+    /** The cab goes to several towns, each a way on of its own. */
+    @Test
+    void aRideToSeveralPlacesIsAWayToEach() {
+        believe(KnownWorld.rideRef(100000000, 1012000), "ride_to", KnownWorld.mapRef(104000000));
+        believe(KnownWorld.rideRef(100000000, 1012000), "ride_to", KnownWorld.mapRef(103000000));
+
+        java.util.Map<String, KnownWorld.Hop> reach = world().reachableFrom(KnownWorld.mapRef(100000000));
+
+        org.junit.jupiter.api.Assertions.assertTrue(reach.containsKey(KnownWorld.mapRef(104000000)));
+        org.junit.jupiter.api.Assertions.assertTrue(reach.containsKey(KnownWorld.mapRef(103000000)));
+        org.junit.jupiter.api.Assertions.assertEquals(1, reach.get(KnownWorld.mapRef(103000000)).hops());
     }
 }

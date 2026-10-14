@@ -2811,7 +2811,7 @@ public class ReflexPolicy implements Policy {
         if (hop == null || !KnownWorld.isRide(hop.firstDoor())) {
             return false;
         }
-        int npcId = npcIdIn(hop.firstDoor());
+        int npcId = npcIdIn(KnownWorld.rideNpc(hop.firstDoor()));
         if (decisionsMade - rideAskedAt.getOrDefault(npcId, -ASK_FOR_A_RIDE_AGAIN) < ASK_FOR_A_RIDE_AGAIN) {
             // Asked them lately and it came to nothing - or is coming to something, which the
             // conversation, answered as a ride, sees through without asking again. Letting the
