@@ -495,6 +495,8 @@ public class ReflexPolicy implements Policy {
 
     /** Where the agent stands as of this decision, so routes start from doors it can walk to. */
     private java.awt.Point standingAt;
+    private Point lastOnFloor;
+    private int lastOnFloorMap;
 
     /** The tick the agent last walked into a door, and the tick being decided now. */
     private long lastDoorTriedAt = -1;
@@ -528,7 +530,20 @@ public class ReflexPolicy implements Policy {
                 // levels: a Bowman by temperament a wanderer stayed at 17 in Lith Harbor,
                 // walking from one stranger to the next, while the Warrior levelled past it.
                 || world.job() > 0 && world.job() % 100 == 0 && world.level() < SECOND_JOB_AT;
-        standingAt = world.selfPosition();
+        // Where it last stood on a floor: halfway up a rope there is nothing underfoot to walk
+        // to a door from, and judging the way out from there found none - a Warrior climbing
+        // over the ship in Nautilus Harbor towards the road out dropped its trip back to its
+        // trainer at the same rung every time and went back into the ship.
+        Point standing = world.selfPosition();
+        if (standing != null && !agents.world.MapGeometry.groundIn(world.mapId()).isEmpty()) {
+            if (agents.world.Navigator.floorHeight(world.mapId(), standing).isPresent()) {
+                lastOnFloor = standing;
+                lastOnFloorMap = world.mapId();
+            } else if (lastOnFloor != null && lastOnFloorMap == world.mapId()) {
+                standing = lastOnFloor;
+            }
+        }
+        standingAt = standing;
         boolean wasStranded = strandedHere;
         strandedHere = world.monsterCount() == 0 && decisionsHere > STRANDED_AFTER && nothingNewOnFoot(mind, world);
         if (strandedHere && !wasStranded) {
@@ -2356,7 +2371,7 @@ public class ReflexPolicy implements Policy {
      */
     public List<Places.Place> placesWorthGoing(Mind mind, WorldModel world, int limit) {
         KnownWorld known = KnownWorld.rememberedBy(mind.semantic().liveBeliefs())
-                .standingAt(KnownWorld.mapRef(world.mapId()), world.selfPosition());
+                .standingAt(KnownWorld.mapRef(world.mapId()), standingAt != null ? standingAt : world.selfPosition());
         String here = KnownWorld.mapRef(world.mapId());
         return places(known, here, mind).stream()
                 .filter(place -> world.portals().stream()
