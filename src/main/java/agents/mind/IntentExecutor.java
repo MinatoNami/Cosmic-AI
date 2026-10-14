@@ -542,6 +542,18 @@ public class IntentExecutor {
     public void knockedBack(Point monster, WorldModel world) {
         Point from = world.selfPosition();
         int map = world.mapId();
+        // Knocked off a rope: three times off the same one, and it is not a way up for now.
+        if (riding != null && ridingMap == map) {
+            int ropeX = riding.x();
+            int times = knockedOff.merge(map * 100_000L + ropeX, 1, Integer::sum);
+            if (times >= KNOCKED_OFF_LIMIT) {
+                Navigator.blockRope(map, ropeX, ROPE_BLOCKED_FOR);
+                knockedOff.remove(map * 100_000L + ropeX);
+                log.info("{} gives up on the rope at x={} in map {}: knocked off it {} times", who, ropeX, map, times);
+            }
+            riding = null;
+            legs.clear();
+        }
         int away = from.x >= monster.x ? 1 : -1;
         int west = Navigator.floorEnd(map, from, -1).orElse(from.x);
         int east = Navigator.floorEnd(map, from, 1).orElse(from.x);
@@ -557,6 +569,10 @@ public class IntentExecutor {
     }
 
     private static final int KNOCKBACK_PIXELS = 60;
+
+    private final java.util.Map<Long, Integer> knockedOff = new java.util.HashMap<>();
+    private static final int KNOCKED_OFF_LIMIT = 3;
+    private static final long ROPE_BLOCKED_FOR = 10 * 60_000L;
 
     private static short foothold(int map, Point at) {
         return (short) MapGeometry.footholdUnder(map, at.x, at.y);

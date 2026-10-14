@@ -2945,6 +2945,12 @@ public class ReflexPolicy implements Policy {
         sentWhy = null;
         noticeNewThings(world, now);
 
+        // Grown enough to go back to its trainer comes before anything else it was told: a
+        // Warrior at 35 followed somebody's directions to the Free Market instead.
+        if (backToTrainer(mind, world, here, true)) {
+            return;
+        }
+
         Belief instruction = null;
         for (Belief belief : mind.semantic().liveBeliefs()) {
             if (belief.predicate().equals("sends_you_to") && belief.subject().startsWith("npc:")
@@ -2968,30 +2974,7 @@ public class ReflexPolicy implements Policy {
             }
         }
 
-        Belief trainedBy = null;
-        for (Belief belief : mind.semantic().liveBeliefs()) {
-            if (belief.subject().equals("self") && belief.predicate().equals("trained_by")
-                    && (trainedBy == null || belief.lastSeen() > trainedBy.lastSeen())) {
-                trainedBy = belief;
-            }
-        }
-        int job = world.job();
-        if (trainedBy == null || job <= 0 || job % 100 != 0 || world.level() < 30) {
-            return;
-        }
-        long grewAt = Math.max(levelReachedAt(mind), newThingSince);
-        if (lastHeardFrom(mind, trainedBy.object()) >= grewAt) {
-            return;         // nothing new to show them since they last spoke
-        }
-        Optional<String> map = lastSeenIn(mind, trainedBy.object());
-        if (map.isEmpty()) {
-            return;
-        }
-        errandNpc = npcIdIn(trainedBy.object());
-        if (!map.get().equals(here)) {
-            sentMap = map.get();
-            sentWhy = TRAINER_WHY;
-        }
+        backToTrainer(mind, world, here, false);
     }
 
     /**
@@ -3001,6 +2984,35 @@ public class ReflexPolicy implements Policy {
     private static boolean canGetTo(Mind mind, String here, String map) {
         return map.equals(here)
                 || KnownWorld.rememberedBy(mind.semantic().liveBeliefs()).reachableFrom(here, Set.of()).containsKey(map);
+    }
+
+    /** Whether it has grown enough since its trainer last spoke to it to go back; sets the errand if so. */
+    private boolean backToTrainer(Mind mind, WorldModel world, String here, boolean levelOnly) {
+        Belief trainedBy = null;
+        for (Belief belief : mind.semantic().liveBeliefs()) {
+            if (belief.subject().equals("self") && belief.predicate().equals("trained_by")
+                    && (trainedBy == null || belief.lastSeen() > trainedBy.lastSeen())) {
+                trainedBy = belief;
+            }
+        }
+        int job = world.job();
+        if (trainedBy == null || job <= 0 || job % 100 != 0 || world.level() < 30) {
+            return false;
+        }
+        long grewAt = levelOnly ? levelReachedAt(mind) : Math.max(levelReachedAt(mind), newThingSince);
+        if (lastHeardFrom(mind, trainedBy.object()) >= grewAt) {
+            return false;   // nothing new to show them since they last spoke
+        }
+        Optional<String> map = lastSeenIn(mind, trainedBy.object());
+        if (map.isEmpty()) {
+            return false;
+        }
+        errandNpc = npcIdIn(trainedBy.object());
+        if (!map.get().equals(here)) {
+            sentMap = map.get();
+            sentWhy = TRAINER_WHY;
+        }
+        return true;
     }
 
     /** Whether an instruction heard at a tick has been carried out since. */

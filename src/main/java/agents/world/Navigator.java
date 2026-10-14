@@ -66,6 +66,41 @@ public final class Navigator {
 
     private static final Map<Integer, Graph> GRAPHS = new HashMap<>();
 
+    /**
+     * Ropes not to be climbed for now, by map and rope x, until a time. Something sat at the
+     * top of a rope in the Field South of Ellinia and knocked a Bowman back to the floor at the
+     * same height every climb, for nine hours; there were other ways up.
+     */
+    private static final Map<Integer, Map<Integer, Long>> BLOCKED = new HashMap<>();
+
+    public static synchronized void blockRope(int mapId, int ropeX, long forMillis) {
+        BLOCKED.computeIfAbsent(mapId, m -> new HashMap<>()).put(ropeX, System.currentTimeMillis() + forMillis);
+    }
+
+    static synchronized Set<Integer> blockedRopes(int mapId) {
+        Map<Integer, Long> ropes = BLOCKED.get(mapId);
+        if (ropes == null) {
+            return Set.of();
+        }
+        long now = System.currentTimeMillis();
+        ropes.values().removeIf(until -> until < now);
+        return Set.copyOf(ropes.keySet());
+    }
+
+    private static boolean usesARope(Edge edge, Set<Integer> ropeXs) {
+        if (edge.rope() != null && ropeXs.contains(edge.rope().x())) {
+            return true;
+        }
+        if (edge.legs() != null) {
+            for (Leg leg : edge.legs()) {
+                if (ropeXs.contains(leg.rope().x())) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
     private Navigator() {
     }
 
@@ -112,7 +147,7 @@ public final class Navigator {
             int x = p.clamp(to.x);
             return Optional.of(new Step(Kind.WALK, x, new Point(x, p.heightAt(x)), null));
         }
-        return graph.firstEdge(start, from.x, goal, to.x)
+        return graph.firstEdge(start, from.x, goal, to.x, blockedRopes(mapId))
                 .map(edge -> new Step(edge.kind, edge.departX,
                         new Point(edge.arriveX, graph.platforms.get(edge.to).heightAt(edge.arriveX)),
                         edge.rope, edge.legs));
@@ -550,6 +585,10 @@ public final class Navigator {
          * floor - where the last move left it - rather than from the floor as a whole.
          */
         Optional<Edge> firstEdge(int start, int startX, int goal, int goalX) {
+            return firstEdge(start, startX, goal, goalX, Set.of());
+        }
+
+        Optional<Edge> firstEdge(int start, int startX, int goal, int goalX, Set<Integer> blockedRopeXs) {
             int n = platforms.size();
             long[] cost = new long[n];
             int[] atX = new int[n];
@@ -569,6 +608,9 @@ public final class Navigator {
                     break;
                 }
                 for (Edge edge : edges.get(here)) {
+                    if (!blockedRopeXs.isEmpty() && usesARope(edge, blockedRopeXs)) {
+                        continue;
+                    }
                     long next = cost[here] + Math.abs(atX[here] - edge.departX) + TRANSITION_COST
                             + (edge.kind == Kind.CLIMB ? edge.climbing : 0);
                     if (next < cost[edge.to]) {
