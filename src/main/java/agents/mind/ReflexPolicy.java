@@ -2637,7 +2637,22 @@ public class ReflexPolicy implements Policy {
     public boolean jobAdvancementPending() {
         return (errandForACalling && errandNpc >= 0)
                 || (rideWanted >= 0 && !cutOffFrom.isEmpty())
-                || TRAINER_WHY.equals(sentWhy);
+                || TRAINER_WHY.equals(sentWhy)
+                || sentByTrainer;
+    }
+
+    /** Whether where it is sent is where its trainer sent it. */
+    private boolean sentByTrainer;
+
+    /** Who trained it, as a ref, or null. */
+    private static String trainerOf(Mind mind) {
+        String trainer = null;
+        for (Belief belief : mind.semantic().liveBeliefs()) {
+            if (belief.subject().equals("self") && belief.predicate().equals("trained_by")) {
+                trainer = belief.object();
+            }
+        }
+        return trainer;
     }
 
     private static final String TRAINER_WHY = "the one who trained you, and you have grown since";
@@ -3007,6 +3022,7 @@ public class ReflexPolicy implements Policy {
     private void whereItWasSent(Mind mind, WorldModel world, String here, long now) {
         sentMap = null;
         sentWhy = null;
+        sentByTrainer = false;
         noticeNewThings(world, now);
 
         // Grown enough to go back to its trainer comes before anything else it was told: a
@@ -3015,15 +3031,19 @@ public class ReflexPolicy implements Policy {
             return;
         }
 
-        Belief instruction = null;
-        for (Belief belief : mind.semantic().liveBeliefs()) {
-            if (belief.predicate().equals("sends_you_to") && belief.subject().startsWith("npc:")
-                    && (instruction == null || belief.lastSeen() > instruction.lastSeen())) {
-                instruction = belief;
+        // Every fresh instruction, newest first, for the first it can act on: one line can send
+        // it both to somebody and to where they are, and the somebody may be a stranger whose
+        // whereabouts it does not know - \"get this letter to the instructor, around West Rocky
+        // Mountain IV\" was written down as both, and the newer pointed nowhere it knew.
+        List<Belief> instructions = mind.semantic().liveBeliefs().stream()
+                .filter(belief -> belief.predicate().equals("sends_you_to") && belief.subject().startsWith("npc:"))
+                .filter(belief -> now - belief.lastSeen() < INSTRUCTION_LASTS)
+                .sorted(Comparator.comparingLong(Belief::lastSeen).reversed())
+                .toList();
+        for (Belief instruction : instructions) {
+            if (followed(mind, instruction.object(), instruction.lastSeen())) {
+                continue;
             }
-        }
-        if (instruction != null && now - instruction.lastSeen() < INSTRUCTION_LASTS
-                && !followed(mind, instruction.object(), instruction.lastSeen())) {
             String target = instruction.object();
             Optional<String> map = target.startsWith("map:") ? Optional.of(target) : lastSeenIn(mind, target);
             if (map.isPresent() && canGetTo(mind, here, map.get())) {
@@ -3034,6 +3054,9 @@ public class ReflexPolicy implements Policy {
                     sentMap = map.get();
                     sentWhy = "where " + instruction.subject() + " sent you";
                 }
+                // Sent by its trainer is the calling still: Dances with Balrog gave a Warrior
+                // his letter for the instructor near Perion, and it stayed in town taking quests.
+                sentByTrainer = instruction.subject().equals(trainerOf(mind));
                 return;
             }
         }
