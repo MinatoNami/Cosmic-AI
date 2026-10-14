@@ -833,9 +833,10 @@ public class ReflexPolicy implements Policy {
         // Not closer as the crow flies is not the same as not getting there. The way from the
         // gangway of Nautilus Harbor to the road out climbs east over the ship first, and a
         // Warrior on its way to its second job gave up on it every time it was furthest east.
-        // Moving along counts a quarter as much against the journey as standing still.
-        stalledQuarters += moving ? 1 : 4;
-        if (stalledQuarters / 4 < JOURNEY_SHOULD_BE_GETTING_SOMEWHERE) {
+        // Moving along counts an eighth as much against the journey as standing still: the
+        // whole way over the ship is a hundred decisions, all of them further from the door.
+        stalledQuarters += moving ? 1 : 8;
+        if (stalledQuarters / 8 < JOURNEY_SHOULD_BE_GETTING_SOMEWHERE) {
             return;
         }
         gaveUpOn.put(whereabouts(journeyTo), decisionsMade);
