@@ -327,7 +327,8 @@ public class ReflexPolicy implements Policy {
 
     /** The closest the agent has got to {@link #journeyTo}, and how long since it improved. */
     private double closestApproach = Double.MAX_VALUE;
-    private int stalledFor;
+    private int stalledQuarters;
+    private Point lastSeenAt;
 
     /**
      * Places the agent set off for, failed to reach, and is leaving alone for now.
@@ -787,7 +788,7 @@ public class ReflexPolicy implements Policy {
                 || journeyTo.distance(target) >= SAME_ERRAND;
         if (somewhereElse) {
             closestApproach = Double.MAX_VALUE;
-            stalledFor = 0;
+            stalledQuarters = 0;
         }
         journeyKind = kind;
         journeyTo = target;
@@ -807,12 +808,19 @@ public class ReflexPolicy implements Policy {
             return;
         }
         double distance = journeyTo.distance(self);
+        boolean moving = lastSeenAt != null && lastSeenAt.distance(self) >= GETTING_SOMEWHERE;
+        lastSeenAt = self;
         if (distance < closestApproach - GETTING_SOMEWHERE) {
             closestApproach = distance;
-            stalledFor = 0;
+            stalledQuarters = 0;
             return;
         }
-        if (++stalledFor < JOURNEY_SHOULD_BE_GETTING_SOMEWHERE) {
+        // Not closer as the crow flies is not the same as not getting there. The way from the
+        // gangway of Nautilus Harbor to the road out climbs east over the ship first, and a
+        // Warrior on its way to its second job gave up on it every time it was furthest east.
+        // Moving along counts a quarter as much against the journey as standing still.
+        stalledQuarters += moving ? 1 : 4;
+        if (stalledQuarters / 4 < JOURNEY_SHOULD_BE_GETTING_SOMEWHERE) {
             return;
         }
         gaveUpOn.put(whereabouts(journeyTo), decisionsMade);
