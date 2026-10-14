@@ -2864,7 +2864,13 @@ public class ReflexPolicy implements Policy {
                         .map(b -> ITEM_TIMES.matcher(b.object()))
                         .anyMatch(m -> m.find() && world.inventory().count(Integer.parseInt(m.group(1)))
                                 >= Integer.parseInt(m.group(2)));
-        if (!holdsIt) {
+        // Or nothing left to heal with and badly hurt: then the colleague is the way out, to
+        // restock and try again, rather than backing away from the monsters until they win.
+        boolean spent = world.hp() >= 0 && world.maxHp() > 0 && world.hp() < world.maxHp() * TEST_GIVE_UP
+                && world.inventory().carried(agents.percept.Item.USE).stream()
+                        .noneMatch(item -> Survival.isDrinkable(item.itemId())
+                                && knownHealers(mind).contains("item:" + item.itemId()));
+        if (!holdsIt && !spent) {
             return;
         }
         WorldModel.Entity colleague = world.visibleNpcs().get(0);
@@ -2875,6 +2881,7 @@ public class ReflexPolicy implements Policy {
     }
 
     private static final Pattern ITEM_TIMES = Pattern.compile("item:(\\d+) x(\\d+)");
+    private static final double TEST_GIVE_UP = 0.4;
     private static final int TEST_MAPS_FROM = 108000000;
     private static final int TEST_MAPS_TO = 108000999;
 

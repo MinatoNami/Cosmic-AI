@@ -1144,6 +1144,10 @@ public class Agent implements Runnable {
             if (dialogue.style() == MENU) {
                 int pick = optionForSecondJob(dialogue.text(), secondJobBranch(world.job(),
                         agents.mind.Fighting.weaponKind(world), disposition));
+                // Out of anything to heal with and badly hurt in the test, the way out is taken.
+                if (pick < 0 && outOfHealing()) {
+                    pick = optionLeaving(dialogue.text());
+                }
                 if (pick >= 0) {
                     log.info("{} picks option {} from npc:{} on the way to its second job", mind.name(), pick, dialogue.npcId());
                     reply(MENU, NPC_YES_OR_NEXT, pick);
@@ -1421,6 +1425,31 @@ public class Agent implements Runnable {
     private static final int SECOND_JOB_AT = 30;
     private static final int TEST_MAPS_FROM = 108000000;
     private static final int TEST_MAPS_TO = 108000999;
+
+    /** Badly hurt with nothing it knows heals left to drink. */
+    private boolean outOfHealing() {
+        if (world.hp() < 0 || world.maxHp() <= 0 || world.hp() >= world.maxHp() * 0.4) {
+            return false;
+        }
+        java.util.Set<String> healers = new java.util.HashSet<>();
+        for (Belief belief : mind.semantic().liveBeliefs()) {
+            if (belief.predicate().equals("restores_hp") && belief.object().equals("true")) {
+                healers.add(belief.subject());
+            }
+        }
+        return world.inventory().carried(agents.percept.Item.USE).stream()
+                .noneMatch(item -> healers.contains("item:" + item.itemId()));
+    }
+
+    static int optionLeaving(String said) {
+        java.util.regex.Matcher option = OPTION.matcher(said);
+        while (option.find()) {
+            if (option.group(2).toLowerCase().contains("leave")) {
+                return Integer.parseInt(option.group(1));
+            }
+        }
+        return -1;
+    }
 
     /** Which second job to take: by the weapon it already fights with, or for a Magician by temperament. */
     static String secondJobBranch(int job, int weaponKind, agents.mind.Disposition disposition) {
