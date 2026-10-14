@@ -2621,6 +2621,7 @@ public class ReflexPolicy implements Policy {
         if (KnownWorld.isOffLimits(here)) {
             leaveOffLimits(mind, world, here);
         }
+        handInTheTest(mind, world);
         // Where the model wanted to go waits too: Agent3, with the INT for Magician, was
         // taking a taxi to Kerning City because that was the model's pick.
         if (jobAdvancementPending() && destinationFromModel) {
@@ -2823,6 +2824,43 @@ public class ReflexPolicy implements Policy {
             errandForACalling = true;       // leaving here comes before anything here
         });
     }
+
+    /**
+     * In a second-job test, once it holds what it was asked to collect, whoever is there is who
+     * to give it to. A Warrior killed fifty-two monsters in the test for its second job, and
+     * fifty-two Dark Marbles fell - and, on its way to its calling, it spoke to nobody but the
+     * trainer it was sent by, so it never spoke to the colleague inside who takes them, and
+     * fought on until its potions ran out and it died.
+     */
+    private void handInTheTest(Mind mind, WorldModel world) {
+        int map = world.mapId();
+        if (map < TEST_MAPS_FROM || map > TEST_MAPS_TO || world.visibleNpcs().isEmpty()) {
+            return;
+        }
+        int mesos = mesosHeld(mind);
+        boolean holdsIt = mind.semantic().liveBeliefs().stream()
+                .filter(b -> b.predicate().equals("wants_first") && ITEMS_ASKED.matcher(b.object()).find())
+                .anyMatch(b -> canPay(b.object(), world.level(), mesos, id -> world.inventory().count(id)))
+                // Or asked to do something with so many of a thing, however it was read: the
+                // Warrior's instructor's "collect 30 Dark Marbles" came back as "use x30".
+                || mind.semantic().liveBeliefs().stream()
+                        .filter(b -> b.predicate().equals("asked_you_to"))
+                        .map(b -> ITEM_TIMES.matcher(b.object()))
+                        .anyMatch(m -> m.find() && world.inventory().count(Integer.parseInt(m.group(1)))
+                                >= Integer.parseInt(m.group(2)));
+        if (!holdsIt) {
+            return;
+        }
+        WorldModel.Entity colleague = world.visibleNpcs().get(0);
+        errandNpc = colleague.typeId();
+        errandMap = null;
+        sentMap = null;
+        errandForACalling = true;
+    }
+
+    private static final Pattern ITEM_TIMES = Pattern.compile("item:(\\d+) x(\\d+)");
+    private static final int TEST_MAPS_FROM = 108000000;
+    private static final int TEST_MAPS_TO = 108000999;
 
     /** Everyone it has seen or heard of standing anywhere. */
     private static Set<String> peopleKnownOf(Mind mind) {
