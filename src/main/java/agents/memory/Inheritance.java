@@ -63,6 +63,7 @@ public final class Inheritance {
             "nothing_to_do", // somewhere with nothing to hunt and nowhere new to walk to
             "offers_calling", // which calling somebody offers a beginner
             "heals_up_to",   // the most a drink has been seen to restore
+            "too_hard_at_level", // somewhere that left no time for anything but recovering
             // Every bit as true of the world, and the first things a recording of somebody
             // playing can teach: what a monster is worth, and whether it fights back.
             "gives_exp",

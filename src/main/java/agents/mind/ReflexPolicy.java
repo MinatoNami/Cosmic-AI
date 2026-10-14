@@ -468,10 +468,10 @@ public class ReflexPolicy implements Policy {
     private static final double LEVELLING_TALK = 0.3;
 
     /** What somewhere new is worth as a reason to travel, as a share, while levelling. */
-    private static final double LEVELLING_EXPLORE = 0.3;
+    private static final double LEVELLING_EXPLORE = 0.15;
 
     /** Strangers as a reason to travel while levelling: many of them have quests to give. */
-    private static final double LEVELLING_STRANGERS = 0.6;
+    private static final double LEVELLING_STRANGERS = 0.3;
 
     static boolean shortOfMoney(Mind mind, WorldModel world) {
         int mesos = world.inventory().meso();
@@ -681,6 +681,7 @@ public class ReflexPolicy implements Policy {
         Choice best = (reachable.isEmpty() ? choices : reachable).stream()
                 .max(Comparator.comparingDouble(Choice::score)).orElseThrow();
         lastChosenAt.put(best.kind(), decisionsMade);
+        noticeTooHard(mind, world, best.kind(), tick);
         if (best.onChosen() != null) {
             best.onChosen().run();
         }
@@ -1788,8 +1789,13 @@ public class ReflexPolicy implements Policy {
 
     private boolean givenUpAtThisLevel(int questId, int level) {
         int[] tried = handInsAtLevel.get(questId);
-        return tried != null && tried[1] == level && tried[0] >= HAND_IN_TRIES;
+        // Given up on, it stays given up on for a few levels, not one: the medal quests are
+        // handed in to somebody who only ever says the ranking is unavailable, and a Bandit that
+        // was not levelling walked back to try each of a dozen of them again and again.
+        return tried != null && level - tried[1] < GIVE_UP_FOR_LEVELS && tried[0] >= HAND_IN_TRIES;
     }
+
+    private static final int GIVE_UP_FOR_LEVELS = 5;
 
     private boolean offWorriedCooldown(int questId) {
         Integer last = lastHandIn.get(questId);
@@ -2268,6 +2274,18 @@ public class ReflexPolicy implements Policy {
             return deaths;
         }
         for (Belief belief : mind.semantic().liveBeliefs()) {
+            if (belief.predicate().equals("too_hard_at_level")) {
+                // As good as dying there twice: a Magician at 25 spent more than half of half
+                // an hour in Swampy Land catching its breath, and killed one thing.
+                try {
+                    if (level - Integer.parseInt(belief.object()) < DEATHS_COUNT_FOR) {
+                        deaths.merge(belief.subject(), Places.KILLING_GROUND, Integer::sum);
+                    }
+                } catch (NumberFormatException ignored) {
+                    // not a level
+                }
+                continue;
+            }
             if (!belief.predicate().equals("killed_you_at_level")) {
                 continue;
             }
@@ -2859,6 +2877,32 @@ public class ReflexPolicy implements Policy {
         }
         return states;
     }
+
+    /**
+     * Notices a map where most of the time goes on getting its breath back, and remembers it as
+     * too hard at this level, so it is hunted elsewhere until the agent has grown.
+     */
+    private void noticeTooHard(Mind mind, WorldModel world, String kind, long tick) {
+        if (world.mapId() != recoverMap) {
+            recoverMap = world.mapId();
+            recoverHere = 0;
+            decidedHere = 0;
+        }
+        decidedHere++;
+        if ("recover".equals(kind)) {
+            recoverHere++;
+        }
+        if (decidedHere >= TOO_HARD_AFTER && recoverHere * 2 > decidedHere && world.level() > 0) {
+            mind.infer(KnownWorld.mapRef(world.mapId()), "too_hard_at_level", String.valueOf(world.level()), tick);
+            recoverHere = 0;
+            decidedHere = 0;
+        }
+    }
+
+    private int recoverMap = -1;
+    private int recoverHere;
+    private int decidedHere;
+    private static final int TOO_HARD_AFTER = 200;
 
     /** Where somebody is known to have taken people. */
     private static Set<String> ridesKnownFor(Mind mind, String npc) {
