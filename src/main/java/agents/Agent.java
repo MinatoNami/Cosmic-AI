@@ -996,7 +996,7 @@ public class Agent implements Runnable {
         }
         Set<Integer> inSight = new HashSet<>();
         world.visibleNpcs().forEach(npc -> inSight.add(npc.typeId()));
-        return businessHereFirst(npcId, states, asked, offeredBack, inSight)
+        return businessHereFirst(npcId, states, asked, offeredBack, inSight, world.level(), world.job())
                 || questToFinishOnFoot(states);
     }
 
@@ -1058,8 +1058,16 @@ public class Agent implements Runnable {
     static boolean businessHereFirst(int npcId, java.util.Map<Integer, String> questStates,
                                      Set<Integer> askedFor, Set<Integer> offeredBack,
                                      Set<Integer> npcsInSight) {
+        return businessHereFirst(npcId, questStates, askedFor, offeredBack, npcsInSight, -1, -1);
+    }
+
+    /** As above, counting only quests a character of this level and job could start; a job of -1 counts them all. */
+    static boolean businessHereFirst(int npcId, java.util.Map<Integer, String> questStates,
+                                     Set<Integer> askedFor, Set<Integer> offeredBack,
+                                     Set<Integer> npcsInSight, int levelNow, int jobNow) {
         for (int quest : agents.world.QuestBoard.offeredBy(npcId)) {
-            if (!questStates.containsKey(quest) && !askedFor.contains(quest)) {
+            if (!questStates.containsKey(quest) && !askedFor.contains(quest)
+                    && (jobNow < 0 || levelNow <= 0 || agents.world.QuestBoard.canStart(quest, levelNow, jobNow, questStates::get))) {
                 return true;
             }
         }

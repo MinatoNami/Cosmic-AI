@@ -4,6 +4,7 @@ import agents.Mind;
 import agents.percept.Observation;
 import agents.trace.Trace;
 import agents.world.KnownWorld;
+import agents.world.QuestBoard;
 import agents.world.WorldModel;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -1465,6 +1466,14 @@ class ReflexPolicyTest {
 
         assertTrue(intent instanceof Intent.MoveTo move && move.destination().x == 400
                 || intent instanceof Intent.Attack, "after the snail: " + intent);
+    }
+
+    /** A quest is offered only to whoever its marker would show for: level, job, earlier quests. */
+    @Test
+    void onlyQuestsThatCouldBeStartedAreOffered() {
+        assertFalse(QuestBoard.canStart(2073, 20, 300, q -> null), "level 23 and up");
+        assertTrue(QuestBoard.canStart(2073, 25, 300, q -> null));
+        assertFalse(QuestBoard.canStart(2136, 30, 100, q -> null), "for Bowmen only");
     }
 
     @Test

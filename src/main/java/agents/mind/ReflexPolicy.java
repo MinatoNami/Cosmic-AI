@@ -527,6 +527,8 @@ public class ReflexPolicy implements Policy {
     public Decision decide(Mind mind, WorldModel world, long tick) {
         currentTick = tick;
         jobKnown = world.job();
+        levelKnown = world.level();
+        questStates = questStatesIn(mind);
         nowTick = tick;
         shortOfMoney = shortOfMoney(mind, world);
         // Short of the stats for any calling that suits it is short of levels, and levels come
@@ -1334,6 +1336,7 @@ public class ReflexPolicy implements Policy {
 
     private boolean hasSomethingToOffer(WorldModel.Entity npc) {
         return QuestBoard.offeredBy(npc.typeId()).stream()
+                .filter(this::couldStart)
                 .anyMatch(quest -> !questsTried.contains(quest));
     }
 
@@ -1503,6 +1506,7 @@ public class ReflexPolicy implements Policy {
                     && questToHandIn(mind, world, here, false).isPresent();
             Optional<Integer> offer = holdOn ? Optional.empty() : QuestBoard.offeredBy(npc.typeId()).stream()
                     .filter(q -> !questsTried.contains(q))
+                    .filter(this::couldStart)
                     .findFirst();
             // The NPC that named a price this agent can now pay is the one it came back
             // for, so neither "said hello recently" nor an ordinary quest marker should be
@@ -2831,6 +2835,30 @@ public class ReflexPolicy implements Policy {
 
     /** The job it last had, for choosing which rides it can count on. */
     private int jobKnown;
+    private int levelKnown;
+    private Map<Integer, String> questStates = Map.of();
+
+    /** Whether a quest could be started now: whether a player would see its marker. */
+    private boolean couldStart(int questId) {
+        if (levelKnown <= 0 || jobKnown < 0) {
+            return true;        // not yet told its level and job: nothing to rule out with
+        }
+        return QuestBoard.canStart(questId, levelKnown, jobKnown, questStates::get);
+    }
+
+    static Map<Integer, String> questStatesIn(Mind mind) {
+        Map<Integer, String> states = new HashMap<>();
+        for (Belief belief : mind.semantic().liveBeliefs()) {
+            if (belief.predicate().equals("state") && belief.subject().startsWith("quest:")) {
+                try {
+                    states.put(Integer.parseInt(belief.subject().substring(6)), belief.object());
+                } catch (NumberFormatException notAQuest) {
+                    // not ours
+                }
+            }
+        }
+        return states;
+    }
 
     /** Where somebody is known to have taken people. */
     private static Set<String> ridesKnownFor(Mind mind, String npc) {
