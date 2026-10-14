@@ -184,6 +184,8 @@ public class Agent implements Runnable {
 
     /** Who the agent was last in conversation with, and what job it had then. */
     private int lastSpokeWith = -1;
+    private int lastSpokeAt = Integer.MIN_VALUE / 2;
+    private static final int GIVEN_WITHIN = 10;
     private int lastJob = -1;
 
     /**
@@ -510,6 +512,14 @@ public class Agent implements Runnable {
                 questsTakenOn.add(quest.questId());
             }
             converse(observation);
+            // Something handed over in a conversation is remembered as given by whoever it was:
+            // a trainer's letter is for taking to whoever the trainer named, for as long as it
+            // is carried, however many times the way there goes wrong.
+            if (observation instanceof Observation.ItemGained gained && gained.quantity() > 0
+                    && gained.itemId() / 1_000_000 == 4 && lastSpokeWith > 0
+                    && steps - lastSpokeAt <= GIVEN_WITHIN) {
+                mind.saw("item:" + gained.itemId(), "given_by", "npc:" + lastSpokeWith, perceiver.currentTick());
+            }
             if (observation instanceof Observation.ShopOpened shop) {
                 shopkeeping.opened(shop, world, mind);
                 shopNpc = shop.npcId();
@@ -1107,6 +1117,7 @@ public class Agent implements Runnable {
         }
         greetedWithoutAnswer = 0;
         lastSpokeWith = dialogue.npcId();
+        lastSpokeAt = steps;
         listen(dialogue);
         rememberWhatWasSaid(dialogue);
         // Somebody who has stranded this agent before gets a no, whoever would otherwise have

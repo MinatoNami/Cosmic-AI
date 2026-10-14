@@ -521,6 +521,7 @@ public class ReflexPolicy implements Policy {
     public Decision decide(Mind mind, WorldModel world, long tick) {
         currentTick = tick;
         jobKnown = world.job();
+        nowTick = tick;
         shortOfMoney = shortOfMoney(mind, world);
         // Short of the stats for any calling that suits it is short of levels, and levels come
         // from hunting: a wanderer five DEX short of Bowman stayed at level 13 for two hours,
@@ -2658,6 +2659,16 @@ public class ReflexPolicy implements Policy {
 
     private static final String TRAINER_WHY = "the one who trained you, and you have grown since";
 
+    /** Ticks before a trainer is worth going back to with nothing new, while the next job is due. */
+    private static final long TRAINER_AGAIN = 3000;
+
+    /** The tick of the decision being made. */
+    private long nowTick;
+
+    private long now() {
+        return nowTick;
+    }
+
     /** Where a calling it wants is, when it cannot walk there from here. */
     private final Set<String> cutOffFrom = new HashSet<>();
 
@@ -3068,6 +3079,9 @@ public class ReflexPolicy implements Policy {
         if (backToTrainer(mind, world, here, true)) {
             return;
         }
+        if (deliverWhatTheTrainerGave(mind, world, here)) {
+            return;
+        }
 
         // Every fresh instruction, newest first, for the first it can act on: one line can send
         // it both to somebody and to where they are, and the somebody may be a stranger whose
@@ -3111,6 +3125,44 @@ public class ReflexPolicy implements Policy {
                 || knownWorld(mind).reachableFrom(here, Set.of()).containsKey(map);
     }
 
+    /**
+     * Carrying something its trainer gave it, takes it to whoever the trainer sent it to - for
+     * as long as it is carried. A Warrior died on the way to the instructor with Dances with
+     * Balrog's letter in its bag; being sent there was "done" once it had stood in the map, so
+     * nothing took it back, and it went off to hand in quests in Lith Harbor.
+     */
+    private boolean deliverWhatTheTrainerGave(Mind mind, WorldModel world, String here) {
+        String trainer = trainerOf(mind);
+        int job = world.job();
+        if (trainer == null || job <= 0 || job % 100 != 0) {
+            return false;
+        }
+        boolean carrying = mind.semantic().liveBeliefs().stream()
+                .anyMatch(b -> b.predicate().equals("given_by") && b.object().equals(trainer)
+                        && itemIdIn(b.subject()) > 0 && world.inventory().count(itemIdIn(b.subject())) > 0);
+        if (!carrying) {
+            return false;
+        }
+        for (Belief sent : mind.semantic().liveBeliefs()) {
+            if (!sent.subject().equals(trainer) || !sent.predicate().equals("sends_you_to")
+                    || !sent.object().startsWith("npc:")) {
+                continue;
+            }
+            Optional<String> map = lastSeenIn(mind, sent.object());
+            if (map.isEmpty() || !canGetTo(mind, here, map.get())) {
+                continue;
+            }
+            errandNpc = npcIdIn(sent.object());
+            if (!map.get().equals(here)) {
+                sentMap = map.get();
+                sentWhy = "to take what your trainer gave you to " + sent.object();
+            }
+            sentByTrainer = true;
+            return true;
+        }
+        return false;
+    }
+
     /** Whether it has grown enough since its trainer last spoke to it to go back; sets the errand if so. */
     private boolean backToTrainer(Mind mind, WorldModel world, String here, boolean levelOnly) {
         Belief trainedBy = null;
@@ -3125,7 +3177,12 @@ public class ReflexPolicy implements Policy {
             return false;
         }
         long grewAt = levelOnly ? levelReachedAt(mind) : Math.max(levelReachedAt(mind), newThingSince);
-        if (lastHeardFrom(mind, trainedBy.object()) >= grewAt) {
+        long heard = lastHeardFrom(mind, trainedBy.object());
+        // Still in the first job at the level for the next, the trainer is worth going back to
+        // once in a while even with nothing new: a test failed or a letter lost is started
+        // again there, and a Thief that came out of its test without the proof wandered.
+        boolean dueAgain = levelOnly && world.level() >= 30 && now() - heard >= TRAINER_AGAIN;
+        if (heard >= grewAt && !dueAgain) {
             return false;   // nothing new to show them since they last spoke
         }
         Optional<String> map = lastSeenIn(mind, trainedBy.object());
