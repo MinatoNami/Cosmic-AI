@@ -2799,7 +2799,10 @@ public class ReflexPolicy implements Policy {
         }
         // Not with whoever it came for standing here: the cab from Henesys brought two agents
         // to the job statues in Lith Harbor, and the next cab out outscored walking over.
-        if (errandNpc >= 0 && errandMap == null) {
+        // (Here meaning neither an errand's map nor where it is sent is elsewhere: going back to
+        // a trainer holds the trainer as the errand and the trainer's map as where it is sent,
+        // and taking that for "here" kept a Thief due its second job from the Henesys cab.)
+        if (errandNpc >= 0 && errandMap == null && sentMap == null) {
             return false;
         }
         String here = KnownWorld.mapRef(world.mapId());
