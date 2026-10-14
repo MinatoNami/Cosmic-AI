@@ -128,6 +128,22 @@ class ShopkeepingTest {
         assertNull(shop.next(world, mind));
     }
 
+    /** With money enough, the strongest it knows heals rather than the cheapest. */
+    @Test
+    void buysTheStrongestHealerItCanStockUpOn() {
+        mind.infer("item:" + RED_POTION, "restores_hp", "true", 1);
+        mind.infer("item:" + ORANGE_POTION, "restores_hp", "true", 1);
+        carrying(100_000);
+        shop.opened(selling(new Observation.ShopOpened.ShopItem(0, ORANGE_POTION, 160),
+                new Observation.ShopOpened.ShopItem(1, RED_POTION, 50)), world, mind);
+
+        InPacket buy = read(shop.next(world, mind));
+
+        assertEquals(0, buy.readByte());
+        assertEquals(0, buy.readShort(), "the orange potion");
+        assertEquals(ORANGE_POTION, buy.readInt());
+    }
+
     @Test
     void topsUpOnWhatItKnowsHealsAsFarAsItsMoneyGoes() {
         mind.infer("item:" + RED_POTION, "restores_hp", "true", 1);

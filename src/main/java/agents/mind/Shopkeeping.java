@@ -36,6 +36,9 @@ public final class Shopkeeping {
 
     /** How many of what heals to carry out of a shop. */
     static final int HEALERS_WANTED = 30;
+
+    /** At most this share of its money on a full stock of the strongest it can buy. */
+    static final double STRONGEST_BUDGET = 0.4;
     static final int MANA_WANTED = 10;
 
     /** How many of something unknown to buy, to try. */
@@ -261,10 +264,17 @@ public final class Shopkeeping {
     static final double AMMUNITION_BUDGET = 0.6;
 
     private Optional<Packet> topUp(WorldModel world, Mind mind, int meso, String does, int wanted) {
-        return open.items().stream()
+        // The strongest it can stock up on, not the cheapest: what a potion costs goes with how
+        // much it restores, and a Warrior at level 36 went into its second-job test with red
+        // potions that heal fifty against monsters that hit for fifty-five, and ran out.
+        List<Observation.ShopOpened.ShopItem> known = open.items().stream()
                 .filter(item -> believes(mind, item.itemId(), does, "true"))
                 .filter(item -> item.price() > 0)
-                .min(Comparator.comparingInt(Observation.ShopOpened.ShopItem::price))
+                .toList();
+        return known.stream()
+                .filter(item -> (long) item.price() * wanted <= meso * STRONGEST_BUDGET)
+                .max(Comparator.comparingInt(Observation.ShopOpened.ShopItem::price))
+                .or(() -> known.stream().min(Comparator.comparingInt(Observation.ShopOpened.ShopItem::price)))
                 .flatMap(item -> {
                     int missing = wanted - world.inventory().count(item.itemId());
                     int affordable = meso / item.price();

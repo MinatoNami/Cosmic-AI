@@ -100,9 +100,14 @@ public final class Survival {
         List<Item> drinkable = world.inventory().carried(Item.USE).stream()
                 .filter(item -> isDrinkable(item.itemId()))
                 .toList();
+        // For health, the strongest it knows of first - most of a red potion is wasted on
+        // nothing at a fifth of a thousand - and among the unmeasured, whatever it has most of.
         Optional<Item> known = drinkable.stream()
                 .filter(item -> believes(mind, item.itemId(), need, true))
-                .max(Comparator.comparingInt(Item::quantity));
+                .max(need.equals("hp")
+                        ? Comparator.comparingInt((Item item) -> healsUpTo(mind, "item:" + item.itemId()))
+                                .thenComparingInt(Item::quantity)
+                        : Comparator.comparingInt(Item::quantity));
         if (known.isPresent()) {
             cooldown = BETWEEN_DRINKS;
             int itemId = known.get().itemId();
@@ -188,6 +193,9 @@ public final class Survival {
         int room = forHealth ? world.maxHp() - before : trial.mpMax() - before;
         if (before >= 0 && now - before >= Math.max(1, Math.min(WORKED, room / 2))) {
             mind.infer(item, predicate, "true", tick);
+            if (forHealth) {
+                rememberHowMuch(mind, item, now - before, tick);
+            }
             trial = null;
             return;
         }
@@ -199,6 +207,27 @@ public final class Survival {
             mind.infer(item, predicate, "false", tick);
         }
         trial = null;
+    }
+
+    /** The most it has seen a drink restore, kept so the strongest can be drunk when it counts. */
+    private static void rememberHowMuch(Mind mind, String item, int rose, long tick) {
+        int best = healsUpTo(mind, item);
+        if (rose > best) {
+            mind.infer(item, "heals_up_to", String.valueOf(rose), tick);
+        }
+    }
+
+    static int healsUpTo(Mind mind, String item) {
+        return mind.semantic().liveBeliefs().stream()
+                .filter(b -> b.subject().equals(item) && b.predicate().equals("heals_up_to"))
+                .mapToInt(b -> {
+                    try {
+                        return Integer.parseInt(b.object());
+                    } catch (NumberFormatException notANumber) {
+                        return 0;
+                    }
+                })
+                .max().orElse(0);
     }
 
     /** Whether a drink has been seen to work often enough to stop checking that it does. */
