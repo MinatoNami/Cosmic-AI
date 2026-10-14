@@ -1101,9 +1101,11 @@ public class ReflexPolicy implements Policy {
             return true;
         }
         Set<String> healers = knownHealers(mind);
-        if (!healers.isEmpty()
-                && healers.stream().allMatch(item -> world.inventory().count(itemIdIn(item)) == 0)
-                && !stocking(mind, healers).isEmpty()) {
+        // Running low is reason enough, not only running out: a Warrior walked into its
+        // second-job test with one red potion and four blue, its third try at the marbles,
+        // and was at a fifth of its health inside within minutes.
+        int carried = healers.stream().mapToInt(item -> world.inventory().count(itemIdIn(item))).sum();
+        if (!healers.isEmpty() && carried < HEALERS_LOW && !stocking(mind, healers).isEmpty()) {
             return true;
         }
         // And with a job, something for mana: its attacks are skills now, paid for in MP, and
@@ -1125,6 +1127,9 @@ public class ReflexPolicy implements Policy {
         }
         return restorers;
     }
+
+    /** Fewer healing items than this, with money for more, and it goes to buy some. */
+    private static final int HEALERS_LOW = 15;
 
     /** Items the agent has seen restore its health, as refs. */
     private static Set<String> knownHealers(Mind mind) {
