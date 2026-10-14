@@ -140,6 +140,23 @@ class AgentAnswersTest {
                 + "(100 mesos)#l\r\n#L2##m101000000# (80 mesos)#l", "map:101000000"), "a taxi's list is towns");
     }
 
+    /** The second job: past the explanations to the choosing, then the branch its weapon suits. */
+    @Test
+    void choosesTheSecondJobItsWeaponSuits() {
+        String first = "Alright, when you have made your decision, click on [I'll choose my occupation] at the bottom.#b\r\n"
+                + "#L0#Please explain to me what being the Fighter is all about.\r\n#L1#Please explain to me what being the Page is all about.\r\n"
+                + "#L2#Please explain to me what being the Spearman is all about.\r\n#L3#I'll choose my occupation!";
+        String second = "Now... have you made up your mind? Please choose the job you'd like to select for your 2nd job advancement. #b\r\n"
+                + "#L0#Fighter\r\n#L1#Page\r\n#L2#Spearman";
+        String warrior = Agent.secondJobBranch(100, 44, agents.mind.Disposition.FIGHTER);
+
+        assertEquals("Spearman", warrior, "a polearm");
+        assertEquals(3, Agent.optionForSecondJob(first, warrior));
+        assertEquals(2, Agent.optionForSecondJob(second, warrior));
+        assertEquals("Cleric", Agent.secondJobBranch(200, 37, agents.mind.Disposition.TALKER));
+        assertEquals("Bandit", Agent.secondJobBranch(400, 33, agents.mind.Disposition.FORAGER));
+    }
+
     /** What the job statues and instructors offer, read from their own words. */
     @Test
     void readsWhichCallingIsOnOffer() {

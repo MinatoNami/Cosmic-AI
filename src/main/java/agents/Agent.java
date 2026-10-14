@@ -1124,6 +1124,26 @@ public class Agent implements Runnable {
         if (callingHere.isPresent() && world.job() == 0) {
             mind.saw("npc:" + dialogue.npcId(), "offers_calling", callingHere.get(), perceiver.currentTick());
         }
+        // The second job is seen through the same way: with a first job and the level for the
+        // next, its trainer, whoever the trainer sends it to, and anybody in a test map get a
+        // yes to every question, and from a list the calling it is cut out for - or "I'll
+        // choose my occupation" to get to that list. A list was otherwise walked away from, so
+        // no agent could ever have picked Fighter, Page or Spearman.
+        if (secondJobTalk(dialogue.npcId())) {
+            if (dialogue.style() == MENU) {
+                int pick = optionForSecondJob(dialogue.text(), secondJobBranch(world.job(),
+                        agents.mind.Fighting.weaponKind(world), disposition));
+                if (pick >= 0) {
+                    log.info("{} picks option {} from npc:{} on the way to its second job", mind.name(), pick, dialogue.npcId());
+                    reply(MENU, NPC_YES_OR_NEXT, pick);
+                    return;
+                }
+            } else {
+                noteAnswer(dialogue.npcId(), dialogue.style(), NPC_YES_OR_NEXT);
+                reply(dialogue.style(), NPC_YES_OR_NEXT, NO_SELECTION);
+                return;
+            }
+        }
         // Somewhere off limits, a way out is a yes whatever else is on offer; an offer going
         // somewhere off limits is a no whatever the policy wants.
         String hereRef = KnownWorld.mapRef(world.mapId());
@@ -1353,6 +1373,75 @@ public class Agent implements Runnable {
             }
         }
         return !goes.isEmpty() && goes.stream().allMatch(KnownWorld::isOffLimits);
+    }
+
+    /** Whether this conversation is part of going for the second job. */
+    private boolean secondJobTalk(int npcId) {
+        int job = world.job();
+        if (job <= 0 || job % 100 != 0 || world.level() < SECOND_JOB_AT) {
+            return false;
+        }
+        int map = world.mapId();
+        if (map >= TEST_MAPS_FROM && map <= TEST_MAPS_TO) {
+            return true;        // the hidden maps the instructors send people to for the test
+        }
+        String trainer = null;
+        for (Belief belief : mind.semantic().liveBeliefs()) {
+            if (belief.subject().equals("self") && belief.predicate().equals("trained_by")) {
+                trainer = belief.object();
+            }
+        }
+        if (trainer == null) {
+            return false;
+        }
+        String npc = "npc:" + npcId;
+        if (npc.equals(trainer)) {
+            return true;
+        }
+        for (Belief belief : mind.semantic().liveBeliefs()) {
+            if (belief.subject().equals(trainer) && belief.predicate().equals("sends_you_to")
+                    && belief.object().equals(npc)) {
+                return true;    // the instructor the trainer sent it to, letter in hand
+            }
+        }
+        return false;
+    }
+
+    private static final int SECOND_JOB_AT = 30;
+    private static final int TEST_MAPS_FROM = 108000000;
+    private static final int TEST_MAPS_TO = 108000999;
+
+    /** Which second job to take: by the weapon it already fights with, or for a Magician by temperament. */
+    static String secondJobBranch(int job, int weaponKind, agents.mind.Disposition disposition) {
+        return switch (job) {
+            case 100 -> weaponKind == 43 || weaponKind == 44 ? "Spearman"
+                    : weaponKind == 32 || weaponKind == 42 ? "Page" : "Fighter";
+            case 200 -> disposition.sociability() >= 0.8 ? "Cleric"
+                    : disposition.aggression() >= 0.6 ? "Wizard (Fire / Poison)" : "Wizard (Ice / Lighting)";
+            case 300 -> weaponKind == 46 ? "Crossbowman" : "Hunter";
+            case 400 -> weaponKind == 47 ? "Assassin" : "Bandit";
+            case 500 -> weaponKind == 49 ? "Gunslinger" : "Brawler";
+            default -> "";
+        };
+    }
+
+    /** The option naming the branch, else the one that gets to choosing; never one that only explains. */
+    static int optionForSecondJob(String said, String branch) {
+        java.util.regex.Matcher option = OPTION.matcher(said);
+        int choose = -1;
+        while (option.find()) {
+            String text = option.group(2).replaceAll("#[a-z]", "").trim();
+            if (text.toLowerCase().contains("explain")) {
+                continue;
+            }
+            if (!branch.isEmpty() && text.equalsIgnoreCase(branch)) {
+                return Integer.parseInt(option.group(1));
+            }
+            if (choose < 0 && text.toLowerCase().contains("choose")) {
+                choose = Integer.parseInt(option.group(1));
+            }
+        }
+        return choose;
     }
 
     /** The option in a list that says yes to going, or -1. */
