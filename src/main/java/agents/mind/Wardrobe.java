@@ -88,7 +88,8 @@ public final class Wardrobe {
                 continue;       // a Bowman does not take up a sword, however sharp
             }
             for (int slot : info.slots()) {
-                double gain = worthInHand(candidate, world) - worthOfReplacing(slot, info, inventory, world);
+                double gain = worthInHand(candidate, world)
+                        - worthOfReplacing(slot, info, twoHanded(candidate.itemId()), inventory, world);
                 if (gain > bestGain) {
                     bestGain = gain;
                     best = new Change(candidate.itemId(), candidate.slot(), slot);
@@ -108,7 +109,8 @@ public final class Wardrobe {
      * overall, the trousers it replaces as well; and for trousers, an overall worn on top,
      * which the server takes off to make room.
      */
-    private double worthOfReplacing(int slot, EquipInfo incoming, Inventory inventory, WorldModel world) {
+    private double worthOfReplacing(int slot, EquipInfo incoming, boolean incomingTwoHanded,
+                                    Inventory inventory, WorldModel world) {
         double lost = inventory.wornAt(slot).map(item -> worthInHand(item, world)).orElse(0.0);
         if (incoming.overall()) {
             lost += inventory.wornAt(PANTS).map(item -> worth(item, world)).orElse(0.0);
@@ -119,6 +121,18 @@ public final class Wardrobe {
                     .map(top -> worth(top, world))
                     .orElse(0.0);
         }
+        // A shield and a weapon held in both hands cannot be worn together; putting on either
+        // takes the other off. Not counting that, a Bowman put its shield on, lost its bow,
+        // put the bow back on, lost its shield - every three seconds.
+        if (slot == SHIELD) {
+            lost += inventory.wornAt(WEAPON)
+                    .filter(weapon -> twoHanded(weapon.itemId()))
+                    .map(weapon -> worthInHand(weapon, world))
+                    .orElse(0.0);
+        }
+        if (slot == WEAPON && incomingTwoHanded) {
+            lost += inventory.wornAt(SHIELD).map(shield -> worth(shield, world)).orElse(0.0);
+        }
         return lost;
     }
 
@@ -127,6 +141,15 @@ public final class Wardrobe {
      * not fight with is worth nothing to keep on, and one with nothing to fire from it in the
      * bag is worth much less than one that can be used.
      */
+    /** Weapons held in both hands: two-handed swords, axes and blunt weapons, spears, polearms, bows, crossbows, knuckles and guns. */
+    static boolean twoHanded(int itemId) {
+        int kind = (itemId / 10000) % 100;
+        return itemId / 1000000 == 1 && (kind >= 40 && kind <= 46 || kind == 48 || kind == 49);
+    }
+
+    private static final int WEAPON = -11;
+    private static final int SHIELD = -10;
+
     static double worthInHand(Item item, WorldModel world) {
         double worth = worth(item, world);
         int weapon = Fighting.kindOfWeapon(item.itemId());

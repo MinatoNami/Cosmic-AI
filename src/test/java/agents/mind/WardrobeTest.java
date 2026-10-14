@@ -22,6 +22,7 @@ class WardrobeTest {
     private static final int WAND = 1372000;
     private static final int OVERALL = 1051000;
     private static final int PANTS = 1060002;
+    private static final int SHIELD = 1092030;
 
     private static EquipInfo tooltip(int itemId) {
         return switch (itemId) {
@@ -29,6 +30,7 @@ class WardrobeTest {
             case WAND -> new EquipInfo(new int[]{-11}, 0, 2, 0, 0, 0, 0, false, false);
             case OVERALL -> new EquipInfo(new int[]{-5}, 0, 0, 0, 0, 0, 0, false, true);
             case PANTS -> new EquipInfo(new int[]{-6}, 0, 0, 0, 0, 0, 0, false, false);
+            case SHIELD -> new EquipInfo(new int[]{-10}, 0, 0, 0, 0, 0, 0, false, false);
             default -> new EquipInfo(new int[]{-11}, 0, 0, 0, 0, 0, 0, false, false);
         };
     }
@@ -125,6 +127,15 @@ class WardrobeTest {
                 Map.of("STR", 4, "DEX", 40, "INT", 4, "LUK", 30)));
         world.update(new Observation.InventoryShown(2, 0, Map.of(1, 24, 2, 24, 3, 24, 4, 24, 5, 24),
                 List.of(items)));
+    }
+
+    /** A bow is held in both hands; the shield would take it off, so the shield stays in the bag. */
+    @Test
+    void aBowmanDoesNotPutOnAShieldOverItsBow() {
+        carrying(300, new Item(1, -11, BOW, 1, attack(10)), new Item(1, 4, SHIELD, 1, defence(5)),
+                new Item(2, 1, 2060000, 500, null));
+
+        assertTrue(wardrobe.step(world).isEmpty());
     }
 
     /** A sword with more attack than the bow is no use to a Bowman, who cannot shoot with it. */
