@@ -114,10 +114,37 @@ public final class Shopkeeping {
                     && believes(mind, usable.itemId(), "restores_hp", "false")
                     && !believes(mind, usable.itemId(), "restores_mp", "true")) {
                 spare.add(usable);
+            } else if (isAmmunition(usable.itemId()) && !firedByItsJob(usable.itemId(), world.job())) {
+                spare.add(usable);      // arrows to a Thief, bolts to a Warrior
+            } else if (usable.itemId() / 10000 == 204) {
+                spare.add(usable);      // scrolls for equipment, which nothing here reads
             }
         }
         return spare;
     }
+
+    /**
+     * Arrows, bolts, stars and bullets. A Thief's use bag filled with eight stacks of arrows
+     * and bolts and thirteen kinds of equipment scroll, none of which it could use or sold,
+     * and every trip to a shop to make room came back with the bag as full as it went.
+     */
+    static boolean isAmmunition(int itemId) {
+        int kind = itemId / 10000;
+        return kind == 206 || kind == 207 || kind == 233;
+    }
+
+    private static boolean firedByItsJob(int itemId, int job) {
+        for (int weapon : new int[] {Fighting.BOW, Fighting.CROSSBOW, Fighting.CLAW, Fighting.GUN}) {
+            if (Fighting.fires(weapon, itemId) && Fighting.weaponSuits(weapon, job)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** "Return to Nearest Town": the way out of somewhere nothing walks out of. */
+    public static final int RETURN_SCROLL = 2030000;
+    private static final int RETURN_SCROLLS_WANTED = 2;
 
     /**
      * Equipment is spare when wearing it could never help: nothing better than what is on
@@ -169,6 +196,18 @@ public final class Shopkeeping {
                     .min(Comparator.comparingInt(Observation.ShopOpened.ShopItem::price));
             if (untried.isPresent()) {
                 return Optional.of(ClientPackets.buyFromShop(untried.get().index(), untried.get().itemId(), TO_TRY));
+            }
+        }
+        // Then something to get back to town with, from somewhere nothing walks out of - a Magician
+        // spent nine hours on the floor of the Nautilus' Generator Room after dropping in.
+        if (world.inventory().count(RETURN_SCROLL) == 0) {
+            Optional<Packet> scroll = open.items().stream()
+                    .filter(item -> item.itemId() == RETURN_SCROLL)
+                    .filter(item -> item.price() > 0 && item.price() * RETURN_SCROLLS_WANTED <= meso / 5)
+                    .findFirst()
+                    .map(item -> ClientPackets.buyFromShop(item.index(), item.itemId(), RETURN_SCROLLS_WANTED));
+            if (scroll.isPresent()) {
+                return scroll;
             }
         }
         return topUp(world, mind, meso, "restores_mp", MANA_WANTED);

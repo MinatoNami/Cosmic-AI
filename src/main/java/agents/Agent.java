@@ -554,6 +554,7 @@ public class Agent implements Runnable {
         doWhatWasAsked();
         keepBuffsUp();
         watchForStalling();
+        escapeIfWalledIn();
 
         // At a shop counter the agent does its business there and nothing else, one
         // transaction a step, as a player standing at one does.
@@ -861,6 +862,35 @@ public class Agent implements Runnable {
             rethought = true;
         }
     }
+
+    /**
+     * Reads a return scroll when no door in the map can be walked to, and has not been for a
+     * while. A Magician dropped from the top floor of the Nautilus' Generator Room to the bottom,
+     * where no ladder reaches back up, and wandered there for nine hours. The scroll takes it to
+     * the map's own return town, which is where the game means somebody stuck there to go.
+     */
+    private void escapeIfWalledIn() {
+        if (steps % WALL_CHECK_EVERY != 0 || world.mapId() <= 0) {
+            return;
+        }
+        int map = world.mapId();
+        boolean walledIn = !agents.world.MapGeometry.usablePortalsIn(map).isEmpty()
+                && !agents.world.MapGeometry.groundIn(map).isEmpty()
+                && agents.world.Doorways.from(map, world.selfPosition()).isEmpty();
+        walledInFor = walledIn && map == walledInMap ? walledInFor + 1 : walledIn ? 1 : 0;
+        walledInMap = map;
+        if (walledInFor >= WALLED_IN_CHECKS
+                && world.inventory().count(agents.mind.Shopkeeping.RETURN_SCROLL) > 0) {
+            log.info("{} reads a return scroll: no door in map {} can be walked to", mind.name(), map);
+            use(agents.mind.Shopkeeping.RETURN_SCROLL);
+            walledInFor = 0;
+        }
+    }
+
+    private static final int WALL_CHECK_EVERY = 50;
+    private static final int WALLED_IN_CHECKS = 12;
+    private int walledInFor;
+    private int walledInMap;
 
     /** Whether it has gone so long without progress that it should be logged back in. */
     public boolean isStalled() {

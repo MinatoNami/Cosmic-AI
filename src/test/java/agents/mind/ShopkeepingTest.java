@@ -77,6 +77,22 @@ class ShopkeepingTest {
         return in;
     }
 
+    /** A Thief keeps its stars and sells the arrows, bolts and equipment scrolls it cannot use. */
+    @Test
+    void sellsAmmunitionItsJobCannotFireAndScrollsNothingReads() {
+        world.update(new agents.percept.Observation.StatsChanged(1, java.util.Map.of("JOB", 400)));
+        carrying(0,
+                new Item(2, 1, 2060000, 2000, null),
+                new Item(2, 2, 2061000, 2000, null),
+                new Item(2, 3, 2070015, 500, null),
+                new Item(2, 4, 2041021, 2, null),
+                new Item(2, 5, RETURN_SCROLL, 1, null));
+
+        List<Integer> spare = shop.spare(world, mind).stream().map(Item::itemId).toList();
+
+        assertEquals(List.of(2060000, 2061000, 2041021), spare);
+    }
+
     @Test
     void sellsWhatIsSpareAndKeepsWhatMightBeUseful() {
         mind.infer("item:" + DUD, "restores_hp", "false", 1);

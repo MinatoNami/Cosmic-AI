@@ -1226,6 +1226,12 @@ public class ReflexPolicy implements Policy {
             if (calling.isPresent()) {
                 return calling;
             }
+            // And nobody else on the way: a Warrior at level 35 set off for its trainer and
+            // went to see what a stranger on a ledge in Nautilus Harbor wanted, every time it
+            // passed through, and never got out of the harbour.
+            if (!strandedHere) {
+                return Optional.empty();
+            }
         }
         return world.visibleNpcs().stream()
                 .filter(npc -> !stranders.contains("npc:" + npc.typeId()))
