@@ -2015,7 +2015,10 @@ public class ReflexPolicy implements Policy {
             destination = null;
         }
         // Going for its calling, somewhere else it set off for can wait.
-        if (destination != null && jobAdvancementPending() && errandMap != null && !errandMap.equals(destination)) {
+        // Going back to its trainer counts too: that sets where it is sent, not an errand's map,
+        // and a Warrior due its second job kept on to the Nautilus' unopened doors for it.
+        String callingTo = errandMap != null ? errandMap : sentMap;
+        if (destination != null && jobAdvancementPending() && callingTo != null && !callingTo.equals(destination)) {
             destination = null;
         }
         if (destination != null) {
