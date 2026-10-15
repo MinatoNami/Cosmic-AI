@@ -1016,9 +1016,13 @@ public class ReflexPolicy implements Policy {
                     + commitmentTo("errand", host.position());
             if (!IntentExecutor.canSpeakTo(world.mapId(), self, host.position(), NPC_RANGE)) {
                 Point where = host.position();
+                int questId = errand.questId();
                 choices.add(new Choice("errand", new Intent.MoveTo(approach(world, self, host.position())),
                         "go back to the one I owe something", score,
-                        () -> settingOff("errand", where)));
+                        () -> {
+                            settingOff("errand", where);
+                            walkedBackFor(questId, world.level());
+                        }));
                 return;
             }
             choices.add(new Choice("errand",
@@ -1026,6 +1030,7 @@ public class ReflexPolicy implements Policy {
                     "see if what I owe is done", score,
                     () -> {
                         lastHandIn.put(errand.questId(), decisionsMade);
+                        walksBack.remove(errand.questId());
                         handInsAtLevel.merge(errand.questId(), new int[] {1, world.level()},
                                 (was, now) -> was[1] == now[1] ? new int[] {was[0] + 1, was[1]} : now);
                         spokeToSomeone();
@@ -1796,6 +1801,29 @@ public class ReflexPolicy implements Policy {
     }
 
     private static final int GIVE_UP_FOR_LEVELS = 5;
+
+    /**
+     * Steps spent walking back to hand a quest in without ever getting to offer it.
+     *
+     * The walk counts as an offer once it has gone on long enough. Agent2 spent twenty minutes
+     * in Lith Harbor walking towards the one it owed and back to the cab, 1,800 times, and
+     * offered the quest seven times; the score for going back rises with every decision it is
+     * not done, so a walk that never arrives was never given up.
+     */
+    private final Map<Integer, Integer> walksBack = new HashMap<>();
+
+    /** Steps of walking back that count as one offer not taken. */
+    static final int WALK_BACK_TRIES = 120;
+
+    private void walkedBackFor(int questId, int level) {
+        if (walksBack.merge(questId, 1, Integer::sum) < WALK_BACK_TRIES) {
+            return;
+        }
+        walksBack.remove(questId);
+        lastHandIn.put(questId, decisionsMade);
+        handInsAtLevel.merge(questId, new int[] {1, level},
+                (was, now) -> was[1] == now[1] ? new int[] {was[0] + 1, was[1]} : now);
+    }
 
     private boolean offWorriedCooldown(int questId) {
         Integer last = lastHandIn.get(questId);

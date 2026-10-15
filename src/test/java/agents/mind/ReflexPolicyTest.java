@@ -296,6 +296,24 @@ class ReflexPolicyTest {
         assertEquals(3, offered, "three tries at this level, then wait to grow");
     }
 
+    /** A walk back that never arrives counts as offers not taken, and is given up the same way. */
+    @Test
+    void stopsWalkingBackToSomebodyItNeverReaches() {
+        mind.take(new Observation.QuestStateChanged(2, 1031, 1));
+        world.update(new Observation.NpcAppeared(3, 7001, 2100, new Point(3000, 0)));
+        Policy talker = new ReflexPolicy(new Random(1), Disposition.TALKER);
+
+        int walkedBack = 0;
+        for (int tick = 4; tick < 5000; tick++) {
+            if ("go back to the one I owe something".equals(talker.decide(mind, world, tick).goal())) {
+                walkedBack++;
+            }
+        }
+
+        assertTrue(walkedBack <= ReflexPolicy.WALK_BACK_TRIES * 3,
+                "walked back " + walkedBack + " times without ever getting there");
+    }
+
     /** Level ten is not enough when DEX 25 was asked for too. */
     @Test
     void doesNotGoBackForACallingItHasNotTheStatsFor() {
