@@ -134,7 +134,10 @@ public final class Places {
         }
         needed.removeAll(grounds);
         places.stream().map(Place::map).toList().forEach(needed::remove);
-        if (!needed.isEmpty() && !grounds.isEmpty() && throughDangerIfNeeded) {
+        // Whenever there is somewhere it must go, not only after recovering from dying: a Warrior
+        // due its second job could reach its trainer only through maps it had died in, and
+        // with the way not offered it explored around Henesys instead, for hours.
+        if (!needed.isEmpty() && !grounds.isEmpty()) {
             List<Place> withDanger = new ArrayList<>(places);
             worthGoing(known, facts, w, Set.of(), true).stream()
                     .filter(place -> needed.contains(place.map()))
@@ -272,8 +275,17 @@ public final class Places {
             if (visits > 0) {
                 reasons.add("been " + visits + (visits == 1 ? " time" : " times"));
             }
-            if (value <= 0) {
+            // The walk costing more than there is to find rules a place out - unless it is
+            // somewhere it must go. A Warrior's trainer, fourteen maps away, scored below nothing
+            // for the distance, was never offered, and its second job waited for hours.
+            // Only where it is sent: an errand or a shop just come back from is meant to drop out
+            // for a while, or it heads straight back for the thing it just went there for.
+            boolean must = sent;
+            if (value <= 0 && !must) {
                 continue;       // the walk costs more than there is to find
+            }
+            if (must) {
+                value = Math.max(value, MUST_FLOOR);
             }
             if (throughDanger) {
                 reasons.add("the only way on is through somewhere that killed you");
@@ -301,6 +313,9 @@ public final class Places {
 
     /** Levels below where people hunt a map at which it is too soon to go. */
     static final int TOO_STRONG_BY = 5;
+
+    /** The least a place it must go to is worth, however far. */
+    static final double MUST_FLOOR = 0.01;
 
     /** Levels above where people hunt a map at which it is worth less than it was. */
     static final int OUTGROWN_BY = 10;
