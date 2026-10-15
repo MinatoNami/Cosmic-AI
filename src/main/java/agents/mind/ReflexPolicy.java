@@ -2567,6 +2567,12 @@ public class ReflexPolicy implements Policy {
                 }
             }
             int rank = errandRank(mind, world, belief);
+            // A price to be taken somewhere is no errand of its own: rides are for when a way
+            // needs them. The Sleepywood Hotel's "499 mesos" for its sauna, payable many times
+            // over, had a Warrior pay, go in, walk out and pay again for half an hour.
+            if (rank < CALLING_ERRAND && !ridesKnownFor(mind, belief.subject()).isEmpty()) {
+                continue;
+            }
             // Equal to the one it holds, the one standing here is the better: the Thief's
             // statue sent Agent2 to the Dark Lord's room, and with the two of them ranked the
             // same it walked straight out again, back towards the statue.
