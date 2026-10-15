@@ -299,7 +299,11 @@ class ReflexPolicyTest {
     /** A walk back that never arrives counts as offers not taken, and is given up the same way. */
     @Test
     void stopsWalkingBackToSomebodyItNeverReaches() {
-        mind.take(new Observation.QuestStateChanged(2, 1031, 1));
+        // Everything npc 2100 takes back, as the medal NPC takes back a dozen: given up one at
+        // a time, each would be a walk of its own.
+        for (int questId : agents.world.QuestBoard.endedBy(2100)) {
+            mind.take(new Observation.QuestStateChanged(2, questId, 1));
+        }
         world.update(new Observation.NpcAppeared(3, 7001, 2100, new Point(3000, 0)));
         Policy talker = new ReflexPolicy(new Random(1), Disposition.TALKER);
 
