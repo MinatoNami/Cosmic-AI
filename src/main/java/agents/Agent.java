@@ -71,6 +71,10 @@ public class Agent implements Runnable {
     private final List<Integer> questsTakenOn = new java.util.ArrayList<>();
     private int lastLineAt;
 
+    /** When it last answered somebody, and how long after that the next line may still come. */
+    private int lastRepliedAt = -1000;
+    private static final int STILL_TALKING_FOR = 10;
+
     /** A finished conversation out with the model, and who it was with. */
     private CompletableFuture<List<agents.mind.InstructionReader.Step>> instructions;
     private int instructionsFrom;
@@ -596,6 +600,13 @@ public class Agent implements Runnable {
                 decision.decidedBy() != null ? decision.decidedBy() : policy.name(),
                 decision.fellBackBecause(), world.selfPosition());
 
+        // Not out of the room while somebody is still talking. Dances asks "are you sure?" a
+        // moment after the calling is picked from his list, and Agent1 had already walked out
+        // of his door by then, four times over, so the question was never answered and
+        // Fighter never became its job.
+        if (decision.intent() instanceof Intent.EnterPortal && steps - lastRepliedAt < STILL_TALKING_FOR) {
+            return;
+        }
         executor.execute(decision.intent(), world);
         rememberAsking(decision.intent());
         noticeTheSilence(decision.intent());
@@ -1346,6 +1357,7 @@ public class Agent implements Runnable {
         byte sent = style == MENU && action == NPC_YES_OR_NEXT && selection < 0 ? NPC_NO : action;
         connection.session().send(ClientPackets.npcTalkMore((byte) style, sent, selection));
         lastDialogueStyle = style;
+        lastRepliedAt = steps;
     }
 
     /**
