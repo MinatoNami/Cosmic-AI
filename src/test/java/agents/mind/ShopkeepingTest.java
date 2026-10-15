@@ -93,6 +93,20 @@ class ShopkeepingTest {
         assertEquals(List.of(2060000, 2061000, 2041021), spare);
     }
 
+    /** The proof of a test, a letter for an instructor: kept, however full the bag. */
+    @Test
+    void keepsWhatIsForAQuestOrForSomebody() {
+        mind.saw("item:4000018", "given_by", "npc:1072000", 1);
+        carrying(0,
+                new Item(4, 1, 4031012, 1, null),
+                new Item(4, 2, 4000018, 5, null),
+                new Item(4, 3, SNAIL_SHELL, 30, null));
+
+        List<Integer> spare = shop.spare(world, mind).stream().map(Item::itemId).toList();
+
+        assertEquals(List.of(SNAIL_SHELL), spare);
+    }
+
     @Test
     void sellsWhatIsSpareAndKeepsWhatMightBeUseful() {
         mind.infer("item:" + DUD, "restores_hp", "false", 1);

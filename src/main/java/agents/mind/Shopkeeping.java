@@ -13,6 +13,7 @@ import java.util.ArrayDeque;
 import java.util.Comparator;
 import java.util.Deque;
 import java.util.List;
+import java.util.Set;
 import java.util.Optional;
 import java.util.function.IntFunction;
 
@@ -106,7 +107,13 @@ public final class Shopkeeping {
     /** What is spare, by the rules above, in the order it will be sold. */
     List<Item> spare(WorldModel world, Mind mind) {
         Inventory inventory = world.inventory();
-        List<Item> spare = new java.util.ArrayList<>(inventory.carried(Item.ETC));
+        // Not the things it was given or asked to bring: a Warrior passed its second-job test,
+        // was handed the proof, and sold it with the snail shells on its way back to Dances -
+        // and before that, the letter for the test, more than once.
+        Set<Integer> keep = keptForSomebody(mind);
+        List<Item> spare = new java.util.ArrayList<>(inventory.carried(Item.ETC).stream()
+                .filter(item -> !keep.contains(item.itemId()) && item.itemId() / 1000 != QUEST_ITEMS)
+                .toList());
         for (Item equipment : inventory.carried(Item.EQUIP)) {
             if (noBetterThanWorn(equipment, world)) {
                 spare.add(equipment);
@@ -124,6 +131,31 @@ public final class Shopkeeping {
             }
         }
         return spare;
+    }
+
+    /** Quest things - letters, proofs, marbles - live in 4031000 to 4031999. */
+    private static final int QUEST_ITEMS = 4031;
+
+    private static final java.util.regex.Pattern ITEM_REF = java.util.regex.Pattern.compile("item:(\\d+)");
+
+    /** Items somebody gave it, or asked it to bring or use. */
+    private static Set<Integer> keptForSomebody(Mind mind) {
+        Set<Integer> keep = new java.util.HashSet<>();
+        for (agents.memory.Belief belief : mind.semantic().liveBeliefs()) {
+            String predicate = belief.predicate();
+            if (predicate.equals("given_by")) {
+                java.util.regex.Matcher id = ITEM_REF.matcher(belief.subject());
+                if (id.find()) {
+                    keep.add(Integer.parseInt(id.group(1)));
+                }
+            } else if (predicate.equals("wants_first") || predicate.equals("asked_you_to")) {
+                java.util.regex.Matcher id = ITEM_REF.matcher(belief.object());
+                while (id.find()) {
+                    keep.add(Integer.parseInt(id.group(1)));
+                }
+            }
+        }
+        return keep;
     }
 
     /**
