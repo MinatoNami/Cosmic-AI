@@ -64,8 +64,49 @@ public class MapGeometry {
         // A hop within the map is a way to move about, not a way out of it.
         java.util.Set<String> hops = new java.util.HashSet<>();
         hopsIn(mapId).forEach(hop -> hops.add(hop.name()));
+        java.util.Set<String> nowhere = leadingNowhereIn(mapId);
         return portalsIn(mapId).stream().filter(PortalSighting::isUsable)
-                .filter(portal -> !hops.contains(portal.name())).toList();
+                .filter(portal -> !hops.contains(portal.name()))
+                .filter(portal -> !nowhere.contains(portal.name())).toList();
+    }
+
+    /** No map to go to and no script to send you anywhere. */
+    private static final int NO_MAP = 999999999;
+
+    private static final Map<Integer, java.util.Set<String>> NOWHERE = new HashMap<>();
+
+    /**
+     * Portals that lead nowhere: no map and no script, only a place to arrive at.
+     *
+     * The Sleepywood dungeon's jumpSP is where the statue's warp puts you, 570 pixels up a
+     * wall. A Bowman took it for a door, walked to the floor beneath it and stood there for
+     * five hours, because walking to a portal means walking to the floor under it.
+     */
+    private static synchronized java.util.Set<String> leadingNowhereIn(int mapId) {
+        return NOWHERE.computeIfAbsent(mapId, id -> {
+            Data mapData = WzData.of(WZFiles.MAP).getData(pathFor(id));
+            if (mapData == null || mapData.getChildByPath("portal") == null) {
+                return java.util.Set.of();
+            }
+            java.util.Set<String> names = new java.util.HashSet<>();
+            for (Data portal : mapData.getChildByPath("portal")) {
+                String name = DataTool.getString(portal.getChildByPath("pn"), "");
+                int to = DataTool.getInt(portal.getChildByPath("tm"), NO_MAP);
+                String script = DataTool.getString(portal.getChildByPath("script"), "");
+                if (to == NO_MAP && script.isBlank()) {
+                    names.add(name);
+                }
+            }
+            // The same name may also be a real door elsewhere in the map; then it is kept.
+            for (Data portal : mapData.getChildByPath("portal")) {
+                String name = DataTool.getString(portal.getChildByPath("pn"), "");
+                int to = DataTool.getInt(portal.getChildByPath("tm"), NO_MAP);
+                if (to != NO_MAP || !DataTool.getString(portal.getChildByPath("script"), "").isBlank()) {
+                    names.remove(name);
+                }
+            }
+            return java.util.Set.copyOf(names);
+        });
     }
 
     /**

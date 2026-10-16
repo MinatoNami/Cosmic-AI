@@ -11,6 +11,15 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class MapGeometryTest {
 
+    /** The statue's landing spot in the Sleepywood dungeon goes nowhere; the doors beside it do. */
+    @Test
+    void aPortalToNowhereIsNotADoor() {
+        var names = MapGeometry.usablePortalsIn(105040300).stream().map(MapGeometry.PortalSighting::name).toList();
+
+        assertFalse(names.contains("jumpSP"), "jumpSP has no map and no script");
+        assertTrue(names.contains("east00") && names.contains("west00") && names.contains("in00"));
+    }
+
     @Test
     void aFlatFloorIsTheSameHeightAllTheWayAlong() {
         MapGeometry.Ground flat = new MapGeometry.Ground(-100, 200, 100, 200);
