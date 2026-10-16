@@ -469,6 +469,7 @@ public class Agent implements Runnable {
         String name = mind.name();
         log.info("{} is awake, policy {}", name, policy.name());
         rereadOfferedCallings();
+        forgiveDoorsThatWorked();
         // What it was in the middle of doing for somebody did not survive the restart; nobody
         // should go on waiting for it.
         for (Belief belief : mind.semantic().liveBeliefs()) {
@@ -836,6 +837,34 @@ public class Agent implements Runnable {
                 mind.semantic().retract(belief.id(), now);
                 log.info("{} no longer believes {} offers {}: \"{}\" was not an offer", mind.name(),
                         belief.subject(), belief.object(), said.get(0).length() > 60 ? said.get(0).substring(0, 60) + "..." : said.get(0));
+            }
+        }
+    }
+
+    /**
+     * Lets go of "leads nowhere" for any door it has also seen take it somewhere, so the door
+     * is given another try.
+     *
+     * A door tried while somebody is still talking only works once they stop, and the Magic
+     * Library's way out was written off as going nowhere on the very decision it had worked.
+     * Nowhere then outweighed the walk through it - it was the later verdict - so the library
+     * was a dead end, and a Magician with its instructor's letter wandered in it for hours.
+     * A door that really does nothing is found out again in a dozen decisions.
+     */
+    private void forgiveDoorsThatWorked() {
+        long now = perceiver.currentTick();
+        Set<String> worked = new HashSet<>();
+        for (Belief belief : mind.semantic().liveBeliefs()) {
+            if (belief.predicate().equals("leads_to") && belief.object().startsWith("map:")
+                    && belief.provenance() != Belief.Provenance.HEARSAY) {
+                worked.add(belief.subject());
+            }
+        }
+        for (Belief belief : mind.semantic().liveBeliefs()) {
+            if (belief.predicate().equals("leads_to") && belief.object().equals(KnownWorld.NOWHERE)
+                    && worked.contains(belief.subject())) {
+                mind.semantic().retract(belief.id(), now);
+                log.info("{} gives {} another try: it has gone somewhere before", mind.name(), belief.subject());
             }
         }
     }

@@ -571,15 +571,23 @@ public class ReflexPolicy implements Policy {
         // thirty-six times in three minutes and never moved an inch. Each failure left it in
         // the same map, so the map went on wearing out, so the door scored higher, so it tried
         // again. Noticing costs one comparison and breaks the loop.
-        for (var awaiting = doorsAwaitingVerdict.entrySet().iterator(); awaiting.hasNext(); ) {
-            var door = awaiting.next();
-            if (decisionsMade - door.getValue() > DOOR_SHOULD_HAVE_WORKED) {
-                mind.infer(door.getKey(), "leads_to", NOWHERE, tick);
-                awaiting.remove();
+        // But not before seeing whether it has moved: a door tried while somebody was still
+        // talking works only once they stop, and the Magic Library's way out was written off
+        // on the first decision in Ellinia - it had been waiting long enough by then - so the
+        // library looked like a dead end, and a Magician with the letter for its instructor
+        // wandered there for good.
+        boolean movedSince = world.mapId() != lastMapId;
+        if (!movedSince) {
+            for (var awaiting = doorsAwaitingVerdict.entrySet().iterator(); awaiting.hasNext(); ) {
+                var door = awaiting.next();
+                if (decisionsMade - door.getValue() > DOOR_SHOULD_HAVE_WORKED) {
+                    mind.infer(door.getKey(), "leads_to", NOWHERE, tick);
+                    awaiting.remove();
+                }
             }
         }
 
-        if (world.mapId() != lastMapId) {
+        if (movedSince) {
             if (!doorsAwaitingVerdict.isEmpty() && lastMapId >= 0
                     && !movedByConversation(mind.episodic().recent(RECENT_ENOUGH), lastDoorTriedAt)) {
                 // Whichever door was tried most recently is the one that worked; the rest were
@@ -602,6 +610,7 @@ public class ReflexPolicy implements Policy {
             }
             decisionsHere = 0;
             ridesAskedHere.clear();     // a ride that went somewhere was given
+            rideWalks.clear();
             wanderingTo = null;         // somewhere in the last map means nothing here
             String arrivedIn = KnownWorld.mapRef(world.mapId());
             if (arrivedIn.equals(destination)) {
@@ -2928,6 +2937,7 @@ public class ReflexPolicy implements Policy {
     }
 
     private final Map<Integer, Integer> ridesAskedHere = new HashMap<>();
+    private final Map<Integer, Integer> rideWalks = new HashMap<>();
     static final int RIDE_TRIES = 3;
     private long tickNow;
 
@@ -3132,6 +3142,14 @@ public class ReflexPolicy implements Policy {
                     if (close) {
                         rideAskedAt.put(npcId, decisionsMade);
                         greetedAt.put(npcId, decisionsMade);
+                        askedForARide(mind, npcId);
+                    } else if (rideWalks.merge(npcId, 1, Integer::sum) >= WALK_BACK_TRIES) {
+                        // A walk to them that never arrives is an ask that came to nothing too:
+                        // Agent2 set off for the Thief's statue five hundred times in twenty
+                        // minutes, turned back for the medal NPC each time, and never got there
+                        // to be told no.
+                        rideWalks.remove(npcId);
+                        rideAskedAt.put(npcId, decisionsMade);
                         askedForARide(mind, npcId);
                     }
                 }));
