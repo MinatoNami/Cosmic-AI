@@ -318,6 +318,26 @@ class ReflexPolicyTest {
                 "walked back " + walkedBack + " times without ever getting there");
     }
 
+    /** Inside a job test the one who sets it is not greeted over and over; the monsters are the point. */
+    @Test
+    void doesNotChatInsideAJobTest() {
+        // Three of Roger's apples in the bag, which he once asked for: not what the test wants.
+        mind.saw("Roger", "wants_first", "3 item:2010000", 1);
+        mind.saw("Magician Job Instructor", "wants_first", "30 item:4031013", 1);
+        world.update(new Observation.MapEntered(2, 108000200, 0));
+        world.update(new Observation.InventoryShown(2, 0, java.util.Map.of(1, 24, 2, 24, 3, 24, 4, 24, 5, 24),
+                List.of(new agents.percept.Item(agents.percept.Item.USE, 1, 2010000, 3, null),
+                        new agents.percept.Item(agents.percept.Item.USE, 2, 2000000, 50, null))));
+        world.movedTo(new Point(0, 0));
+        world.update(new Observation.NpcAppeared(3, 7005, 1072005, new Point(20, 0)));
+        Policy talker = new ReflexPolicy(new Random(1), Disposition.TALKER);
+
+        for (int tick = 4; tick < 200; tick++) {
+            assertFalse(talker.decide(mind, world, tick).intent() instanceof Intent.TalkTo,
+                    "greeted the test's NPC with nothing to hand in");
+        }
+    }
+
     /** Level ten is not enough when DEX 25 was asked for too. */
     @Test
     void doesNotGoBackForACallingItHasNotTheStatsFor() {

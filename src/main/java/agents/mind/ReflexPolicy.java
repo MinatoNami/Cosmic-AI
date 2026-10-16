@@ -1504,6 +1504,12 @@ public class ReflexPolicy implements Policy {
 
     private void someoneToTalkTo(List<Choice> choices, WorldModel world, Mind mind, Point self) {
         worthTalkingTo(world, mind, self).ifPresent(npc -> {
+            // In a job test, the one inside is spoken to with the marbles, or to leave, and not
+            // otherwise: he only asks for thirty Dark Marbles again, and the monsters that drop
+            // them are all around.
+            if (inATest(world) && npc.typeId() != errandNpc) {
+                return;
+            }
             double distance = npc.position().distance(self);
             // Somebody known to take you elsewhere is not somebody to take a quest from while
             // a quest under way can still be finished on foot here. Shanks's ferry is a quest:
@@ -3026,16 +3032,20 @@ public class ReflexPolicy implements Policy {
             return;
         }
         int mesos = mesosHeld(mind);
+        // Only what a test asks for: the things it is collected in, 4031xxx, like the marbles.
+        // Any request at all would do otherwise, and a Magician holding three of Roger's apples
+        // took the test as done and greeted the one inside twenty-five thousand times.
         boolean holdsIt = mind.semantic().liveBeliefs().stream()
-                .filter(b -> b.predicate().equals("wants_first") && ITEMS_ASKED.matcher(b.object()).find())
+                .filter(b -> b.predicate().equals("wants_first") && TEST_ITEMS.matcher(b.object()).find())
                 .anyMatch(b -> canPay(b.object(), world.level(), mesos, id -> world.inventory().count(id)))
                 // Or asked to do something with so many of a thing, however it was read: the
                 // Warrior's instructor's "collect 30 Dark Marbles" came back as "use x30".
                 || mind.semantic().liveBeliefs().stream()
                         .filter(b -> b.predicate().equals("asked_you_to"))
                         .map(b -> ITEM_TIMES.matcher(b.object()))
-                        .anyMatch(m -> m.find() && world.inventory().count(Integer.parseInt(m.group(1)))
-                                >= Integer.parseInt(m.group(2)));
+                        .anyMatch(m -> m.find() && m.group(1).startsWith("4031")
+                                && world.inventory().count(Integer.parseInt(m.group(1)))
+                                        >= Integer.parseInt(m.group(2)));
         // Or nothing left to heal with and badly hurt: then the colleague is the way out, to
         // restock and try again, rather than backing away from the monsters until they win.
         boolean spent = world.hp() >= 0 && world.maxHp() > 0 && world.hp() < world.maxHp() * TEST_GIVE_UP
@@ -3050,6 +3060,12 @@ public class ReflexPolicy implements Policy {
         errandMap = null;
         sentMap = null;
         errandForACalling = true;
+    }
+
+    private static final Pattern TEST_ITEMS = Pattern.compile("item:4031\\d{3}\\b");
+
+    private static boolean inATest(WorldModel world) {
+        return world.mapId() >= TEST_MAPS_FROM && world.mapId() <= TEST_MAPS_TO;
     }
 
     private static final Pattern ITEM_TIMES = Pattern.compile("item:(\\d+) x(\\d+)");
