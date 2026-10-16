@@ -528,6 +528,7 @@ public class ReflexPolicy implements Policy {
         currentTick = tick;
         jobKnown = world.job();
         levelKnown = world.level();
+        tickNow = tick;
         questStates = questStatesIn(mind);
         nowTick = tick;
         shortOfMoney = shortOfMoney(mind, world);
@@ -600,6 +601,7 @@ public class ReflexPolicy implements Policy {
                 destinationFromModel = false;
             }
             decisionsHere = 0;
+            ridesAskedHere.clear();     // a ride that went somewhere was given
             wanderingTo = null;         // somewhere in the last map means nothing here
             String arrivedIn = KnownWorld.mapRef(world.mapId());
             if (arrivedIn.equals(destination)) {
@@ -1576,6 +1578,7 @@ public class ReflexPolicy implements Policy {
                     () -> {
                         if (npc.typeId() == rideWanted) {
                             rideAskedAt.put(npc.typeId(), decisionsMade);
+                            askedForARide(mind, npc.typeId());
                         }
                         greetedAt.put(npc.typeId(), decisionsMade);
                         greetingSentAt.putIfAbsent(npc.typeId(), decisionsMade);
@@ -2881,15 +2884,46 @@ public class ReflexPolicy implements Policy {
                 refused.add("npc:" + npc);
             }
         });
-        if (jobKnown > 0) {
-            for (Belief belief : mind.semantic().liveBeliefs()) {
-                if (belief.predicate().equals("offers_calling") || belief.predicate().equals("sent_you_on")) {
-                    refused.add(belief.subject());
-                }
+        for (Belief belief : mind.semantic().liveBeliefs()) {
+            if (jobKnown > 0
+                    && (belief.predicate().equals("offers_calling") || belief.predicate().equals("sent_you_on"))) {
+                refused.add(belief.subject());
+            }
+            if (belief.predicate().equals("gave_no_ride_at_level") && gaveNoRideLately(belief.object())) {
+                refused.add(belief.subject());
             }
         }
         return KnownWorld.rememberedBy(mind.semantic().liveBeliefs()).refusingRidesFrom(refused);
     }
+
+    /**
+     * Asked for a ride again without having gone anywhere since.
+     *
+     * The Thief's statue in Lith Harbor warps beginners to the hideout and tells a Bandit only
+     * to keep training. Agent2 had written its warp down as a way to Kerning City, and with no
+     * belief saying the statue offers a calling - it took its job before those were kept -
+     * nothing struck the warp out for longer than the wait between asks. It asked, was told to
+     * keep training, and asked again, for five hours. Three asks in one map with no ride is
+     * written down, so it holds after a restart too, until the agent has grown a few levels.
+     */
+    private void askedForARide(Mind mind, int npcId) {
+        if (ridesAskedHere.merge(npcId, 1, Integer::sum) >= RIDE_TRIES && levelKnown > 0) {
+            mind.infer("npc:" + npcId, "gave_no_ride_at_level", String.valueOf(levelKnown), tickNow);
+            ridesAskedHere.remove(npcId);
+        }
+    }
+
+    private boolean gaveNoRideLately(String level) {
+        try {
+            return levelKnown - Integer.parseInt(level) < GIVE_UP_FOR_LEVELS;
+        } catch (NumberFormatException e) {
+            return false;
+        }
+    }
+
+    private final Map<Integer, Integer> ridesAskedHere = new HashMap<>();
+    static final int RIDE_TRIES = 3;
+    private long tickNow;
 
     /** The job it last had, for choosing which rides it can count on. */
     private int jobKnown;
@@ -3082,6 +3116,7 @@ public class ReflexPolicy implements Policy {
                     if (close) {
                         rideAskedAt.put(npcId, decisionsMade);
                         greetedAt.put(npcId, decisionsMade);
+                        askedForARide(mind, npcId);
                     }
                 }));
         return true;
