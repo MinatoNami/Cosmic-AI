@@ -3410,18 +3410,27 @@ public class ReflexPolicy implements Policy {
     /** What taking a ride on the way is worth, over an errand. */
     private static final double RIDE = 1.0;
 
-    /** The item, and how many, somebody said or showed they want first - "1 item:4031045". */
+    /**
+     * The item, and how many, somebody said or showed they want first - "1 item:4031045".
+     *
+     * Only a ticket-like thing: something from the etc pocket. A generation inherited "Shanks
+     * wants 150 item:2000000" - his 150 mesos read as 150 red potions - went to fetch the
+     * potions from nobody, never asked him for the ferry, and walked Maple Island's roads
+     * between Split Road and Southperry for an hour.
+     */
     static Optional<int[]> itemPrice(Mind mind, String npcRef) {
         for (Belief belief : mind.semantic().liveBeliefs()) {
             if (belief.subject().equals(npcRef) && belief.predicate().equals("wants_first")) {
                 Matcher item = ITEM_PRICE.matcher(belief.object());
-                if (item.matches()) {
+                if (item.matches() && Integer.parseInt(item.group(2)) / 1_000_000 == ETC) {
                     return Optional.of(new int[] {Integer.parseInt(item.group(2)), Integer.parseInt(item.group(1))});
                 }
             }
         }
         return Optional.empty();
     }
+
+    private static final int ETC = 4;
 
     private static final Pattern ITEM_PRICE = Pattern.compile("(\\d+) item:(\\d+)");
 
@@ -3441,7 +3450,12 @@ public class ReflexPolicy implements Policy {
         Optional<WorldModel.Entity> giver = world.visibleNpcs().stream()
                 .filter(n -> givers.contains(n.typeId())).findFirst();
         if (giver.isEmpty()) {
+            // Nobody here to get it from: as good as asking and being told no, so a ride it
+            // cannot pay for is struck off like any other that never comes, not headed for
+            // forever.
             fetchingFrom = -1;
+            rideAskedAt.put(rideNpc, decisionsMade);
+            askedForARide(mind, rideNpc);
             return false;
         }
         int giverId = giver.get().typeId();

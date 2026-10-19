@@ -1828,6 +1828,15 @@ class ReflexPolicyTest {
         assertTrue(ReflexPolicy.itemPrice(mind, "npc:1032007").isEmpty());
     }
 
+    /** Shanks's 150 mesos, misread as 150 red potions, is not a price to go and fetch. */
+    @Test
+    void onlyATicketLikeThingIsARidesPrice() {
+        mind.take(new Observation.MapEntered(1, 2000000, 0));
+        mind.hear("npc:22000", "wants_first", "150 item:2000000", 1);
+
+        assertTrue(ReflexPolicy.itemPrice(mind, "npc:22000").isEmpty());
+    }
+
     /** Level 48 needs 483,532; at 313 a minute that is more than a day. */
     @Test
     void aDayALevelIsLevellingStalled() {
