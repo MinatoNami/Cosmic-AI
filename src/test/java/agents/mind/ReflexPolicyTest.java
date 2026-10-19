@@ -1861,4 +1861,34 @@ class ReflexPolicyTest {
 
         assertFalse(measuring.levellingStalled());
     }
+    /** Two two-minute visits to the same field are four minutes there: enough to write down. */
+    @Test
+    void shortVisitsToTheSameFieldAddUp() {
+        long[] now = {0};
+        ReflexPolicy measuring = new ReflexPolicy(new Random(1), Disposition.FIGHTER);
+        measuring.clock(() -> now[0]);
+        world.update(new Observation.StatsChanged(1, Map.of("LEVEL", 5)));
+        world.update(new Observation.MonsterAppeared(2, 9001, 100100, new Point(400, 0)));
+        measuring.decide(mind, world, 2);
+        mind.take(new Observation.ExpGained(3, 40));
+        now[0] = 2 * 60_000;
+        world.update(new Observation.MapEntered(4, 20000, 0));
+        measuring.decide(mind, world, 4);
+
+        assertFalse(mind.semantic().liveBeliefs().stream()
+                .anyMatch(b -> b.predicate().equals(agents.world.Yields.EARNS_PER_MINUTE)), "two minutes is not enough");
+
+        now[0] = 3 * 60_000;
+        world.update(new Observation.MapEntered(5, 10000, 0));
+        world.update(new Observation.MonsterAppeared(6, 9002, 100100, new Point(400, 0)));
+        measuring.decide(mind, world, 6);
+        mind.take(new Observation.ExpGained(7, 40));
+        now[0] = 5 * 60_000;
+        world.update(new Observation.MapEntered(8, 20000, 0));
+        measuring.decide(mind, world, 8);
+
+        assertTrue(mind.semantic().liveBeliefs().stream().anyMatch(b -> b.subject().equals("map:10000")
+                && b.predicate().equals(agents.world.Yields.EARNS_PER_MINUTE) && b.object().equals("5:20")),
+                "80 over four minutes in map:10000");
+    }
 }

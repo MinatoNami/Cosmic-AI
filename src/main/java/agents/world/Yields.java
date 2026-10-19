@@ -54,6 +54,9 @@ public final class Yields {
      */
     static final double ESTIMATE_TRUST = 0.7;
 
+    /** The most an estimate may promise, as a multiple of the best it has measured at this level. */
+    static final double ESTIMATE_CEILING = 3;
+
     /** One measurement, as the object of an {@link #EARNS_PER_MINUTE} belief. */
     public static String measurement(int level, double perMinute) {
         return level + ":" + Math.round(perMinute);
@@ -65,6 +68,13 @@ public final class Yields {
      */
     public static Map<String, Double> expected(List<Belief> beliefs, int level) {
         Map<String, Double> measured = measured(beliefs, level);
+        // Nothing measured at about this level, nothing to estimate against. A generation born
+        // knowing what drakes give, at level one on Maple Island, rated the snails beside it at
+        // a tenth of a hunting ground and walked from map to map for half an hour, never long
+        // enough anywhere to measure anything.
+        if (measured.isEmpty()) {
+            return measured;
+        }
         Map<String, Double> perKill = perKill(beliefs);
         Map<String, Set<String>> monstersIn = new HashMap<>();
         for (Belief belief : beliefs) {
@@ -82,8 +92,12 @@ public final class Yields {
             }
         });
         double killsPerMinute = killsPerMinute(measured, worthAKill);
+        // And never more than a few times the best it has managed: what a monster gives says
+        // nothing about whether this agent can kill it, and the more it gives the less likely.
+        double ceiling = Collections.max(measured.values()) * ESTIMATE_CEILING;
         Map<String, Double> expected = new HashMap<>();
-        worthAKill.forEach((map, exp) -> expected.put(map, exp * killsPerMinute * ESTIMATE_TRUST));
+        worthAKill.forEach((map, exp) -> expected.put(map,
+                Math.min(ceiling, exp * killsPerMinute * ESTIMATE_TRUST)));
         expected.putAll(measured);
         return expected;
     }

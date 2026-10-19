@@ -59,12 +59,12 @@ class YieldsTest {
         believe("monster:pig", "present_in", "map:field", 1);
         believe("monster:pig", "gives_exp", "150", 3);
         believe("map:field", Yields.EARNS_PER_MINUTE, Yields.measurement(45, 300), 1);
-        believe("monster:drake", "present_in", "map:cave", 1);
-        believe("monster:drake", "gives_exp", "1350", 3);
+        believe("monster:lupin", "present_in", "map:forest", 1);
+        believe("monster:lupin", "gives_exp", "400", 3);
 
-        double cave = Yields.expected(memory.liveBeliefs(), 45).get("map:cave");
+        double forest = Yields.expected(memory.liveBeliefs(), 45).get("map:forest");
 
-        assertEquals(1350 * 2 * Yields.ESTIMATE_TRUST, cave, 0.01);
+        assertEquals(400 * 2 * Yields.ESTIMATE_TRUST, forest, 0.01);
     }
 
     @Test
@@ -81,5 +81,23 @@ class YieldsTest {
         believe("map:field", Yields.EARNS_PER_MINUTE, Yields.measurement(45, 400), 1);
 
         assertEquals(Map.of("map:field", 300.0), Yields.measured(memory.liveBeliefs(), 45));
+    }
+
+    /** Born knowing what drakes give, at level one with nothing measured: nothing is estimated. */
+    @Test
+    void nothingIsEstimatedBeforeAnythingIsMeasuredAtThisLevel() {
+        believe("monster:drake", "present_in", "map:cave", 1);
+        believe("monster:drake", "gives_exp", "1350", 3);
+
+        assertTrue(Yields.expected(memory.liveBeliefs(), 1).isEmpty());
+    }
+
+    @Test
+    void anEstimateNeverPromisesMoreThanAFewTimesTheBestMeasured() {
+        believe("map:field", Yields.EARNS_PER_MINUTE, Yields.measurement(45, 100), 1);
+        believe("monster:drake", "present_in", "map:cave", 1);
+        believe("monster:drake", "gives_exp", "1350", 3);
+
+        assertEquals(100 * Yields.ESTIMATE_CEILING, Yields.expected(memory.liveBeliefs(), 45).get("map:cave"), 0.01);
     }
 }

@@ -3074,13 +3074,23 @@ public class ReflexPolicy implements Policy {
         if (!moved && now - yieldSince < YIELD_PERIOD) {
             return;
         }
-        double minutes = (now - yieldSince) / 60_000.0;
-        // A field walked through on the way somewhere is not a measurement of the field, and
-        // nor is a town: only minutes spent among monsters say what hunting is worth.
-        if (yieldMap > 0 && yieldLevel > 0 && monstersWhileMeasuring && minutes >= YIELD_LEAST_MINUTES) {
-            mind.saw(KnownWorld.mapRef(yieldMap), Yields.EARNS_PER_MINUTE,
-                    Yields.measurement(yieldLevel, Math.max(0, earned) / minutes), tick);
-            ratesKnownAt = Integer.MIN_VALUE / 2;
+        // Stays add up, map by map, until there are enough minutes among monsters to say what
+        // hunting there is worth. Measured one stay at a time, a new generation on Maple Island
+        // never stood anywhere three minutes together and measured nothing at all. A town adds
+        // nothing: only minutes spent among monsters count.
+        if (yieldMap > 0 && yieldLevel > 0 && monstersWhileMeasuring) {
+            double[] stays = staysAt.computeIfAbsent(yieldMap, m -> new double[2]);
+            stays[0] += (now - yieldSince) / 60_000.0;
+            stays[1] += earned;
+            if (stays[0] >= YIELD_LEAST_MINUTES) {
+                mind.saw(KnownWorld.mapRef(yieldMap), Yields.EARNS_PER_MINUTE,
+                        Yields.measurement(yieldLevel, Math.max(0, stays[1]) / stays[0]), tick);
+                staysAt.remove(yieldMap);
+                ratesKnownAt = Integer.MIN_VALUE / 2;
+            }
+        }
+        if (level != yieldLevel) {
+            staysAt.clear();        // minutes at the last level say nothing about this one
         }
         if (moved) {
             ratesKnownAt = Integer.MIN_VALUE / 2;
@@ -3185,6 +3195,8 @@ public class ReflexPolicy implements Policy {
     private int lastBar = -1;
     private long lastExpEpisode = -1;
     private boolean monstersWhileMeasuring;
+    /** Minutes and experience from stays too short to write down yet, by map, at this level. */
+    private final Map<Integer, double[]> staysAt = new HashMap<>();
 
     private Map<String, Double> expectedRates = Map.of();
     private double rateHere;
@@ -3205,7 +3217,7 @@ public class ReflexPolicy implements Policy {
     /** Episodes looked back through for experience since the last decision. */
     private static final int YIELD_LOOKBACK = 256;
 
-    /** How often a stay is written down, and the least of one worth writing. */
+    /** How often a stay is written down, and the fewest minutes in a map worth writing. */
     private static final long YIELD_PERIOD = 5 * 60_000;
     private static final double YIELD_LEAST_MINUTES = 3;
 
