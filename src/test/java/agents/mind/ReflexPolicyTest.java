@@ -219,6 +219,22 @@ class ReflexPolicyTest {
     }
 
     /**
+     * A quest given up because it walled the agent in is not asked for again until it has
+     * grown: Tangyoon's milk quest sends whoever takes it into the stable it just got out of.
+     */
+    @Test
+    void doesNotAskAgainForAQuestThatWalledItIn() {
+        mind.take(new Observation.DialogueShown(2, 2101, "Are you done with your training?", 1));
+        mind.infer("quest:1000", "walled_you_in_at_level", "0", 2);
+        world.update(new Observation.NpcAppeared(3, 7002, 2101, new Point(20, 0)));
+
+        Intent intent = new ReflexPolicy(new Random(1), Disposition.TALKER)
+                .decide(mind, world, 4).intent();
+
+        assertFalse(intent instanceof Intent.StartQuest quest && quest.questId() == 1000);
+    }
+
+    /**
      * Mushroom Town is known by heart from birth, so it is stale the moment an agent arrives.
      * A wanderer walked out of it past Heena without asking her for anything. A quest on offer
      * in sight is not a map worn out.

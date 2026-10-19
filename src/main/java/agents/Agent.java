@@ -608,9 +608,14 @@ public class Agent implements Runnable {
         if (decision.intent() instanceof Intent.EnterPortal && steps - lastRepliedAt < STILL_TALKING_FOR) {
             return;
         }
+        if (decision.intent() instanceof Intent.TalkTo) {
+            greetedAt = steps;
+        }
         executor.execute(decision.intent(), world);
         rememberAsking(decision.intent());
         noticeTheSilence(decision.intent());
+        // After acting rather than before, so a greeting never follows a close in the same step.
+        closeWhatWentQuiet();
 
         // Some maps cannot be left. Map 1020100 is an empty tutorial staging room: one
         // portal, and it is a spawn point, so there is nothing to walk through, nobody to
@@ -924,21 +929,92 @@ public class Agent implements Runnable {
             return;
         }
         int map = world.mapId();
-        boolean walledIn = !agents.world.MapGeometry.usablePortalsIn(map).isEmpty()
+        Set<String> reachable = agents.world.Doorways.from(map, world.selfPosition());
+        boolean noDoorReached = !agents.world.MapGeometry.usablePortalsIn(map).isEmpty()
                 && !agents.world.MapGeometry.groundIn(map).isEmpty()
-                && agents.world.Doorways.from(map, world.selfPosition()).isEmpty();
+                && reachable.isEmpty();
+        // Or every door it can reach is one it has found goes nowhere, and nothing has come of
+        // staying. The Nautilus' cow stable has one way out, a scripted door that will not open
+        // until the milk jug is full; Agent1 walked into it 489 times, wrote it off, and spent
+        // the rest of the day there with a return scroll in its bag.
+        List<Belief> beliefs = mind.semantic().liveBeliefs();
+        boolean deadEnded = steps - lastProgressAt >= RETHINK_AFTER
+                && everyDoorGoesNowhere(map, reachable, beliefs);
+        boolean walledIn = noDoorReached || deadEnded;
         walledInFor = walledIn && map == walledInMap ? walledInFor + 1 : walledIn ? 1 : 0;
         walledInMap = map;
-        if (walledInFor >= WALLED_IN_CHECKS
-                && world.inventory().count(agents.mind.Shopkeeping.RETURN_SCROLL) > 0) {
-            log.info("{} reads a return scroll: no door in map {} can be walked to", mind.name(), map);
+        if (walledInFor < WALLED_IN_CHECKS) {
+            return;
+        }
+        // A door that will not open is usually a quest keeping it shut: the stable's lets
+        // anybody out who is not in the middle of fetching milk. Giving up whatever was under
+        // way here opens it, so its doors are given another try - and the quest is not taken
+        // up again until the agent has grown, or it would only be sent back in.
+        List<Integer> underWayHere = deadEnded ? questsUnderWayIn(map, beliefs) : List.of();
+        if (!underWayHere.isEmpty()) {
+            long now = perceiver.currentTick();
+            for (int questId : underWayHere) {
+                log.info("{} gives up quest {}: it has walled it in, in map {}", mind.name(), questId, map);
+                connection.session().send(ClientPackets.questAction(QUEST_FORFEIT, questId, 0));
+                mind.infer("quest:" + questId, "walled_you_in_at_level", String.valueOf(world.level()), now);
+            }
+            for (Belief belief : beliefs) {
+                if (belief.predicate().equals("leads_to") && belief.object().equals(KnownWorld.NOWHERE)
+                        && belief.subject().startsWith(KnownWorld.portalRef(map, ""))) {
+                    mind.semantic().retract(belief.id(), now);
+                }
+            }
+            walledInFor = 0;
+        } else if (world.inventory().count(agents.mind.Shopkeeping.RETURN_SCROLL) > 0) {
+            log.info("{} reads a return scroll: {} in map {}", mind.name(),
+                    noDoorReached ? "no door can be walked to" : "every door it can reach goes nowhere", map);
             use(agents.mind.Shopkeeping.RETURN_SCROLL);
             walledInFor = 0;
         }
     }
 
+    /** Whether there are doors within reach and every one of them is known to go nowhere. */
+    static boolean everyDoorGoesNowhere(int map, Set<String> reachable, List<Belief> beliefs) {
+        if (reachable.isEmpty()) {
+            return false;
+        }
+        KnownWorld known = KnownWorld.rememberedBy(beliefs);
+        return reachable.stream().allMatch(door -> known.destinationOf(KnownWorld.portalRef(map, door))
+                .filter(KnownWorld.NOWHERE::equals).isPresent());
+    }
+
+    /**
+     * Quests started and not finished whose state last changed since the agent came into this
+     * map. When it came in is when it first believed it was here: that belief outlives a
+     * restart, where a count kept in a field would start again inside the trap.
+     */
+    static List<Integer> questsUnderWayIn(int map, List<Belief> beliefs) {
+        String here = KnownWorld.mapRef(map);
+        Optional<Long> cameIn = beliefs.stream()
+                .filter(b -> b.subject().equals("self") && b.predicate().equals("in_map") && b.object().equals(here))
+                .map(Belief::firstSeen)
+                .findFirst();
+        if (cameIn.isEmpty()) {
+            return List.of();
+        }
+        List<Integer> quests = new java.util.ArrayList<>();
+        for (Belief belief : beliefs) {
+            if (belief.predicate().equals("state") && belief.subject().startsWith("quest:")
+                    && belief.object().equals("1") && belief.lastSeen() >= cameIn.get()) {
+                try {
+                    quests.add(Integer.parseInt(belief.subject().substring("quest:".length())));
+                } catch (NumberFormatException notAQuest) {
+                    // not one the server numbered
+                }
+            }
+        }
+        return quests;
+    }
+
     private static final int WALL_CHECK_EVERY = 50;
     private static final int WALLED_IN_CHECKS = 12;
+    /** QuestActionHandler's action 3. */
+    private static final int QUEST_FORFEIT = 3;
     private int walledInFor;
     private int walledInMap;
 
@@ -1166,6 +1242,7 @@ public class Agent implements Runnable {
         greetedWithoutAnswer = 0;
         lastSpokeWith = dialogue.npcId();
         lastSpokeAt = steps;
+        shownStyle = dialogue.style();
         listen(dialogue);
         rememberWhatWasSaid(dialogue);
         // Somebody who has stranded this agent before gets a no, whoever would otherwise have
@@ -1406,10 +1483,49 @@ public class Agent implements Runnable {
         log.info("{} has had no answer from anyone in {} greetings; closing the last conversation",
                 mind.name(), greetedWithoutAnswer);
         connection.session().send(ClientPackets.npcTalkMore((byte) lastDialogueStyle, NPC_CLOSE, NO_SELECTION));
+        closedAt = steps;
         greetedWithoutAnswer = 0;
     }
 
     private static final int GREETINGS_BEFORE_CLOSING = 3;
+
+    /**
+     * Closes a conversation once nobody has said anything in it for a few steps, as a player
+     * presses Escape on a window left hanging.
+     *
+     * Waiting for three greetings to go unanswered before closing was too slow. In the Nautilus'
+     * stable the calves leave the conversation open when there is no milk to spill, and the
+     * greetings that went unheard were nearly always the ones to the second cow, the only one
+     * that would have filled the jug: eighty-five visits to the first cow and nine to the
+     * second. Closing a conversation the script has already ended does nothing; closing one it
+     * has not lets the next greeting be heard - so long as it comes half a second later, since
+     * the server ignores a greeting that soon after a conversation ends. Not while the model is
+     * still reading what was said, and not just after greeting somebody, whose answer is on
+     * its way.
+     */
+    private void closeWhatWentQuiet() {
+        if (shownStyle < 0 || shownStyle == GET_TEXT || pendingDialogue != null || lastLineAt <= closedAt) {
+            return;
+        }
+        if (steps - lastLineAt < GONE_QUIET || steps - lastRepliedAt < GONE_QUIET
+                || steps - greetedAt < GONE_QUIET) {
+            return;
+        }
+        connection.session().send(ClientPackets.npcTalkMore((byte) shownStyle, NPC_CLOSE, NO_SELECTION));
+        closedAt = steps;
+    }
+
+    /** The style of the last line shown, and when a conversation was last closed. */
+    private int shownStyle = -1;
+    private int closedAt = -1;
+    private int greetedAt = -1000;
+    private static final int GONE_QUIET = 5;
+
+    /**
+     * sendGetText. Closing one is read as an answer with a string after it, which this does
+     * not send, so it is left to the greetings' own count.
+     */
+    private static final int GET_TEXT = 2;
 
     /** Mode -1: the dialogue window closed. Scripts dispose on it whatever they were waiting for. */
     private static final byte NPC_CLOSE = -1;

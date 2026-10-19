@@ -530,6 +530,7 @@ public class ReflexPolicy implements Policy {
         levelKnown = world.level();
         tickNow = tick;
         questStates = questStatesIn(mind);
+        walledInBy = walledInBy(mind);
         nowTick = tick;
         shortOfMoney = shortOfMoney(mind, world);
         // Short of the stats for any calling that suits it is short of levels, and levels come
@@ -2904,7 +2905,7 @@ public class ReflexPolicy implements Policy {
                     && (belief.predicate().equals("offers_calling") || belief.predicate().equals("sent_you_on"))) {
                 refused.add(belief.subject());
             }
-            if (belief.predicate().equals("gave_no_ride_at_level") && gaveNoRideLately(belief.object())) {
+            if (belief.predicate().equals("gave_no_ride_at_level") && givenUpLately(belief.object())) {
                 refused.add(belief.subject());
             }
         }
@@ -2928,7 +2929,7 @@ public class ReflexPolicy implements Policy {
         }
     }
 
-    private boolean gaveNoRideLately(String level) {
+    private boolean givenUpLately(String level) {
         try {
             return levelKnown - Integer.parseInt(level) < GIVE_UP_FOR_LEVELS;
         } catch (NumberFormatException e) {
@@ -2948,10 +2949,35 @@ public class ReflexPolicy implements Policy {
 
     /** Whether a quest could be started now: whether a player would see its marker. */
     private boolean couldStart(int questId) {
+        if (walledInBy.contains(questId)) {
+            return false;
+        }
         if (levelKnown <= 0 || jobKnown < 0) {
             return true;        // not yet told its level and job: nothing to rule out with
         }
         return QuestBoard.canStart(questId, levelKnown, jobKnown, questStates::get);
+    }
+
+    /**
+     * Quests given up because they walled the agent in, a few levels ago or fewer. Taken up
+     * again straight away, the milk quest's owner would send it back into the stable it had
+     * just got out of.
+     */
+    private Set<Integer> walledInBy = Set.of();
+
+    private Set<Integer> walledInBy(Mind mind) {
+        Set<Integer> quests = new HashSet<>();
+        for (Belief belief : mind.semantic().liveBeliefs()) {
+            if (belief.predicate().equals("walled_you_in_at_level") && belief.subject().startsWith("quest:")
+                    && givenUpLately(belief.object())) {
+                try {
+                    quests.add(Integer.parseInt(belief.subject().substring("quest:".length())));
+                } catch (NumberFormatException notAQuest) {
+                    // not ours
+                }
+            }
+        }
+        return quests;
     }
 
     static Map<Integer, String> questStatesIn(Mind mind) {
