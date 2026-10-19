@@ -1900,4 +1900,41 @@ class ReflexPolicyTest {
                 && b.predicate().equals(agents.world.Yields.EARNS_PER_MINUTE) && b.object().equals("5:20")),
                 "80 over four minutes in map:10000");
     }
+    /**
+     * The Thief's statue sends people to Kerning City, and whoever there has not been heard yet
+     * might be the one who gives the calling - so Alex, standing there unheard, is gone to.
+     */
+    private Intent aBeginnerFromTheThiefsStatueMeetsAlex(boolean knownSilent) {
+        world.update(new Observation.MapEntered(1, 103000000, 0));
+        world.update(new Observation.StatsChanged(1, Map.of("LEVEL", 8, "JOB", 0)));
+        mind.take(new Observation.MapEntered(1, 103000000, 0));
+        mind.saw("npc:9201126", "offers_calling", "thief", 1);
+        mind.hear("npc:9201126", "sends_you_to", "map:103000000", 1);
+        mind.saw("npc:1052000", "present_in", "map:103000000", 1);
+        if (knownSilent) {
+            mind.saw("npc:1052000", "does_not_answer", "true", 1);
+        }
+        world.update(new Observation.NpcAppeared(2, 7001, 1052000, new Point(20, 0)));
+        return new ReflexPolicy(new Random(1), Disposition.FORAGER).decide(mind, world, 2).intent();
+    }
+
+    private static boolean towardsAlex(Intent intent) {
+        return intent instanceof Intent.TalkTo talk && talk.npcId() == 1052000
+                || intent instanceof Intent.MoveTo move && move.destination().equals(new Point(20, 0));
+    }
+
+    @Test
+    void somebodyUnheardWhereACallingIsGivenIsGoneTo() {
+        Intent intent = aBeginnerFromTheThiefsStatueMeetsAlex(false);
+
+        assertTrue(towardsAlex(intent), "goes to Alex: " + intent);
+    }
+
+    /** Alex has no script and never answers: he is not who gives the calling, however unheard. */
+    @Test
+    void somebodyWhoNeverAnswersIsNotTakenForTheOneWhoGivesTheCalling() {
+        Intent intent = aBeginnerFromTheThiefsStatueMeetsAlex(true);
+
+        assertFalse(towardsAlex(intent), "leaves Alex be: " + intent);
+    }
 }

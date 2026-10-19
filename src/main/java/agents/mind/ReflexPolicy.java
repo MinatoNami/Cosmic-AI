@@ -2682,10 +2682,16 @@ public class ReflexPolicy implements Policy {
         if (world.job() == 0) {
             int instructorHops = Integer.MAX_VALUE;
             Set<String> heard = spokenTo(mind);
+            // Nor somebody who never says a word, who can never be heard and so never stops
+            // being the one who might give the calling. The Thief's statue sends people to
+            // Kerning City, where Alex stands; the server has no script for him, and Agent2
+            // greeted him five hundred and sixty times in an hour as its errand, at level 8.
+            Set<String> silent = doesNotAnswer(mind);
             for (String instructorsRoom : whereCallingsAreGiven(mind)) {
                 for (Belief there : mind.semantic().liveBeliefs()) {
                     if (!there.predicate().equals("present_in") || !there.object().equals(instructorsRoom)
-                            || !there.subject().startsWith("npc:") || heard.contains(there.subject())) {
+                            || !there.subject().startsWith("npc:") || heard.contains(there.subject())
+                            || silent.contains(there.subject())) {
                         continue;
                     }
                     if (reachable == null) {
