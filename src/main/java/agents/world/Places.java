@@ -66,11 +66,24 @@ public final class Places {
      * @param level        the agent's level, or 0 when it does not know it
      * @param huntedAt     the level people were seen hunting each map at, from recordings of
      *                     them playing - empty when nobody has been watched
+     * @param expRate      experience a minute it can expect in each map, at its level (see
+     *                     {@link Yields}) - empty when it knows nothing of what anything gives
+     * @param rateHere     what a hunting ground has to beat: what it earns where it is, or 0
+     *                     when that is not known
      */
     public record Facts(String here, Map<String, Integer> visits, String errandMap,
                         Set<String> hearAgain, Set<String> avoid, Map<String, Double> justBeenFor,
                         Set<String> shopMaps, String sentTo, String sentWhy,
-                        Map<String, Integer> deaths, int level, Map<String, Integer> huntedAt) {
+                        Map<String, Integer> deaths, int level, Map<String, Integer> huntedAt,
+                        Map<String, Double> expRate, double rateHere) {
+
+        public Facts(String here, Map<String, Integer> visits, String errandMap,
+                     Set<String> hearAgain, Set<String> avoid, Map<String, Double> justBeenFor,
+                     Set<String> shopMaps, String sentTo, String sentWhy,
+                     Map<String, Integer> deaths, int level, Map<String, Integer> huntedAt) {
+            this(here, visits, errandMap, hearAgain, avoid, justBeenFor, shopMaps, sentTo, sentWhy,
+                    deaths, level, huntedAt, Map.of(), 0);
+        }
 
         public Facts(String here, Map<String, Integer> visits, String errandMap,
                      Set<String> hearAgain, Set<String> avoid, Map<String, Double> justBeenFor,
@@ -177,6 +190,7 @@ public final class Places {
     private static List<Place> worthGoing(KnownWorld known, Facts facts, Weights w,
                                           Set<String> avoiding, boolean throughDanger) {
         List<Place> places = new ArrayList<>();
+        double rateToBeat = facts.rateHere() > 0 ? facts.rateHere() : typicalRate(facts.expRate());
         for (Map.Entry<String, KnownWorld.Hop> entry
                 : known.reachableFrom(facts.here(), avoiding).entrySet()) {
             String map = entry.getKey();
@@ -227,6 +241,15 @@ public final class Places {
                     // ground that seeing a snail in it cannot tell you.
                     hunting *= 2;
                     reasons.add("people hunt there at about your level");
+                }
+                // What the hunting there is worth a minute, against what it has now. Seeing
+                // something alive made a field of pigs as good a reason as a drake's cave, and
+                // agents in their forties hunted pigs for hours.
+                Double rate = facts.expRate().get(map);
+                if (rate != null && rateToBeat > 0) {
+                    hunting *= worthOfRate(rate, rateToBeat);
+                    reasons.add("about " + Math.round(rate) + " experience a minute"
+                            + (facts.rateHere() > 0 ? ", against " + Math.round(facts.rateHere()) + " here" : ""));
                 }
                 value += hunting;
                 if (known.huntingIn(map)) {
@@ -310,6 +333,36 @@ public final class Places {
     }
 
     public static final int KILLING_GROUND = 2;
+
+    /**
+     * How much a hunting ground's usual worth is scaled for what it gives a minute against what
+     * it has to beat: twice as good is worth twice, four times as good three times, half as
+     * good next to nothing. By doublings rather than the plain ratio, so a cave worth ten
+     * times the field does not outweigh an errand, a death or the walk.
+     */
+    static double worthOfRate(double rate, double toBeat) {
+        if (rate <= 0) {
+            return RATE_FLOOR;
+        }
+        double doublings = Math.log(rate / toBeat) / Math.log(2);
+        return Math.max(RATE_FLOOR, Math.min(RATE_CEILING, 1 + doublings));
+    }
+
+    static final double RATE_FLOOR = 0.1;
+    static final double RATE_CEILING = 3;
+
+    /**
+     * What a hunting ground has to beat when what it earns here is not known - in a town, or
+     * just arrived: the middle of what it expects anywhere, so the better half of what it knows
+     * pulls and the worse half does not.
+     */
+    static double typicalRate(Map<String, Double> rates) {
+        if (rates.isEmpty()) {
+            return 0;
+        }
+        List<Double> sorted = rates.values().stream().sorted().toList();
+        return sorted.get(sorted.size() / 2);
+    }
 
     /** Levels below where people hunt a map at which it is too soon to go. */
     static final int TOO_STRONG_BY = 5;

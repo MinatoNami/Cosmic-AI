@@ -1770,4 +1770,49 @@ class ReflexPolicyTest {
                 "did not go to hear what comes next: " + decision.goal() + " " + decision.considered());
         assertEquals(1052001, ((Intent.TalkTo) decision.intent()).npcId());
     }
+    /**
+     * Four minutes among monsters at level 45, 1500 experience earned and 300 of it lost to
+     * dying: on leaving, what the field paid a minute is written down against the level.
+     */
+    @Test
+    void writesDownWhatAFieldPaidOnLeavingIt() {
+        long[] now = {0};
+        ReflexPolicy measuring = new ReflexPolicy(new Random(1), Disposition.FIGHTER);
+        measuring.clock(() -> now[0]);
+        world.update(new Observation.StatsChanged(1, Map.of("LEVEL", 45, "EXP", 5000)));
+        world.update(new Observation.MonsterAppeared(2, 9001, 100100, new Point(400, 0)));
+        measuring.decide(mind, world, 2);
+
+        for (int i = 0; i < 3; i++) {
+            mind.take(new Observation.ExpGained(3 + i, 500));
+        }
+        world.update(new Observation.StatsChanged(6, Map.of("EXP", 6200)));
+        measuring.decide(mind, world, 6);
+        world.update(new Observation.StatsChanged(7, Map.of("EXP", 5900)));
+        now[0] = 4 * 60_000;
+        world.update(new Observation.MapEntered(8, 20000, 0));
+        measuring.decide(mind, world, 8);
+
+        assertTrue(mind.semantic().liveBeliefs().stream().anyMatch(b -> b.subject().equals("map:10000")
+                        && b.predicate().equals(agents.world.Yields.EARNS_PER_MINUTE)
+                        && b.object().equals("45:300")),
+                "(1500 - 300) / 4 minutes");
+    }
+
+    /** A minute in a field on the way through says nothing about the field. */
+    @Test
+    void aFieldPassedThroughIsNotMeasured() {
+        long[] now = {0};
+        ReflexPolicy measuring = new ReflexPolicy(new Random(1), Disposition.FIGHTER);
+        measuring.clock(() -> now[0]);
+        world.update(new Observation.StatsChanged(1, Map.of("LEVEL", 45)));
+        world.update(new Observation.MonsterAppeared(2, 9001, 100100, new Point(400, 0)));
+        measuring.decide(mind, world, 2);
+        now[0] = 60_000;
+        world.update(new Observation.MapEntered(3, 20000, 0));
+        measuring.decide(mind, world, 3);
+
+        assertFalse(mind.semantic().liveBeliefs().stream()
+                .anyMatch(b -> b.predicate().equals(agents.world.Yields.EARNS_PER_MINUTE)));
+    }
 }

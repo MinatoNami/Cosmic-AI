@@ -6,6 +6,7 @@ import agents.world.KnownWorld;
 import agents.world.Places;
 import agents.world.QuestBoard;
 import agents.world.WorldModel;
+import agents.world.Yields;
 
 import java.awt.Point;
 import java.util.ArrayList;
@@ -560,6 +561,8 @@ public class ReflexPolicy implements Policy {
             }
         }
         standingAt = standing;
+        measureYield(mind, world, tick);
+        knowRates(mind, KnownWorld.mapRef(world.mapId()), world.level());
         boolean wasStranded = strandedHere;
         strandedHere = world.monsterCount() == 0 && decisionsHere > STRANDED_AFTER && nothingNewOnFoot(mind, world);
         if (strandedHere && !wasStranded) {
@@ -1653,7 +1656,10 @@ public class ReflexPolicy implements Policy {
                 // The model looked at every place the agent could go and picked one. That is a
                 // decision about the next few minutes, and letting the nearest snail outvote it
                 // made the model's choices lean rather than decide.
-                + (destinationFromModel && destination != null ? COMMITTED : 0);
+                + (destinationFromModel && destination != null ? COMMITTED : 0)
+                // Somewhere it can walk to pays at least twice what it is earning here: the
+                // field is outgrown, however much is still alive in it.
+                + (outgrownHere ? OUTGROWN_PULL : 0);
         // A quest to ask for or hand in, with the person right here, is not a map worn out,
         // however well the agent knows it. Mushroom Town is known by heart from birth, so it
         // was stale on arrival: a wanderer walked out past Heena without asking her for
@@ -2209,7 +2215,7 @@ public class ReflexPolicy implements Policy {
         int level = levelOf(mind);
         Places.Facts facts = new Places.Facts(here, visitsTo(mind), errandMap,
                 worthHearingAgain(known), avoid, justBeen, shopMaps, sentMap, sentWhy,
-                deathsNearLevel(mind, level), level, huntedAt(mind));
+                deathsNearLevel(mind, level), level, huntedAt(mind), expectedRates, rateHere);
         return Places.worthGoing(known, facts, weights(seekingACalling(mind)), recoveredFromDying());
     }
 
@@ -3019,6 +3025,122 @@ public class ReflexPolicy implements Policy {
     private int recoverHere;
     private int decidedHere;
     private static final int TOO_HARD_AFTER = 200;
+
+    /**
+     * Keeps account of what it earns where, and writes it down every few minutes and whenever
+     * it leaves or grows a level (see {@link Yields}). Earned is what the experience bar
+     * gained, less what dying took back off it; the minutes are all of them, getting its
+     * breath back and walking about included, because those are what a place costs.
+     */
+    private void measureYield(Mind mind, WorldModel world, long tick) {
+        long now = clock.getAsLong();
+        int map = world.mapId();
+        int level = world.level();
+        long newest = lastExpEpisode;
+        for (agents.memory.Episode episode : mind.episodic().recent(YIELD_LOOKBACK)) {
+            if (episode.id() > lastExpEpisode
+                    && episode.observation() instanceof agents.percept.Observation.ExpGained gained) {
+                earned += gained.amount();
+            }
+            newest = Math.max(newest, episode.id());
+        }
+        lastExpEpisode = newest;
+        int bar = world.stat("EXP");
+        if (bar >= 0 && lastBar >= 0 && level == yieldLevel && bar < lastBar) {
+            earned -= lastBar - bar;
+        }
+        lastBar = bar;
+        monstersWhileMeasuring |= world.monsterCount() > 0;
+        boolean moved = map != yieldMap || level != yieldLevel;
+        if (!moved && now - yieldSince < YIELD_PERIOD) {
+            return;
+        }
+        double minutes = (now - yieldSince) / 60_000.0;
+        // A field walked through on the way somewhere is not a measurement of the field, and
+        // nor is a town: only minutes spent among monsters say what hunting is worth.
+        if (yieldMap > 0 && yieldLevel > 0 && monstersWhileMeasuring && minutes >= YIELD_LEAST_MINUTES) {
+            mind.saw(KnownWorld.mapRef(yieldMap), Yields.EARNS_PER_MINUTE,
+                    Yields.measurement(yieldLevel, Math.max(0, earned) / minutes), tick);
+            ratesKnownAt = Integer.MIN_VALUE / 2;
+        }
+        if (moved) {
+            ratesKnownAt = Integer.MIN_VALUE / 2;
+        }
+        yieldMap = map;
+        yieldLevel = level;
+        yieldSince = now;
+        earned = 0;
+        monstersWhileMeasuring = world.monsterCount() > 0;
+    }
+
+    /**
+     * What it expects a minute anywhere and what it has measured, and whether somewhere it can
+     * get to beats here by enough to leave for. Worked out again when a measurement is written,
+     * on arriving somewhere and every few hundred decisions, not on every one: it reads every
+     * belief, and what monsters give changes slowly.
+     */
+    private void knowRates(Mind mind, String here, int level) {
+        if (decisionsMade - ratesKnownAt < RATES_KEPT_FOR && level == ratesLevel) {
+            return;
+        }
+        ratesKnownAt = decisionsMade;
+        ratesLevel = level;
+        List<Belief> beliefs = mind.semantic().liveBeliefs();
+        expectedRates = Yields.expected(beliefs, level);
+        Double measuredHere = Yields.measured(beliefs, level).get(here);
+        rateHere = measuredHere == null ? 0 : measuredHere;
+        outgrownHere = false;
+        if (measuredHere == null) {
+            return;
+        }
+        double toBeat = Math.max(measuredHere, 1) * BETTER_BY;
+        Set<String> reachable = KnownWorld.rememberedBy(beliefs).reachableFrom(here, killingGrounds).keySet();
+        betterGround = expectedRates.entrySet().stream()
+                .filter(e -> !e.getKey().equals(here) && reachable.contains(e.getKey()))
+                .filter(e -> e.getValue() >= toBeat)
+                .max(Map.Entry.comparingByValue())
+                .map(Map.Entry::getKey).orElse(null);
+        outgrownHere = betterGround != null;
+    }
+
+    /** Where experience is measured, since when, and what has been earned there so far. */
+    private int yieldMap = -1;
+    private int yieldLevel = -1;
+    private long yieldSince;
+    private long earned;
+    private int lastBar = -1;
+    private long lastExpEpisode = -1;
+    private boolean monstersWhileMeasuring;
+
+    private Map<String, Double> expectedRates = Map.of();
+    private double rateHere;
+    /** Somewhere it can walk to that pays enough better than here to leave for, or null. */
+    private String betterGround;
+    private boolean outgrownHere;
+    private int ratesKnownAt = Integer.MIN_VALUE / 2;
+    private int ratesLevel = -1;
+
+    /** Wall-clock time, in milliseconds; tests set their own. */
+    private java.util.function.LongSupplier clock = System::currentTimeMillis;
+
+    void clock(java.util.function.LongSupplier clock) {
+        this.clock = clock;
+    }
+
+    /** Episodes looked back through for experience since the last decision. */
+    private static final int YIELD_LOOKBACK = 256;
+
+    /** How often a stay is written down, and the least of one worth writing. */
+    private static final long YIELD_PERIOD = 5 * 60_000;
+    private static final double YIELD_LEAST_MINUTES = 3;
+
+    private static final int RATES_KEPT_FOR = 300;
+
+    /** How many times what it earns here somewhere must promise before it is worth leaving for. */
+    static final double BETTER_BY = 2;
+
+    /** How much a better hunting ground in reach adds to the pull of a door. */
+    static final double OUTGROWN_PULL = 1.0;
 
     /** Where somebody is known to have taken people. */
     private static Set<String> ridesKnownFor(Mind mind, String npc) {

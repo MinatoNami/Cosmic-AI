@@ -235,6 +235,50 @@ class PlacesTest {
         assertTrue(places.isEmpty(), "level 3 has no business where people hunt at 20: " + places);
     }
 
+    private List<Places.Place> rankByRate(Map<String, Double> rates, double here) {
+        return Places.worthGoing(KnownWorld.rememberedBy(memory.liveBeliefs()),
+                new Places.Facts("map:1", visits, null, Set.of(), Set.of(), Map.of(), Set.of(), null, null,
+                        Map.of(), 45, Map.of(), rates, here), WEIGHTS);
+    }
+
+    /**
+     * Something alive in both, as it always was; but one is a field of pigs and the other a
+     * cave of drakes. The extra door is worth it for nine times the experience.
+     */
+    @Test
+    void theGroundThatPaysMoreIsTheBetterGround() {
+        believe("monster:pig", "present_in", "map:2");
+        believe("monster:drake", "present_in", "map:3");
+        door(3, "north00", 4);
+        door(4, "south00", 3);
+        visits.put("map:4", 3);
+
+        List<Places.Place> places = rankByRate(Map.of("map:2", 150.0, "map:3", 1350.0), 150);
+
+        assertEquals("map:3", places.get(0).map(), "worth the extra door: " + places);
+        assertTrue(places.get(0).reasons().stream().anyMatch(r -> r.startsWith("about 1350 experience a minute")),
+                places.get(0).reasons().toString());
+    }
+
+    /** A field paying half of what it earns here is not a hunting ground worth walking to. */
+    @Test
+    void anOutgrownGroundIsHardlyWorthTheWalk() {
+        believe("monster:snail", "present_in", "map:2");
+
+        double flat = rankByRate(Map.of(), 0).get(0).value();
+        double outgrown = rankByRate(Map.of("map:2", 100.0), 400).stream()
+                .filter(p -> p.map().equals("map:2")).mapToDouble(Places.Place::value).findFirst().orElse(0);
+
+        assertTrue(outgrown < flat, outgrown + " should be below " + flat);
+    }
+
+    @Test
+    void doublingWhatItEarnsDoublesWhatHuntingIsWorth() {
+        assertEquals(2.0, Places.worthOfRate(400, 200), 1e-9);
+        assertEquals(Places.RATE_CEILING, Places.worthOfRate(10_000, 200), 1e-9);
+        assertEquals(Places.RATE_FLOOR, Places.worthOfRate(50, 200), 1e-9);
+    }
+
     @Test
     void withNobodyWatchedNothingChanges() {
         believe("monster:100100", "present_in", "map:2");
