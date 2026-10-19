@@ -60,6 +60,7 @@ public final class Inheritance {
             "does_not_answer", // who never says a word, however often greeted
             "strands_you",   // who sends you somewhere there is no leaving
             "takes_you_to",  // where somebody's offer of passage actually goes
+            "carries_you_to", // where a boat or a train carries everybody aboard
             "nothing_to_do", // somewhere with nothing to hunt and nowhere new to walk to
             "offers_calling", // which calling somebody offers a beginner
             "heals_up_to",   // the most a drink has been seen to restore

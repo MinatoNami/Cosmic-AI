@@ -663,4 +663,23 @@ class KnownWorldTest {
         org.junit.jupiter.api.Assertions.assertTrue(reach.containsKey(KnownWorld.mapRef(103000000)));
         org.junit.jupiter.api.Assertions.assertEquals(1, reach.get(KnownWorld.mapRef(103000000)).hops());
     }
+    /**
+     * The boat to Orbis: Cherry takes you onto the deck, the deck is carried onto the boat when
+     * it leaves, and the boat carries you to Orbis Station. None of it is a door.
+     */
+    @Test
+    void aCrossingYouAreCarriedOnIsAWayToTheFarSide() {
+        believe(KnownWorld.rideRef(101000300, 1032008), "ride_to", KnownWorld.mapRef(101000301));
+        believe(KnownWorld.mapRef(101000301), KnownWorld.CARRIES_YOU_TO, KnownWorld.mapRef(200090010));
+        believe(KnownWorld.mapRef(200090010), KnownWorld.CARRIES_YOU_TO, KnownWorld.mapRef(200000100));
+
+        java.util.Map<String, KnownWorld.Hop> reach = world().reachableFrom(KnownWorld.mapRef(101000300));
+
+        KnownWorld.Hop orbis = reach.get(KnownWorld.mapRef(200000100));
+        org.junit.jupiter.api.Assertions.assertNotNull(orbis, "Orbis Station is three steps away: " + reach);
+        org.junit.jupiter.api.Assertions.assertEquals("npc:1032008", KnownWorld.rideNpc(orbis.firstDoor()));
+        org.junit.jupiter.api.Assertions.assertTrue(KnownWorld.isCarried(
+                world().reachableFrom(KnownWorld.mapRef(101000301)).get(KnownWorld.mapRef(200000100)).firstDoor()),
+                "on the deck, the way on is to wait");
+    }
 }

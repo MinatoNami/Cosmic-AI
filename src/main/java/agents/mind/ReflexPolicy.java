@@ -474,6 +474,13 @@ public class ReflexPolicy implements Policy {
     /** Strangers as a reason to travel while levelling: many of them have quests to give. */
     private static final double LEVELLING_STRANGERS = 0.3;
 
+    /**
+     * Somebody worth hearing again, when levelling has stalled on foot: the people who offered
+     * something and were turned down are where the way on is. All four agents had spoken to
+     * the man selling passage to Orbis and the woman taking tickets, and none had gone back.
+     */
+    private static final double STALLED_TALK = 2.5;
+
     static boolean shortOfMoney(Mind mind, WorldModel world) {
         int mesos = world.inventory().meso();
         if (mesos < 0) {
@@ -562,9 +569,13 @@ public class ReflexPolicy implements Policy {
         }
         standingAt = standing;
         measureYield(mind, world, tick);
-        knowRates(mind, KnownWorld.mapRef(world.mapId()), world.level());
+        knowRates(mind, KnownWorld.mapRef(world.mapId()), world.level(), world.stat("EXP"));
         boolean wasStranded = strandedHere;
-        strandedHere = world.monsterCount() == 0 && decisionsHere > STRANDED_AFTER && nothingNewOnFoot(mind, world);
+        // Not while being carried: the room before takeoff has nothing to hunt and no way out
+        // on foot, and writing it off as nothing to do had whoever sold the passage refused for
+        // good, as going nowhere worth going.
+        strandedHere = !riding && world.monsterCount() == 0 && decisionsHere > STRANDED_AFTER
+                && nothingNewOnFoot(mind, world);
         if (strandedHere && !wasStranded) {
             // Worth remembering, and passing on: whoever offers to bring an agent here is
             // offering it nothing.
@@ -696,7 +707,9 @@ public class ReflexPolicy implements Policy {
         Choice best = (reachable.isEmpty() ? choices : reachable).stream()
                 .max(Comparator.comparingDouble(Choice::score)).orElseThrow();
         lastChosenAt.put(best.kind(), decisionsMade);
-        noticeTooHard(mind, world, best.kind(), tick);
+        if (!riding) {
+            noticeTooHard(mind, world, best.kind(), tick);
+        }
         if (best.onChosen() != null) {
             best.onChosen().run();
         }
@@ -2168,10 +2181,13 @@ public class ReflexPolicy implements Policy {
         return Optional.empty();
     }
 
-    /** Whether the way to somewhere starts with somebody's ride. */
+    /**
+     * Whether the way to somewhere starts with somebody's ride - or with waiting to be carried,
+     * which is no door either, and no reason to give up going.
+     */
     private static boolean rideFirst(KnownWorld known, String here, String to) {
         KnownWorld.Hop hop = known.reachableFrom(here, Set.of()).get(to);
-        return hop != null && KnownWorld.isRide(hop.firstDoor());
+        return hop != null && (KnownWorld.isRide(hop.firstDoor()) || KnownWorld.isCarried(hop.firstDoor()));
     }
 
     private Optional<WorldModel.PortalTarget> firstDoorTo(KnownWorld known, String here, String to,
@@ -2230,17 +2246,20 @@ public class ReflexPolicy implements Policy {
     private Places.Weights weights(boolean seekingACalling) {
         // Levelling, somewhere to hunt outweighs somewhere new: three agents spent half their
         // time walking between towns, drawn by Kerning City's twelve unopened doors.
-        double exploring = shortOfStats && !jobAdvancementPending() ? LEVELLING_EXPLORE : 1;
+        // Unless levelling has stalled on foot: then hunting what it can walk to is what has
+        // stopped working, and somewhere new or somebody's offer is the way on.
+        boolean levelling = shortOfStats && !levellingStalled;
+        double exploring = levelling && !jobAdvancementPending() ? LEVELLING_EXPLORE : 1;
         return new Places.Weights(
                 2.0 * exploring,                            // a door never opened
                 (1.2 + disposition.curiosity() * 0.6        // somebody never spoken to,
                         + (seekingACalling ? 2.0 : 0))      // who might be the one to train it
-                        * (shortOfStats && !seekingACalling ? LEVELLING_STRANGERS : 1),  // a little less when levels are what it needs
-                0.8 * (shortOfStats ? LEVELLING_TALK : 1),  // somebody worth hearing again
+                        * (levelling && !seekingACalling ? LEVELLING_STRANGERS : 1),  // a little less when levels are what it needs
+                0.8 * (levellingStalled ? STALLED_TALK : levelling ? LEVELLING_TALK : 1),  // somebody worth hearing again
                 3.0,                                        // somebody owed a visit
                 3.5,                                        // a shop, when the bag is full
                 (0.4 + disposition.aggression() * 1.2)      // something to hunt,
-                        * (shortOfMoney || shortOfStats ? MONEY_MAKES_HUNTING : 1),  // and much more when broke or short of a calling
+                        * (shortOfMoney || levelling ? MONEY_MAKES_HUNTING : 1),  // and much more when broke or short of a calling
                 1.5 * exploring,                            // somewhere never stood in
                 0.3,                                        // the less visited, the better
                 0.35,                                       // each door of walking
@@ -3079,7 +3098,7 @@ public class ReflexPolicy implements Policy {
      * on arriving somewhere and every few hundred decisions, not on every one: it reads every
      * belief, and what monsters give changes slowly.
      */
-    private void knowRates(Mind mind, String here, int level) {
+    private void knowRates(Mind mind, String here, int level, int bar) {
         if (decisionsMade - ratesKnownAt < RATES_KEPT_FOR && level == ratesLevel) {
             return;
         }
@@ -3087,14 +3106,27 @@ public class ReflexPolicy implements Policy {
         ratesLevel = level;
         List<Belief> beliefs = mind.semantic().liveBeliefs();
         expectedRates = Yields.expected(beliefs, level);
-        Double measuredHere = Yields.measured(beliefs, level).get(here);
+        Map<String, Double> measured = Yields.measured(beliefs, level);
+        Double measuredHere = measured.get(here);
         rateHere = measuredHere == null ? 0 : measuredHere;
+        Set<String> reachable = KnownWorld.rememberedBy(beliefs).reachableFrom(here, killingGrounds).keySet();
+        double bestOnFoot = expectedRates.entrySet().stream()
+                .filter(e -> e.getKey().equals(here) || reachable.contains(e.getKey()))
+                .mapToDouble(Map.Entry::getValue).max().orElse(0);
+        double onFoot = Math.max(bestOnFoot, rateHere);
+        // Somewhere it knows of pays far better, and it cannot walk there: what an agent born
+        // knowing Orbis's monsters from a predecessor who went there should notice.
+        boolean betterBeyondReach = expectedRates.entrySet().stream()
+                .anyMatch(e -> !reachable.contains(e.getKey()) && !e.getKey().equals(here)
+                        && !killingGrounds.contains(e.getKey()) && e.getValue() >= Math.max(onFoot, 1) * BETTER_BY);
+        levellingStalled = !measured.isEmpty() && level >= STALLS_FROM_LEVEL
+                && (hoursToLevel(level, bar, onFoot) > STALLED_HOURS || betterBeyondReach);
+        betterGround = null;
         outgrownHere = false;
         if (measuredHere == null) {
             return;
         }
         double toBeat = Math.max(measuredHere, 1) * BETTER_BY;
-        Set<String> reachable = KnownWorld.rememberedBy(beliefs).reachableFrom(here, killingGrounds).keySet();
         betterGround = expectedRates.entrySet().stream()
                 .filter(e -> !e.getKey().equals(here) && reachable.contains(e.getKey()))
                 .filter(e -> e.getValue() >= toBeat)
@@ -3102,6 +3134,48 @@ public class ReflexPolicy implements Policy {
                 .map(Map.Entry::getKey).orElse(null);
         outgrownHere = betterGround != null;
     }
+
+    /**
+     * Hours to the next level at this rate, read off the experience bar the way a player reads
+     * it: how far along it is, and how long the last few minutes took to fill it.
+     */
+    static double hoursToLevel(int level, int bar, double perMinute) {
+        if (perMinute <= 0) {
+            return Double.POSITIVE_INFINITY;
+        }
+        long left = Math.max(0, (long) constants.game.ExpTable.getExpNeededForLevel(level) - Math.max(0, bar));
+        return left / perMinute / 60;
+    }
+
+    /**
+     * Whether nothing it can walk to will see it to the next level in good time: levelling has
+     * stalled on foot, and the way on is somebody's offer to take it somewhere else.
+     */
+    @Override
+    public boolean levellingStalled() {
+        return levellingStalled;
+    }
+
+    @Override
+    public void inTransit(boolean riding) {
+        this.riding = riding;
+    }
+
+    /** Being carried somewhere: a ride paid for and not yet arrived. */
+    private boolean riding;
+
+    /**
+     * "Already travelling, please be patient for the next one" is not a ride refused. Counted
+     * as one, three missed departures of a boat that leaves every quarter of an hour would
+     * have struck it off until the next level.
+     */
+    @Override
+    public void toldToWait(int npcId) {
+        ridesAskedHere.remove(npcId);
+        rideAskedAt.put(npcId, decisionsMade - ASK_FOR_A_RIDE_AGAIN + ASK_AGAIN_WHEN_TOLD_TO_WAIT);
+    }
+
+    private static final int ASK_AGAIN_WHEN_TOLD_TO_WAIT = 100;
 
     /** Where experience is measured, since when, and what has been earned there so far. */
     private int yieldMap = -1;
@@ -3117,6 +3191,7 @@ public class ReflexPolicy implements Policy {
     /** Somewhere it can walk to that pays enough better than here to leave for, or null. */
     private String betterGround;
     private boolean outgrownHere;
+    private boolean levellingStalled;
     private int ratesKnownAt = Integer.MIN_VALUE / 2;
     private int ratesLevel = -1;
 
@@ -3141,6 +3216,14 @@ public class ReflexPolicy implements Policy {
 
     /** How much a better hunting ground in reach adds to the pull of a door. */
     static final double OUTGROWN_PULL = 1.0;
+
+    /**
+     * Hours to a level, at the best it can find on foot, past which levelling has stalled.
+     * Four agents in their forties made between 45 and 310 experience a minute on Victoria
+     * Island, a day or more a level; Ossyria, a boat ride away, is where people go next.
+     */
+    static final double STALLED_HOURS = 24;
+    private static final int STALLS_FROM_LEVEL = 20;
 
     /** Where somebody is known to have taken people. */
     private static Set<String> ridesKnownFor(Mind mind, String npc) {
@@ -3274,6 +3357,14 @@ public class ReflexPolicy implements Policy {
             return false;
         }
         String landing = known.exitTo(here, hop.firstDoor()).orElse(null);
+        // A ride with a price in hand first: the ticket, from whoever handed one over before.
+        // Asked without it, Cherry only says "make sure you got a ticket", and three of those
+        // strike her ride off until the next level.
+        Optional<int[]> price = itemPrice(mind, "npc:" + npcId);
+        if (price.isPresent() && world.inventory().count(price.get()[0]) < price.get()[1]) {
+            return fetchThePrice(choices, world, mind, self, price.get()[0], npcId);
+        }
+        fetchingFrom = -1;
         Optional<WorldModel.Entity> npc = world.visibleNpcs().stream().filter(n -> n.typeId() == npcId).findFirst();
         if (npc.isEmpty()) {
             return false;
@@ -3306,6 +3397,68 @@ public class ReflexPolicy implements Policy {
 
     /** What taking a ride on the way is worth, over an errand. */
     private static final double RIDE = 1.0;
+
+    /** The item, and how many, somebody said or showed they want first - "1 item:4031045". */
+    static Optional<int[]> itemPrice(Mind mind, String npcRef) {
+        for (Belief belief : mind.semantic().liveBeliefs()) {
+            if (belief.subject().equals(npcRef) && belief.predicate().equals("wants_first")) {
+                Matcher item = ITEM_PRICE.matcher(belief.object());
+                if (item.matches()) {
+                    return Optional.of(new int[] {Integer.parseInt(item.group(2)), Integer.parseInt(item.group(1))});
+                }
+            }
+        }
+        return Optional.empty();
+    }
+
+    private static final Pattern ITEM_PRICE = Pattern.compile("(\\d+) item:(\\d+)");
+
+    /**
+     * Goes to whoever handed over what a ride costs, if they stand here, and asks again. The
+     * ticket seller at Ellinia Station asks "are you sure you want to purchase?", and the
+     * conversation is told to say yes to the one it came to for the fare.
+     */
+    private boolean fetchThePrice(List<Choice> choices, WorldModel world, Mind mind, Point self, int itemId, int rideNpc) {
+        Set<Integer> givers = new HashSet<>();
+        for (Belief belief : mind.semantic().liveBeliefs()) {
+            if (belief.subject().equals("item:" + itemId) && belief.predicate().equals("given_by")) {
+                givers.add(npcIdIn(belief.object()));
+            }
+        }
+        givers.remove(rideNpc);
+        Optional<WorldModel.Entity> giver = world.visibleNpcs().stream()
+                .filter(n -> givers.contains(n.typeId())).findFirst();
+        if (giver.isEmpty()) {
+            fetchingFrom = -1;
+            return false;
+        }
+        int giverId = giver.get().typeId();
+        if (decisionsMade - greetedAt.getOrDefault(giverId, -ASK_FOR_THE_PRICE_AGAIN) < ASK_FOR_THE_PRICE_AGAIN) {
+            return false;
+        }
+        Point where = giver.get().position();
+        boolean close = IntentExecutor.canSpeakTo(world.mapId(), self, where, NPC_RANGE);
+        choices.add(new Choice("door",
+                close ? new Intent.TalkTo(giver.get().objectId(), giverId, where) : new Intent.MoveTo(where),
+                "get what the ride costs from npc:" + giverId, ERRAND + RIDE,
+                () -> {
+                    fetchingFrom = giverId;
+                    if (close) {
+                        greetedAt.put(giverId, decisionsMade);
+                    }
+                }));
+        return true;
+    }
+
+    private static final int ASK_FOR_THE_PRICE_AGAIN = 50;
+
+    /** Whoever it has gone to for the price of a ride, or -1. */
+    private int fetchingFrom = -1;
+
+    @Override
+    public int fetchingFrom() {
+        return fetchingFrom;
+    }
 
     /**
      * The nearest finisher of a quest under way, as {npc id, map}, among those it has seen and

@@ -135,12 +135,31 @@ public class Agent implements Runnable {
     /** The last NPC whose offer this agent accepted, so a dead end has somebody to blame. */
     private int wentAlongWith = -1;
     private int acceptedAtStep = Integer.MIN_VALUE / 2;
+    /** Where it was when it said yes, so being moved by the yes can be told from staying. */
+    private int mapWhenAccepted = -1;
 
     /** The map this agent was last in, so arriving somewhere new can be noticed. */
     private int lastMap = -1;
 
     /** Steps after saying yes within which a map change is that NPC's doing. */
     private static final int TAKEN_WITHIN = 5;
+
+    /**
+     * Until when it is being carried somewhere, in steps: a ride paid for, waited out in a
+     * room with no way out on foot - the deck before the boat to Orbis leaves - and every map
+     * it is carried through after.
+     */
+    private int inTransitUntil = Integer.MIN_VALUE / 2;
+
+    /** Fifteen minutes: the boat to Orbis leaves every quarter of an hour and takes ten. */
+    private static final int TRANSIT_PATIENCE = 1500;
+
+    /** When it last walked into a door, and the map it was last carried from. */
+    private int lastPortalAt = Integer.MIN_VALUE / 2;
+    private int lastMapCarried = -1;
+
+    /** Steps after walking into a door within which a map change is the door's doing. */
+    private static final int DOOR_WITHIN = 10;
 
     /**
      * Asks for the health and mana that return on their own, as a client does every ten
@@ -520,6 +539,8 @@ public class Agent implements Runnable {
             // Something handed over in a conversation is remembered as given by whoever it was:
             // a trainer's letter is for taking to whoever the trainer named, for as long as it
             // is carried, however many times the way there goes wrong.
+            noticePaidPassage(observation);
+            noticeToldToWait(observation);
             if (observation instanceof Observation.ItemGained gained && gained.quantity() > 0
                     && gained.itemId() / 1_000_000 == 4 && lastSpokeWith > 0
                     && steps - lastSpokeAt <= GIVEN_WITHIN) {
@@ -591,6 +612,8 @@ public class Agent implements Runnable {
         }
 
         long tick = perceiver.currentTick();
+        noticeBeingCarried();
+        policy.inTransit(inTransit());
         Policy.Decision decision = policy.decide(mind, world, tick);
 
         // A policy that decided for itself does not bother naming itself; one that handed
@@ -612,6 +635,9 @@ public class Agent implements Runnable {
             greetedAt = steps;
         }
         executor.execute(decision.intent(), world);
+        if (decision.intent() instanceof Intent.EnterPortal) {
+            lastPortalAt = steps;
+        }
         rememberAsking(decision.intent());
         noticeTheSilence(decision.intent());
         // After acting rather than before, so a greeting never follows a close in the same step.
@@ -628,7 +654,10 @@ public class Agent implements Runnable {
         // the agent logged back out of its own test and the instructor blamed for it.
         boolean noWayOut = world.mapId() > 0 && MapGeometry.usablePortalsIn(world.mapId()).isEmpty();
         boolean nothingHere = world.visibleNpcs().isEmpty() && world.monsterCount() == 0;
-        nowhereToGo = noWayOut && nothingHere ? nowhereToGo + 1 : 0;
+        // Not while a ride it paid for is under way: the deck before the boat leaves has no
+        // door and nobody on it, and an agent waiting there was logged back in - which the
+        // server answers with the station it had just left.
+        nowhereToGo = noWayOut && nothingHere && !inTransit() ? nowhereToGo + 1 : 0;
         noticeANewCalling();
         noticeWhereOffersGo();
         if (nowhereToGo == 0) {
@@ -1038,13 +1067,18 @@ public class Agent implements Runnable {
         String who = "npc:" + npcId;
         Set<String> goesTo = new HashSet<>();
         Set<String> pointless = new HashSet<>();
+        Set<String> carriesOn = new HashSet<>();
         for (Belief belief : beliefs) {
             if (belief.predicate().equals("takes_you_to") && belief.subject().equals(who)) {
                 goesTo.add(belief.object());
             } else if (belief.predicate().equals("nothing_to_do")) {
                 pointless.add(belief.subject());
+            } else if (belief.predicate().equals(KnownWorld.CARRIES_YOU_TO)) {
+                carriesOn.add(belief.subject());
             }
         }
+        // The deck before the boat leaves has nothing on it, and is the way to Orbis.
+        pointless.removeAll(carriesOn);
         return !goesTo.isEmpty() && pointless.containsAll(goesTo);
     }
 
@@ -1218,6 +1252,69 @@ public class Agent implements Runnable {
      * the recovery is to log back in, and it is verified: an agent stuck in 1020100 came
      * back in Split Road of Destiny, exactly as that map's returnMap specifies.
      */
+    /**
+     * Notices a ride being paid for: something taken out of its bag just after saying yes to
+     * somebody who then moved it. Cherry at Ellinia Station asks "Do you want to go to Orbis?",
+     * moves the agent to the deck and takes the ticket; she never says what she wanted, so
+     * this is the only way to know the ticket was the price. What she took is written down as
+     * what she wants first, and the ride is under way.
+     */
+    private void noticePaidPassage(Observation observation) {
+        if (!(observation instanceof Observation.ItemGained taken) || taken.quantity() >= 0
+                || wentAlongWith <= 0 || steps - acceptedAtStep > TAKEN_WITHIN
+                || world.mapId() == mapWhenAccepted) {
+            return;
+        }
+        mind.saw("npc:" + wentAlongWith, "wants_first", -taken.quantity() + " item:" + taken.itemId(),
+                perceiver.currentTick());
+        inTransitUntil = steps + TRANSIT_PATIENCE;
+        lastMapCarried = world.mapId();
+        log.info("{} paid npc:{} item:{} for passage to map {}", mind.name(), wentAlongWith,
+                taken.itemId(), world.mapId());
+    }
+
+    /**
+     * Notices being moved while in transit without walking into a door or saying yes to
+     * anybody - carried, as the boat carries everyone on its deck when it leaves - and writes
+     * down where from and where to, which is the only way such a crossing gets onto its map
+     * of the world.
+     */
+    private void noticeBeingCarried() {
+        int map = world.mapId();
+        if (map <= 0 || map == lastMapCarried) {
+            return;
+        }
+        int from = lastMapCarried;
+        lastMapCarried = map;
+        if (!inTransit() || from <= 0) {
+            return;
+        }
+        boolean walked = steps - lastPortalAt <= DOOR_WITHIN;
+        boolean taken = steps - acceptedAtStep <= TAKEN_WITHIN;
+        if (walked || taken) {
+            return;
+        }
+        mind.saw(KnownWorld.mapRef(from), KnownWorld.CARRIES_YOU_TO, KnownWorld.mapRef(map), perceiver.currentTick());
+        inTransitUntil = steps + TRANSIT_PATIENCE;
+        log.info("{} was carried from map {} to map {}", mind.name(), from, map);
+    }
+
+    /** Whether a ride it paid for is still under way. */
+    boolean inTransit() {
+        return steps < inTransitUntil;
+    }
+
+    /** "Already travelling, please be patient for the next one": a wait, not a no. */
+    private static final java.util.regex.Pattern WAIT_FOR_THE_NEXT = java.util.regex.Pattern.compile(
+            "(?i)be patient|the next one|already travel|ready to take off");
+
+    private void noticeToldToWait(Observation observation) {
+        if (observation instanceof Observation.DialogueShown said && said.npcId() > 0
+                && WAIT_FOR_THE_NEXT.matcher(said.text()).find()) {
+            policy.toldToWait(said.npcId());
+        }
+    }
+
     public boolean isTrapped() {
         return nowhereToGo > TRAPPED_AFTER;
     }
@@ -1310,12 +1407,20 @@ public class Agent implements Runnable {
         boolean unwantedCalling = callingHere.isPresent() && world.job() == 0
                 && !disposition.callingsThatSuit().contains(callingHere.get())
                 && world.level() < agents.mind.Disposition.ANY_CALLING_AFTER;
+        // Buying the fare for a ride it means to take: the ticket seller asks "are you sure?"
+        if (dialogue.npcId() == policy.fetchingFrom() && isAQuestion(dialogue.style())) {
+            noteAnswer(dialogue.npcId(), dialogue.style(), NPC_YES_OR_NEXT);
+            log.info("{} buys what the ride costs from npc:{}", mind.name(), dialogue.npcId());
+            reply(dialogue.style(), NPC_YES_OR_NEXT, NO_SELECTION);
+            return;
+        }
         if (dialogue.npcId() == policy.rideWanted() && !unwantedCalling) {
             if (dialogue.style() == MENU) {
                 int going = optionThatGoes(dialogue.text(), policy.rideTo());
                 if (going >= 0) {
                     wentAlongWith = dialogue.npcId();
                     acceptedAtStep = steps;
+                    mapWhenAccepted = world.mapId();
                     log.info("{} asks npc:{} for the ride (option {})", mind.name(), dialogue.npcId(), going);
                     reply(MENU, NPC_YES_OR_NEXT, going);
                     return;
@@ -1737,6 +1842,7 @@ public class Agent implements Runnable {
         if (answer == NPC_YES_OR_NEXT) {
             wentAlongWith = npcId;
             acceptedAtStep = steps;
+            mapWhenAccepted = world.mapId();
             refusals.accepted(npcId);
         } else {
             refusals.declined(npcId, perceiver.currentTick(), mind.lastNoveltyTick());
@@ -1748,7 +1854,11 @@ public class Agent implements Runnable {
      * to, or turning it down has become a habit that is teaching the agent nothing.
      */
     private boolean nothingKeepsMeHere(int npcId) {
-        return nowhereLeftToGo() || refusals.outgrown(npcId, mind.lastNoveltyTick());
+        return nowhereLeftToGo() || refusals.outgrown(npcId, mind.lastNoveltyTick())
+                // Nor when hunting anything it can walk to will take a day a level: the ticket
+                // seller at Ellinia Station asks "are you sure you want to purchase?", and every
+                // agent in its forties said no, for days.
+                || policy.levellingStalled();
     }
 
     /**
@@ -1799,6 +1909,10 @@ public class Agent implements Runnable {
                       + "walk to that you have not already seen."
                     : ". There is still somewhere you have not been, or somebody here you have "
                       + "not spoken to.");
+        }
+        if (policy.levellingStalled()) {
+            placed.append(" Nothing you can hunt within walking distance will see you to your next"
+                    + " level in good time: being taken somewhere new is how you will grow.");
         }
         // Whether it has a calling yet, and what sort of character it is. Without these an
         // offer to become something read like any other offer with no way back, and the

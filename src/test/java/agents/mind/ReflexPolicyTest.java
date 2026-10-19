@@ -1815,4 +1815,50 @@ class ReflexPolicyTest {
         assertFalse(mind.semantic().liveBeliefs().stream()
                 .anyMatch(b -> b.predicate().equals(agents.world.Yields.EARNS_PER_MINUTE)));
     }
+    /** What Cherry took for the boat is what she wants first: one ticket. */
+    @Test
+    void readsTheItemARideCosts() {
+        mind.take(new Observation.MapEntered(1, 101000301, 0));
+        mind.saw("npc:1032008", "wants_first", "1 item:4031045", 1);
+
+        int[] price = ReflexPolicy.itemPrice(mind, "npc:1032008").orElseThrow();
+
+        assertEquals(4031045, price[0]);
+        assertEquals(1, price[1]);
+        assertTrue(ReflexPolicy.itemPrice(mind, "npc:1032007").isEmpty());
+    }
+
+    /** Level 48 needs 483,532; at 313 a minute that is more than a day. */
+    @Test
+    void aDayALevelIsLevellingStalled() {
+        assertTrue(ReflexPolicy.hoursToLevel(48, 0, 313) > ReflexPolicy.STALLED_HOURS);
+        assertTrue(ReflexPolicy.hoursToLevel(48, 0, 2000) < ReflexPolicy.STALLED_HOURS);
+        assertEquals(Double.POSITIVE_INFINITY, ReflexPolicy.hoursToLevel(48, 0, 0));
+    }
+
+    /**
+     * Measured at 50 a minute somewhere, with nowhere better known: at level 45, levelling has
+     * stalled, and an offer to be taken somewhere is worth a yes.
+     */
+    @Test
+    void slowLevellingWithNothingBetterOnFootIsStalled() {
+        ReflexPolicy measuring = new ReflexPolicy(new Random(1), Disposition.FIGHTER);
+        world.update(new Observation.StatsChanged(1, Map.of("LEVEL", 45, "EXP", 0)));
+        mind.take(new Observation.MapEntered(1, 10000, 0));
+        mind.saw("map:10000", agents.world.Yields.EARNS_PER_MINUTE, agents.world.Yields.measurement(45, 50), 1);
+
+        measuring.decide(mind, world, 2);
+
+        assertTrue(measuring.levellingStalled());
+    }
+
+    @Test
+    void levellingIsNotStalledBeforeAnythingIsMeasured() {
+        ReflexPolicy measuring = new ReflexPolicy(new Random(1), Disposition.FIGHTER);
+        world.update(new Observation.StatsChanged(1, Map.of("LEVEL", 45, "EXP", 0)));
+
+        measuring.decide(mind, world, 2);
+
+        assertFalse(measuring.levellingStalled());
+    }
 }

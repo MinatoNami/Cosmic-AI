@@ -52,6 +52,16 @@ public final class KnownWorld {
 
     /** NPC rides, by the map they start from: npc ref to the map they take you to. */
     private final Map<String, Map<String, String>> rides = new HashMap<>();
+
+    /**
+     * Maps everybody in them is carried out of, on the server's own clock: the deck before the
+     * boat to Orbis leaves, the boat itself. Map ref to where it carries you.
+     */
+    private final Map<String, String> carries = new HashMap<>();
+
+    /** The predicate a crossing is written down under, and its name as a way out. */
+    public static final String CARRIES_YOU_TO = "carries_you_to";
+    public static final String CARRIED = "carried";
     private final Map<String, Set<String>> takesYouTo = new HashMap<>();
 
     /**
@@ -165,6 +175,11 @@ public final class KnownWorld {
                         world.rides.computeIfAbsent(from, m -> new TreeMap<>()).put(rideTo(npc, belief.object()), belief.object());
                     }
                 }
+                case CARRIES_YOU_TO -> {
+                    if (!belief.subject().equals(belief.object())) {
+                        world.carries.put(belief.subject(), belief.object());
+                    }
+                }
                 case "takes_you_to" -> world.takesYouTo
                         .computeIfAbsent(belief.subject(), npc -> new HashSet<>()).add(belief.object());
                 case "talks_in" -> {
@@ -276,6 +291,11 @@ public final class KnownWorld {
                 merged.putIfAbsent(ride, to);
             }
         });
+        // And somewhere that carries everybody on is a way out too, taken by waiting.
+        String carriedTo = carries.get(mapRef);
+        if (carriedTo != null) {
+            merged.putIfAbsent(CARRIED, carriedTo);
+        }
         understood.put(mapRef, merged);
         return merged;
     }
@@ -320,6 +340,16 @@ public final class KnownWorld {
     public static String rideNpc(String door) {
         int at = door.indexOf('@');
         return at < 0 ? door : door.substring(0, at);
+    }
+
+    /** Whether a step on a route is waiting to be carried rather than a door to walk through. */
+    public static boolean isCarried(String door) {
+        return CARRIED.equals(door);
+    }
+
+    /** Whether everybody in a map is carried out of it, so it is a way on and not a dead end. */
+    public boolean carriesYouOn(String mapRef) {
+        return carries.containsKey(mapRef);
     }
 
     /** Whether a step on a route is somebody to ask rather than a door to walk through. */

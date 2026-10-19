@@ -198,4 +198,24 @@ class AgentAnswersTest {
         assertEquals(Set.of("warrior"), agents.mind.Disposition.FIGHTER.callingsThatSuit());
         assertTrue(agents.mind.Disposition.TALKER.callingsThatSuit().contains("magician"));
     }
+    /**
+     * Cherry takes you onto the deck before the boat to Orbis leaves: nothing to hunt, nobody
+     * there, no door. Written off as nothing to do, she was turned down for good; but the deck
+     * is carried on, so it is not nowhere.
+     */
+    @Test
+    void aRideOntoADeckThatSailsIsNotARideToNowhere() {
+        agents.memory.SemanticMemory memory = new agents.memory.SemanticMemory();
+        memory.assertTriple("npc:1032008", "takes_you_to", "map:101000301", 1, 1,
+                agents.memory.Belief.Provenance.FIRST_HAND);
+        memory.assertTriple("map:101000301", "nothing_to_do", "true", 2, 2,
+                agents.memory.Belief.Provenance.INFERRED);
+
+        assertTrue(Agent.leadsNowhereWorthGoing(1032008, memory.liveBeliefs()), "before it has sailed");
+
+        memory.assertTriple("map:101000301", agents.world.KnownWorld.CARRIES_YOU_TO, "map:200090010", 3, 3,
+                agents.memory.Belief.Provenance.FIRST_HAND);
+
+        assertFalse(Agent.leadsNowhereWorthGoing(1032008, memory.liveBeliefs()), "the deck sails");
+    }
 }

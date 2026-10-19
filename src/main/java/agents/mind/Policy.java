@@ -70,10 +70,40 @@ public interface Policy {
     }
 
     /**
+     * Whether nothing it can walk to will see it to the next level in good time, so that an
+     * offer to be taken elsewhere is worth a yes.
+     */
+    default boolean levellingStalled() {
+        return false;
+    }
+
+    /**
+     * Told that the agent is being carried somewhere - a ride paid for and not yet arrived -
+     * so that a room it cannot leave is waited out rather than written off.
+     */
+    default void inTransit(boolean riding) {
+    }
+
+    /**
+     * Told that whoever it asked for a ride said to wait for the next one, which is not the
+     * same as a no.
+     */
+    default void toldToWait(int npcId) {
+    }
+
+    /**
      * The NPC whose offer of a ride this policy has decided to take, or -1. Whoever answers
      * the conversation says yes to them, and picks the option that goes.
      */
     default int rideWanted() {
+        return -1;
+    }
+
+    /**
+     * The NPC it has gone to for what a ride costs - a ticket - or -1. Their question gets a
+     * yes.
+     */
+    default int fetchingFrom() {
         return -1;
     }
 
