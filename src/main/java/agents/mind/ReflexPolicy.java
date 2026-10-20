@@ -3626,12 +3626,18 @@ public class ReflexPolicy implements Policy {
         sentByTrainer = false;
         noticeNewThings(world, now);
 
-        // Grown enough to go back to its trainer comes before anything else it was told: a
-        // Warrior at 35 followed somebody's directions to the Free Market instead.
-        if (backToTrainer(mind, world, here, true)) {
+        // Carrying what its trainer gave it, taking it where the trainer said comes first: that
+        // is what the trainer wants next. Asked the other way round, "back to the trainer" won
+        // every few thousand ticks at level 30 whether or not there was anything new to show,
+        // and the trainer only said "take the letter" again. Agent3 was back with Grendel every
+        // five minutes, never long enough up the tree to reach the instructor at its top, and
+        // Agent0 never once set off for the Road to the Dungeon with Athena Pierce's letter.
+        if (deliverWhatTheTrainerGave(mind, world, here)) {
             return;
         }
-        if (deliverWhatTheTrainerGave(mind, world, here)) {
+        // Then grown enough to go back to its trainer, before anything else it was told: a
+        // Warrior at 35 followed somebody's directions to the Free Market instead.
+        if (backToTrainer(mind, world, here, true)) {
             return;
         }
 

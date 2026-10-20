@@ -526,8 +526,13 @@ public class Agent implements Runnable {
             mind.take(observation);
             acknowledgeArrival(observation);
             answerNpc(observation);
+            // And picking up anything from the etc pocket: a job test's monsters give no
+            // experience, only the marbles that pass it, and Agent3 was logged out of the
+            // Magician's test for making no progress while it collected them.
             if (observation instanceof Observation.ExpGained
-                    || observation instanceof Observation.QuestStateChanged) {
+                    || observation instanceof Observation.QuestStateChanged
+                    || observation instanceof Observation.ItemGained picked
+                       && picked.quantity() > 0 && picked.itemId() / 1_000_000 == 4) {
                 lastProgressAt = steps;
                 rethought = false;
             }

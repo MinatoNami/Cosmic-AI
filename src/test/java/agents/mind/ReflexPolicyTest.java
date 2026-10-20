@@ -1543,6 +1543,34 @@ class ReflexPolicyTest {
         assertTrue(ReflexPolicy.canPay("30 item:4031013", 30, 0, thirtyMarbles));
     }
 
+    /**
+     * Grown since its trainer last spoke, but carrying the trainer's letter: the letter goes to
+     * whoever the trainer named before the trainer is gone back to. The other way round, Athena
+     * Pierce was visited every few minutes and her letter never reached the Road to the Dungeon.
+     */
+    @Test
+    void takesTheTrainersLetterOnBeforeGoingBackToTheTrainer() {
+        aJunction();
+        mind.take(new Observation.MapEntered(4, 20000, 0));
+        mind.take(new Observation.DialogueShown(4, 1022000, "Please get this letter to the instructor.", 0));
+        mind.saw("self", "trained_by", "npc:1022000", 4);
+        mind.saw("item:4031008", "given_by", "npc:1022000", 4);
+        mind.hear("npc:1022000", "sends_you_to", "npc:1072000", 4);
+        mind.saw("npc:1072000", "present_in", "map:30000", 4);
+        mind.take(new Observation.MapEntered(5, 10000, 0));
+        mind.take(new Observation.StatsChanged(9, Map.of("LEVEL", 30, "JOB", 100)));
+        world.update(new Observation.MapEntered(10, 10000, 0));
+        world.update(new Observation.StatsChanged(10, Map.of("LEVEL", 30, "JOB", 100)));
+        world.update(new Observation.InventoryShown(10, 0, Map.of(1, 24, 2, 24, 3, 24, 4, 24, 5, 24),
+                List.of(new agents.percept.Item(4, 1, 4031008, 1, null))));
+        ReflexPolicy policy = new ReflexPolicy(new Random(1), Disposition.WANDERER);
+        policy.decide(mind, world, 10);
+        policy.cameInAt(new Point(-500, 0));
+
+        assertEquals("east00", policy.pickDoor(JUNCTION_DOORS, mind, 10000, "player:1").name(),
+                "the letter to the instructor at 30000, not back to the trainer at 20000");
+    }
+
     /** Having shown them already, there is nothing to go back for until something else changes. */
     @Test
     void doesNotKeepGoingBackToATrainerItHasAlreadyShown() {
