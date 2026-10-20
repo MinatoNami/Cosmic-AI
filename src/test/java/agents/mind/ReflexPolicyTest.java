@@ -1865,11 +1865,12 @@ class ReflexPolicyTest {
         assertTrue(ReflexPolicy.itemPrice(mind, "npc:22000").isEmpty());
     }
 
-    /** Level 48 needs 483,532; at 313 a minute that is more than a day. */
+    /** Level 48 needs 483,532: at 313 a minute that is more than a day, at 5,000 under two hours. */
     @Test
-    void aDayALevelIsLevellingStalled() {
+    void moreThanTwoHoursALevelIsLevellingStalled() {
         assertTrue(ReflexPolicy.hoursToLevel(48, 0, 313) > ReflexPolicy.STALLED_HOURS);
-        assertTrue(ReflexPolicy.hoursToLevel(48, 0, 2000) < ReflexPolicy.STALLED_HOURS);
+        assertTrue(ReflexPolicy.hoursToLevel(48, 0, 2000) > ReflexPolicy.STALLED_HOURS);
+        assertTrue(ReflexPolicy.hoursToLevel(48, 0, 5000) < ReflexPolicy.STALLED_HOURS);
         assertEquals(Double.POSITIVE_INFINITY, ReflexPolicy.hoursToLevel(48, 0, 0));
     }
 

@@ -3239,8 +3239,10 @@ public class ReflexPolicy implements Policy {
      * Hours to a level, at the best it can find on foot, past which levelling has stalled.
      * Four agents in their forties made between 45 and 310 experience a minute on Victoria
      * Island, a day or more a level; Ossyria, a boat ride away, is where people go next.
+     * Two hours rather than a day: at a day nobody ever went, while agents in their thirties
+     * levelled every hour or so on Victoria and would have kept to it into their fifties.
      */
-    static final double STALLED_HOURS = 24;
+    static final double STALLED_HOURS = 2;
     private static final int STALLS_FROM_LEVEL = 20;
 
     /** Where somebody is known to have taken people. */
