@@ -1705,6 +1705,14 @@ public class ReflexPolicy implements Policy {
         if (somethingToDoHere(world, mind)) {
             boredom = 0;
         }
+        // Nor while whoever its calling waits on is in this very map. Agent3 climbed the tree
+        // north of Ellinia to within a few hundred pixels of the instructor, Grendel's letter in
+        // its bag, then took a fancy to three strangers three maps off - urged on to explore -
+        // and walked the whole tree back down and out.
+        if (jobAdvancementPending() && errandNpc >= 0
+                && world.visibleNpcs().stream().anyMatch(npc -> npc.typeId() == errandNpc)) {
+            boredom = 0;
+        }
         double score = boredom
                 + (errandMap != null || sentMap != null || !shopMaps.isEmpty() ? ERRAND : 0)
                 // A calling elsewhere outweighs anything to chat about here. Henesys has quests

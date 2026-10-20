@@ -1,5 +1,6 @@
 package agents.mind;
 
+import agents.Mind;
 import agents.percept.Observation;
 import agents.world.MapGeometry;
 import agents.world.Navigator;
@@ -83,4 +84,37 @@ class TreeNorthOfElliniaTest {
         assertEquals(0, MapGeometry.roomHopsIn(100000000).stream()
                 .filter(hop -> hop.room() == 100000100).count(), "a town's shops are not side rooms");
     }
+    /**
+     * Out of the highest room, a few hundred pixels below the instructor with the letter in its
+     * bag and urged to explore: it goes on to the instructor, not out of the tree.
+     */
+    @Test
+    void withTheInstructorInSightTheTreeIsNotLeft() {
+        Mind mind = new Mind("Test", agents.trace.Trace.toFile(dir.resolve("t.jsonl"), "Test"));
+        mind.take(new Observation.MapEntered(1, 101000003, 0));
+        mind.take(new Observation.DialogueShown(1, 1032001, "Please get this letter to the instructor.", 0));
+        mind.saw("self", "trained_by", "npc:1032001", 1);
+        mind.saw("item:4031009", "given_by", "npc:1032001", 1);
+        mind.hear("npc:1032001", "sends_you_to", "npc:1072001", 1);
+        mind.saw("npc:1072001", "present_in", "map:" + TREE, 1);
+        mind.take(new Observation.MapEntered(2, TREE, 0));
+        WorldModel world = new WorldModel();
+        world.update(new Observation.MapEntered(2, TREE, 0));
+        world.movedTo(new Point(-737, -3718));
+        world.update(new Observation.StatsChanged(2, java.util.Map.of("LEVEL", 31, "JOB", 200)));
+        world.update(new Observation.InventoryShown(2, 1000, java.util.Map.of(1, 24, 2, 24, 3, 24, 4, 24, 5, 24),
+                java.util.List.of(new agents.percept.Item(4, 1, 4031009, 1, null))));
+        world.update(new Observation.NpcAppeared(2, 7001, 1072001, INSTRUCTOR));
+        ReflexPolicy policy = new ReflexPolicy(new java.util.Random(1), Disposition.TALKER);
+        policy.urge("door", 500);
+
+        for (int i = 0; i < 20; i++) {
+            Policy.Decision decision = policy.decide(mind, world, 3 + i);
+            assertTrue(!(decision.intent() instanceof Intent.EnterPortal) && !decision.goal().startsWith("walk to a way out"),
+                    "decision " + i + ": " + decision.goal());
+        }
+    }
+
+    @org.junit.jupiter.api.io.TempDir
+    java.nio.file.Path dir;
 }
