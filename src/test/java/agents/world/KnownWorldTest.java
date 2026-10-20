@@ -682,4 +682,21 @@ class KnownWorldTest {
                 world().reachableFrom(KnownWorld.mapRef(101000301)).get(KnownWorld.mapRef(200000100)).firstDoor()),
                 "on the deck, the way on is to wait");
     }
+    /**
+     * Downstairs at the Forest's up00 and dw00 hop between its own floors. Remembered as doors,
+     * they were never opened; the world map says they are no way out, so they are not unopened.
+     */
+    @Test
+    void aHopWithinTheMapIsNoDoorLeftUnopened() {
+        KnownWorld.useAtlas(new Atlas());
+        try {
+            believe(KnownWorld.mapRef(100040110), "has_door", "up00");
+            believe(KnownWorld.mapRef(100040110), "has_door", "dw00");
+
+            org.junit.jupiter.api.Assertions.assertEquals(java.util.Set.of(),
+                    world().unopenedDoorsIn(KnownWorld.mapRef(100040110)));
+        } finally {
+            KnownWorld.useAtlas(null);
+        }
+    }
 }

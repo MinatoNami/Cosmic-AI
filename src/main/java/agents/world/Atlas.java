@@ -39,6 +39,40 @@ public final class Atlas {
         return byMap.computeIfAbsent(mapId, id -> load(id, "tm"));
     }
 
+    private final Map<Integer, java.util.Set<String>> notWaysOut = new HashMap<>();
+
+    /**
+     * Whether the data says this "door" is no way out of the map at all: a hop to somewhere
+     * else in the same map, or a portal with neither a map nor a script. Downstairs at the
+     * Forest has four hops up and down its floors; inherited as doors and never opened, they
+     * were four unopened doors for good, and every agent kept heading back there to open them.
+     */
+    public synchronized boolean isNoWayOut(int mapId, String door) {
+        return notWaysOut.computeIfAbsent(mapId, Atlas::loadNotWaysOut).contains(door);
+    }
+
+    private static java.util.Set<String> loadNotWaysOut(int mapId) {
+        DataProvider provider = WzData.of(WZFiles.MAP);
+        String padded = StringUtil.getLeftPaddedStr(Integer.toString(mapId), '0', 9);
+        Data map = provider.getData("Map/Map" + (mapId / 100000000) + "/" + padded + ".img");
+        if (map == null || map.getChildByPath("portal") == null) {
+            return java.util.Set.of();
+        }
+        java.util.Set<String> none = new java.util.HashSet<>();
+        for (Data portal : map.getChildByPath("portal")) {
+            String name = DataTool.getString(portal.getChildByPath("pn"), "");
+            int to = DataTool.getInt(portal.getChildByPath("tm"), SCRIPTED);
+            String script = DataTool.getString(portal.getChildByPath("script"), "");
+            if (name.isBlank() || "sp".equals(name)) {
+                continue;
+            }
+            if (to == mapId || to == SCRIPTED && script.isBlank()) {
+                none.add(name);
+            }
+        }
+        return java.util.Set.copyOf(none);
+    }
+
     /** The portal a door brings a character out at, on the far side; null if the data does not say. */
     public synchronized String arrivalOf(int mapId, String door) {
         return arrivals.computeIfAbsent(mapId, id -> load(id, "tn")).get(door);

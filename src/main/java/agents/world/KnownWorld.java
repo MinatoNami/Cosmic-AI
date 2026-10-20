@@ -399,11 +399,19 @@ public final class KnownWorld {
     public Set<String> unopenedDoorsIn(String mapRef) {
         Set<String> unopened = new HashSet<>();
         for (String door : doorsSeen.getOrDefault(mapRef, Set.of())) {
-            if (!settled.contains(portalRef(mapRef, door)) && !onTheWorldMap(mapRef, door)) {
+            if (!settled.contains(portalRef(mapRef, door)) && !onTheWorldMap(mapRef, door)
+                    && !noWayOut(mapRef, door)) {
                 unopened.add(door);
             }
         }
         return unopened;
+    }
+
+    /** A "door" the world map says goes nowhere but elsewhere in the same map, if there is one. */
+    private static boolean noWayOut(String mapRef, String door) {
+        Atlas worldMap = atlas;
+        int id = idOf(mapRef);
+        return worldMap != null && id > 0 && worldMap.isNoWayOut(id, door);
     }
 
     /**
