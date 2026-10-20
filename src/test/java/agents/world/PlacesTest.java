@@ -235,6 +235,20 @@ class PlacesTest {
         assertTrue(places.isEmpty(), "level 3 has no business where people hunt at 20: " + places);
     }
 
+    /**
+     * Sent somewhere that has killed it, it is still offered: the instructor its trainer sent
+     * it to stands in a map a predecessor died in, and the second job waits there.
+     */
+    @Test
+    void whereItWasSentIsOfferedEvenIfItKilledIt() {
+        List<Places.Place> places = Places.worthGoing(KnownWorld.rememberedBy(memory.liveBeliefs()),
+                new Places.Facts("map:1", visits, null, Set.of(), Set.of(), Map.of(), Set.of(), "map:3",
+                        "to take what your trainer gave you", Map.of("map:3", 3)), WEIGHTS, true);
+
+        assertTrue(places.stream().anyMatch(p -> p.map().equals("map:3")), "the instructor's map: " + places);
+        assertEquals("map:3", places.get(0).map());
+    }
+
     private List<Places.Place> rankByRate(Map<String, Double> rates, double here) {
         return Places.worthGoing(KnownWorld.rememberedBy(memory.liveBeliefs()),
                 new Places.Facts("map:1", visits, null, Set.of(), Set.of(), Map.of(), Set.of(), null, null,

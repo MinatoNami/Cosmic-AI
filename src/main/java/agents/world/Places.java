@@ -145,7 +145,11 @@ public final class Places {
         if (facts.sentTo() != null) {
             needed.add(facts.sentTo());
         }
-        needed.removeAll(grounds);
+        // Not a killing ground itself - except where it was sent. Agent0 was born believing the
+        // Road to the Dungeon had killed a predecessor at 37 and been too hard at 42, so the
+        // map where Athena Pierce's letter had to go was a killing ground, and the one place
+        // the second job waited was never once offered.
+        grounds.stream().filter(ground -> !ground.equals(facts.sentTo())).forEach(needed::remove);
         places.stream().map(Place::map).toList().forEach(needed::remove);
         // Whenever there is somewhere it must go, not only after recovering from dying: a Warrior
         // due its second job could reach its trainer only through maps it had died in, and
