@@ -1505,7 +1505,7 @@ public class ReflexPolicy implements Policy {
      * Dances with Balrog stands on a ledge in the Warriors' Sanctuary that no floor reaches;
      * a fighter walked at the ledge until it gave up, and left without the Warrior's calling.
      */
-    private static Point approach(WorldModel world, Point self, Point npc) {
+    static Point approach(WorldModel world, Point self, Point npc) {
         int map = world.mapId();
         if (agents.world.MapGeometry.groundIn(map).isEmpty() || agents.world.Navigator.nextStep(map, self, npc).isPresent()
                 || self.distance(npc) < NPC_RANGE) {
@@ -1522,8 +1522,33 @@ public class ReflexPolicy implements Policy {
                 below = Math.max(below, floor.get());
             }
         }
+        // Nor anything straight below: a floor beside them, on the same screen, will do. The
+        // Magician's instructor at the top of the tree north of Ellinia stands on a ledge no
+        // floor reaches, and the floor beneath it ends seventeen pixels short of where he
+        // stands - so he was walked at along the ground three thousand pixels below, for hours.
+        Point best = null;
+        for (int dx = -ASIDE; dx <= ASIDE; dx += FLOOR_GAP) {
+            Optional<Integer> floor = Optional.empty();
+            for (int below = npc.y + FLOOR_GAP; below < npc.y + ON_SCREEN_BELOW && floor.isEmpty(); below += FLOOR_GAP) {
+                floor = agents.world.Navigator.floorHeight(map, new Point(npc.x + dx, below)).filter(y -> y > npc.y);
+            }
+            if (floor.isEmpty()) {
+                continue;
+            }
+            Point stand = new Point(npc.x + dx, floor.get());
+            if ((best == null || stand.distance(npc) < best.distance(npc))
+                    && (stand.distance(self) < NPC_RANGE || agents.world.Navigator.nextStep(map, self, stand).isPresent())) {
+                best = stand;
+            }
+        }
+        if (best != null) {
+            return best;
+        }
         return new Point(npc.x, agents.world.Navigator.heightAlongFloor(map, self, npc.x).orElse(self.y));
     }
+
+    /** How far to either side of somebody a floor to speak to them from is looked for. */
+    private static final int ASIDE = 200;
 
     private static final int FLOOR_GAP = 10;
     private static final int ON_SCREEN_BELOW = 300;

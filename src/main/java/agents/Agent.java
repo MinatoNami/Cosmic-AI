@@ -616,6 +616,9 @@ public class Agent implements Runnable {
             return;
         }
 
+        if (crossingASideRoom()) {
+            return;
+        }
         long tick = perceiver.currentTick();
         noticeBeingCarried();
         policy.inTransit(inTransit());
@@ -1303,6 +1306,50 @@ public class Agent implements Runnable {
         inTransitUntil = steps + TRANSIT_PATIENCE;
         log.info("{} was carried from map {} to map {}", mind.name(), from, map);
     }
+
+    /**
+     * Inside a side room on the way across its map, leaves by the door the way was planned
+     * through. Left to the policy, the room's doors all lead back to the same map and the
+     * first of them - the one it came in by - would do as well as any, which is back down to
+     * the foot of the tree.
+     */
+    private boolean crossingASideRoom() {
+        Optional<agents.world.MapGeometry.RoomHop> through = executor.throughRoom();
+        if (through.isEmpty()) {
+            return false;
+        }
+        agents.world.MapGeometry.RoomHop hop = through.get();
+        if (world.mapId() != hop.room()) {
+            // Out of it again, or never let in: either way the room is behind it.
+            if (stepsInSideRoom > 0
+                    || System.currentTimeMillis() - executor.throughRoomAtMillis() > SIDE_ROOM_ENTRY_MILLIS) {
+                executor.leftTheRoom();
+                stepsInSideRoom = 0;
+            }
+            return false;
+        }
+        if (++stepsInSideRoom > SIDE_ROOM_PATIENCE) {
+            log.info("{} gives up crossing side room {} for door {}", mind.name(), hop.room(), hop.roomExit());
+            executor.leftTheRoom();
+            stepsInSideRoom = 0;
+            return false;
+        }
+        Optional<java.awt.Point> door = MapGeometry.portalsIn(hop.room()).stream()
+                .filter(p -> p.name().equals(hop.roomExit()))
+                .map(MapGeometry.PortalSighting::position).findFirst();
+        if (door.isEmpty()) {
+            executor.leftTheRoom();
+            return false;
+        }
+        executor.execute(new Intent.EnterPortal(hop.roomExit(), door.get()), world);
+        return true;
+    }
+
+    private int stepsInSideRoom;
+
+    /** A minute and a half to cross a side room, and ten seconds to be let into one. */
+    private static final int SIDE_ROOM_PATIENCE = 150;
+    private static final long SIDE_ROOM_ENTRY_MILLIS = 10_000;
 
     /** Whether a ride it paid for is still under way. */
     boolean inTransit() {

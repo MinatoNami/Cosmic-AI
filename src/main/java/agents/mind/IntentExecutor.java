@@ -27,6 +27,24 @@ public class IntentExecutor {
     /** Whose hands these are, for the log. */
     private String who = "agent";
 
+    /** The side room it stepped into on the way across a map, and when; null when none. */
+    private agents.world.MapGeometry.RoomHop throughRoom;
+    private long throughRoomAtMillis;
+
+    /** The side room it is crossing, if it stepped into one to come out elsewhere in its map. */
+    public java.util.Optional<agents.world.MapGeometry.RoomHop> throughRoom() {
+        return java.util.Optional.ofNullable(throughRoom);
+    }
+
+    public long throughRoomAtMillis() {
+        return throughRoomAtMillis;
+    }
+
+    /** Done with the side room: out of it, or never got in. */
+    public void leftTheRoom() {
+        throughRoom = null;
+    }
+
     public void actingFor(String name) {
         who = name;
     }
@@ -331,6 +349,13 @@ public class IntentExecutor {
         }
         switch (step.kind()) {
             case JUMP -> leap(from, step.landing(), world, true);
+            case ROOM -> {
+                // Into a side room, to come out higher up this map by the door the way was
+                // planned through; the agent sees to leaving by that door once inside.
+                session.send(ClientPackets.enterPortal(step.through().portal()));
+                throughRoom = step.through();
+                throughRoomAtMillis = System.currentTimeMillis();
+            }
             case HOP -> {
                 // A portal to elsewhere in this map: the client moves itself, and says so.
                 session.send(ClientPackets.move(from, step.landing(), foothold(map, step.landing()),

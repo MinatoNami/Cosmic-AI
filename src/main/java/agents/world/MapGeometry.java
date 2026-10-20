@@ -182,6 +182,74 @@ public class MapGeometry {
         return List.copyOf(hops);
     }
 
+    /**
+     * A way up or across a map by way of a side room: step into the portal at {@code from}, and
+     * leave the room by {@code roomExit}, which comes back out at {@code to}.
+     *
+     * The tree north of Ellinia is climbed this way. Its portals lead into small rooms inside
+     * the trunk, and each room's doors come back out higher up the same tree; the Magician's
+     * instructor stands at the top. Nothing here knew that: a map's own floors and ropes did
+     * not reach, and between maps the rooms were only somewhere to go and come back from. A
+     * Magician with Grendel's letter stood at the foot of the tree for three hours.
+     */
+    public record RoomHop(String portal, Point from, Point to, int room, String roomExit) {
+    }
+
+    private static final Map<Integer, List<RoomHop>> ROOM_HOPS = new HashMap<>();
+
+    /** Every way across this map through a side room whose doors all lead back into it. */
+    public static synchronized List<RoomHop> roomHopsIn(int mapId) {
+        return ROOM_HOPS.computeIfAbsent(mapId, MapGeometry::loadRoomHops);
+    }
+
+    private static List<RoomHop> loadRoomHops(int mapId) {
+        DataProvider provider = WzData.of(WZFiles.MAP);
+        Data mapData = provider.getData(pathFor(mapId));
+        if (mapData == null || mapData.getChildByPath("portal") == null) {
+            return List.of();
+        }
+        Map<String, Point> here = new HashMap<>();
+        for (PortalSighting sighting : portalsIn(mapId)) {
+            here.putIfAbsent(sighting.name(), sighting.position());
+        }
+        List<RoomHop> hops = new ArrayList<>();
+        for (Data portal : mapData.getChildByPath("portal")) {
+            int room = DataTool.getInt(portal.getChildByPath("tm"), 0);
+            if (room <= 0 || room == mapId || room == 999999999) {
+                continue;
+            }
+            Data roomData = provider.getData(pathFor(room));
+            if (roomData == null || roomData.getChildByPath("portal") == null) {
+                continue;
+            }
+            String name = DataTool.getString(portal.getChildByPath("pn"), "");
+            Point from = new Point(DataTool.getInt(portal.getChildByPath("x"), 0),
+                    DataTool.getInt(portal.getChildByPath("y"), 0));
+            List<RoomHop> through = new ArrayList<>();
+            boolean sideRoom = true;
+            for (Data door : roomData.getChildByPath("portal")) {
+                String doorName = DataTool.getString(door.getChildByPath("pn"), "");
+                int leadsTo = DataTool.getInt(door.getChildByPath("tm"), 999999999);
+                if (doorName.isBlank() || "sp".equals(doorName) || leadsTo == 999999999 || leadsTo == room) {
+                    continue;
+                }
+                if (leadsTo != mapId) {
+                    sideRoom = false;       // a room with a way on elsewhere is a place, not a side room
+                    break;
+                }
+                String comesOutAt = DataTool.getString(door.getChildByPath("tn"), "");
+                Point to = here.get(comesOutAt);
+                if (to != null && !comesOutAt.equals(name)) {
+                    through.add(new RoomHop(name, from, to, room, doorName));
+                }
+            }
+            if (sideRoom) {
+                hops.addAll(through);
+            }
+        }
+        return List.copyOf(hops);
+    }
+
     /** The server numbers portals by their node name in the file, and so must we. */
     private static int portalId(Data portal) {
         try {

@@ -43,6 +43,9 @@ public final class Navigator {
     /** The smallest rise onto an overlapping floor that counts as a floor overhead at all. */
     private static final int MIN_STEP_UP = 4;
 
+    /** Floors overlapping by less than this are jumped across, end to start. */
+    private static final int BARELY_OVERLAPS = 8;
+
     /** How finely an overlap between two floors is searched for the easiest place to jump. */
     private static final int JUMP_SEARCH_STEP = 16;
 
@@ -104,7 +107,7 @@ public final class Navigator {
     private Navigator() {
     }
 
-    public enum Kind { WALK, DROP, JUMP, CLIMB, HOP }
+    public enum Kind { WALK, DROP, JUMP, CLIMB, HOP, ROOM }
 
     /**
      * The next thing to do: walk to {@code departX} on the current floor, then make the move.
@@ -114,10 +117,19 @@ public final class Navigator {
      * @param legs for a climb, the ropes in order and how each is left; null for a plain climb
      *             from one end of a single rope to the other, as it always was
      */
-    public record Step(Kind kind, int departX, Point landing, MapGeometry.Climb rope, List<Leg> legs) {
+    /**
+     * @param through for {@link Kind#ROOM}, the side room to go through and the door to leave it
+     *                by; null otherwise
+     */
+    public record Step(Kind kind, int departX, Point landing, MapGeometry.Climb rope, List<Leg> legs,
+                       MapGeometry.RoomHop through) {
+
+        public Step(Kind kind, int departX, Point landing, MapGeometry.Climb rope, List<Leg> legs) {
+            this(kind, departX, landing, rope, legs, null);
+        }
 
         public Step(Kind kind, int departX, Point landing, MapGeometry.Climb rope) {
-            this(kind, departX, landing, rope, null);
+            this(kind, departX, landing, rope, null, null);
         }
     }
 
@@ -150,7 +162,7 @@ public final class Navigator {
         return graph.firstEdge(start, from.x, goal, to.x, blockedRopes(mapId))
                 .map(edge -> new Step(edge.kind, edge.departX,
                         new Point(edge.arriveX, graph.platforms.get(edge.to).heightAt(edge.arriveX)),
-                        edge.rope, edge.legs));
+                        edge.rope, edge.legs, edge.through));
     }
 
     /** The height of the floor a point is standing on, if it is standing on one. */
@@ -225,6 +237,7 @@ public final class Navigator {
         return GRAPHS.computeIfAbsent(mapId, id -> {
             Graph graph = Graph.build(MapGeometry.groundIn(id), MapGeometry.climbsIn(id));
             graph.linkHops(MapGeometry.hopsIn(id));
+            graph.linkRoomHops(MapGeometry.roomHopsIn(id));
             return graph;
         });
     }
@@ -259,7 +272,12 @@ public final class Navigator {
         }
     }
 
-    record Edge(int to, Kind kind, int departX, int arriveX, MapGeometry.Climb rope, List<Leg> legs, int climbing) {
+    record Edge(int to, Kind kind, int departX, int arriveX, MapGeometry.Climb rope, List<Leg> legs, int climbing,
+                MapGeometry.RoomHop through) {
+
+        Edge(int to, Kind kind, int departX, int arriveX, MapGeometry.Climb rope, List<Leg> legs, int climbing) {
+            this(to, kind, departX, arriveX, rope, legs, climbing, null);
+        }
 
         Edge(int to, Kind kind, int departX, int arriveX, MapGeometry.Climb rope) {
             this(to, kind, departX, arriveX, rope, null, rope == null ? 0 : rope.height());
@@ -290,6 +308,21 @@ public final class Navigator {
                 int to = platformUnder(hop.to().x, hop.to().y);
                 if (from >= 0 && to >= 0 && from != to) {
                     edges.get(from).add(new Edge(to, Kind.HOP, hop.from().x, hop.to().x, null));
+                }
+            }
+        }
+
+        /**
+         * Side rooms: step in at one floor, climb the room, come out on another. Costed as the
+         * height gained, as a climb would be, so a rope that does the same is no worse.
+         */
+        void linkRoomHops(List<MapGeometry.RoomHop> hops) {
+            for (MapGeometry.RoomHop hop : hops) {
+                int from = platformUnder(hop.from().x, hop.from().y);
+                int to = platformUnder(hop.to().x, hop.to().y);
+                if (from >= 0 && to >= 0 && from != to) {
+                    edges.get(from).add(new Edge(to, Kind.ROOM, hop.from().x, hop.to().x, null, null,
+                            Math.abs(hop.from().y - hop.to().y), hop));
                 }
             }
         }
@@ -385,7 +418,10 @@ public final class Navigator {
                         }
                         Platform q = platforms.get(to);
                         int gap = direction > 0 ? q.minX - edge : edge - q.maxX;
-                        if (gap < 0 || gap > JUMP_REACH) {
+                        // A floor that starts a pixel or two before this one ends is still a jump
+                        // across: too little overlap for the jump straight up below to sample, and
+                        // the stairs inside the trunk of the tree north of Ellinia climb that way.
+                        if (gap < -BARELY_OVERLAPS || gap > JUMP_REACH) {
                             continue;
                         }
                         int arrive = direction > 0 ? q.minX + 4 : q.maxX - 4;
