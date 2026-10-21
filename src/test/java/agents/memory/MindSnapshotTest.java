@@ -121,4 +121,26 @@ class MindSnapshotTest {
         assertThrows(IllegalStateException.class,
                 () -> MindSnapshot.load(file(), episodic, semantic));
     }
+    /**
+     * The server rebooted mid-save and Agent1's mind was left cut off partway through a belief.
+     * Everything before the cut is restored; the torn line is left out; it wakes.
+     */
+    @Test
+    void aMindCutOffMidSaveStillWakesWithEverythingBeforeTheCut() throws Exception {
+        EpisodicMemory episodic = episodesWith("hello", "there");
+        SemanticMemory semantic = new SemanticMemory();
+        semantic.assertTriple("npc:2000", "present_in", "map:10000", 0, 1, Belief.Provenance.FIRST_HAND);
+        semantic.assertTriple("npc:2001", "present_in", "map:10000", 1, 2, Belief.Provenance.FIRST_HAND);
+        MindSnapshot.save(file(), "Agent1", 42, episodic, semantic);
+        byte[] whole = java.nio.file.Files.readAllBytes(file());
+        java.nio.file.Files.write(file(), java.util.Arrays.copyOf(whole, whole.length - 25));
+
+        EpisodicMemory reloadedEpisodic = new EpisodicMemory();
+        SemanticMemory reloadedSemantic = new SemanticMemory();
+        MindSnapshot.Restored restored = MindSnapshot.load(file(), reloadedEpisodic, reloadedSemantic);
+
+        assertEquals("Agent1", restored.agent());
+        assertEquals(2, restored.episodes());
+        assertEquals(1, restored.beliefs(), "the first belief whole, the second torn and left out");
+    }
 }

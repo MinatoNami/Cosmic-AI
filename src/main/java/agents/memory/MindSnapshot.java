@@ -48,7 +48,8 @@ public final class MindSnapshot {
             if (path.getParent() != null) {
                 Files.createDirectories(path.getParent());
             }
-            try (BufferedWriter out = Files.newBufferedWriter(temporary, StandardCharsets.UTF_8)) {
+            try (java.io.FileOutputStream file = new java.io.FileOutputStream(temporary.toFile());
+                 BufferedWriter out = new BufferedWriter(new java.io.OutputStreamWriter(file, StandardCharsets.UTF_8))) {
                 out.write(join("mind", String.valueOf(FORMAT), text(agent), String.valueOf(tick)));
                 out.newLine();
 
@@ -74,8 +75,13 @@ public final class MindSnapshot {
                             belief.supportedBy().stream().map(String::valueOf).reduce((a, b) -> a + "," + b).orElse("")));
                     out.newLine();
                 }
+                // On the disk before it takes the old mind's place. Renamed with its words
+                // still in memory, a mind survived the server rebooting as a name with a torn
+                // file under it: Agent1's and Agent2's were cut off at 20 MiB, and neither woke.
+                out.flush();
+                file.getFD().sync();
             }
-            Files.move(temporary, path, StandardCopyOption.REPLACE_EXISTING);
+            Files.move(temporary, path, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
         } catch (IOException e) {
             throw new UncheckedIOException("Could not save the mind to " + path, e);
         }
@@ -98,12 +104,20 @@ public final class MindSnapshot {
         long tick = 0;
         int episodes = 0;
         int beliefs = 0;
+        int torn = 0;
         try {
-            for (String line : Files.readAllLines(path, StandardCharsets.UTF_8)) {
+            // Decoded forgivingly: a file cut off in the middle of a character is still worth
+            // every whole line before the cut.
+            String all = StandardCharsets.UTF_8.newDecoder()
+                    .onMalformedInput(java.nio.charset.CodingErrorAction.REPLACE)
+                    .onUnmappableCharacter(java.nio.charset.CodingErrorAction.REPLACE)
+                    .decode(java.nio.ByteBuffer.wrap(Files.readAllBytes(path))).toString();
+            for (String line : all.split("\n")) {
                 if (line.isBlank()) {
                     continue;
                 }
                 String[] f = line.split(SEP, -1);
+                try {
                 switch (f[0]) {
                     case "mind" -> {
                         int format = Integer.parseInt(f[1]);
@@ -132,9 +146,21 @@ public final class MindSnapshot {
                         // A record kind from a later format. Skipping beats refusing to wake up.
                     }
                 }
+                } catch (RuntimeException brokenLine) {
+                    if (brokenLine instanceof IllegalStateException && f[0].equals("mind")) {
+                        throw brokenLine;       // a format this build does not read is not a torn line
+                    }
+                    // A line that does not read - the last one, cut off when the machine went
+                    // down mid-save - is left out rather than costing the whole mind.
+                    torn++;
+                }
             }
         } catch (IOException e) {
             throw new UncheckedIOException("Could not read the mind at " + path, e);
+        }
+        if (torn > 0) {
+            org.slf4j.LoggerFactory.getLogger(MindSnapshot.class)
+                    .warn("Mind at {} had {} line(s) that did not read; restored the rest", path, torn);
         }
         return new Restored(agent, tick, episodes, beliefs);
     }
