@@ -218,12 +218,27 @@ public class Agent implements Runnable {
      * "npc:1072004 wants_first 30 item:4031013". The policy acts on these the way it acts on
      * any other belief, and a person reading the trace can see where each errand came from.
      */
+    /**
+     * Whether a line offers passage somewhere: Joel's "the ship ride to Orbis Station", Cherry's
+     * "do you want to go to Orbis?", "travel in this boat", a ticket for a train.
+     */
+    static boolean offersPassage(String said) {
+        return PASSAGE.matcher(said).find();
+    }
+
+    private static final java.util.regex.Pattern PASSAGE = java.util.regex.Pattern.compile(
+            "(?i)\\b(ship|boat|ferry|train|subway|ticket|voyage|sail)s?\\b|travel(?:l?ing)? (?:in|on|to)\\b|do you want to go to");
+
     private void rememberWhatWasSaid(Observation.DialogueShown dialogue) {
         // "Come back at level ten" is the one condition it can always read for itself, and the
         // model summarised it as "Warrior class requirement" - which nothing can check.
         if (dialogue.npcId() > 0) {
             comeBackAt(dialogue.text()).ifPresent(condition ->
                     mind.hear("npc:" + dialogue.npcId(), "wants_first", condition, perceiver.currentTick()));
+        }
+        // Somebody offering to take it somewhere, in so many words: a ship, a boat, a ticket.
+        if (dialogue.npcId() > 0 && offersPassage(dialogue.text())) {
+            mind.saw("npc:" + dialogue.npcId(), agents.mind.ReflexPolicy.OFFERS_PASSAGE, "true", perceiver.currentTick());
         }
         agents.mind.Instructions.Heard heard = agents.mind.Instructions.read(dialogue.text());
         if (heard.isEmpty() || dialogue.npcId() <= 0) {

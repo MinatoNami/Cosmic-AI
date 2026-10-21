@@ -61,6 +61,7 @@ public final class Inheritance {
             "strands_you",   // who sends you somewhere there is no leaving
             "takes_you_to",  // where somebody's offer of passage actually goes
             "carries_you_to", // where a boat or a train carries everybody aboard
+            "offers_passage", // who offered, in so many words, to take you somewhere
             "nothing_to_do", // somewhere with nothing to hunt and nowhere new to walk to
             "offers_calling", // which calling somebody offers a beginner
             "heals_up_to",   // the most a drink has been seen to restore

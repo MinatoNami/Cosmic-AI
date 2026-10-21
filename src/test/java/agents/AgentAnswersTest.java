@@ -218,4 +218,13 @@ class AgentAnswersTest {
 
         assertFalse(Agent.leadsNowhereWorthGoing(1032008, memory.liveBeliefs()), "the deck sails");
     }
+    /** Joel sells the ship ride to Orbis, Cherry takes the boat; Heena only sends you out. */
+    @Test
+    void hearsAnOfferOfPassage() {
+        assertTrue(Agent.offersPassage("Hello, I'm in charge of selling tickets for the ship ride to Orbis Station of Ossyria."));
+        assertTrue(Agent.offersPassage("Do you want to go to Orbis?"));
+        assertTrue(Agent.offersPassage("Make sure you got a Orbis ticket to travel in this boat."));
+        assertFalse(Agent.offersPassage("Are you done with your training? I will send you out."));
+        assertFalse(Agent.offersPassage("Zzzzzz..."));
+    }
 }

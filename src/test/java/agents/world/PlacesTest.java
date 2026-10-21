@@ -302,4 +302,18 @@ class PlacesTest {
                         new Places.Facts("map:1", visits, null, Set.of(), Set.of(), Map.of(), Set.of()), WEIGHTS)
                         .stream().map(Places.Place::value).toList());
     }
+    /** Stalled, somewhere with somebody offering passage is worth the trip; otherwise not. */
+    @Test
+    void somebodyOfferingPassageIsWorthGoingToOnceStalled() {
+        Places.Weights stalled = new Places.Weights(2.0, 1.5, 0.8, 3.0, 3.5, 0.6, 1.5, 0.3, 0.35, 1.0, 1.0, 2.0, 4.0);
+        Places.Facts facts = new Places.Facts("map:1", visits, null, Set.of(), Set.of(), Map.of(), Set.of(), null, null,
+                Map.of(), 45, Map.of(), Map.of(), 0, Set.of("map:3"));
+
+        List<Places.Place> places = Places.worthGoing(KnownWorld.rememberedBy(memory.liveBeliefs()), facts, stalled);
+
+        assertEquals("map:3", places.get(0).map(), places.toString());
+        assertTrue(places.get(0).reasons().contains("somebody who offers passage somewhere you have never been"));
+        assertTrue(Places.worthGoing(KnownWorld.rememberedBy(memory.liveBeliefs()), facts, WEIGHTS).isEmpty(),
+                "not stalled, a passage is no reason on its own");
+    }
 }

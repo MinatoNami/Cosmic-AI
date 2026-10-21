@@ -1966,4 +1966,23 @@ class ReflexPolicyTest {
 
         assertFalse(towardsAlex(intent), "leaves Alex be: " + intent);
     }
+    /**
+     * Heading somewhere whose way starts with somebody's ride, with the ride not to be asked
+     * just now: no door is the way, so none is taken. Agent3 took last-resort doors around
+     * Ellinia for six hours instead.
+     */
+    @Test
+    void whenTheWayOnIsARideNoLastResortDoorIsTaken() {
+        aJunction();
+        mind.saw(KnownWorld.rideRef(10000, 1032005), "ride_to", "map:40000", 4);
+        mind.saw("monster:1", "present_in", "map:40000", 4);
+        world.update(new Observation.MapEntered(5, 10000, 0));
+        ReflexPolicy policy = new ReflexPolicy(new Random(1), Disposition.TALKER);
+        policy.decide(mind, world, 5);
+        policy.headFor("map:40000", "the Ant Tunnel");
+        policy.cameInAt(new Point(-500, 0));
+
+        assertEquals(null, policy.pickDoor(JUNCTION_DOORS, mind, 10000, "player:1"),
+                "the way to map:40000 is the cab, not a door");
+    }
 }

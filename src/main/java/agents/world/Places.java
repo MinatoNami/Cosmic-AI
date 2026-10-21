@@ -36,17 +36,29 @@ public final class Places {
      * How much each reason to go somewhere is worth, set per disposition, and how much each
      * door of walking costs.
      */
+    /**
+     * @param passage somebody who offers passage somewhere it has never been - 0 unless
+     *                levelling has stalled on foot, when it is the way on
+     */
     public record Weights(double unopenedDoor, double stranger, double worthHearingAgain,
                           double errand, double shop, double hunting, double neverBeen,
                           double novelty, double perHop, double spentRoom, double justBeenFor,
-                          double danger) {
+                          double danger, double passage) {
         // justBeenFor is a share, not an amount: 1 wipes out a place's reasons on arrival.
+
+        public Weights(double unopenedDoor, double stranger, double worthHearingAgain,
+                       double errand, double shop, double hunting, double neverBeen,
+                       double novelty, double perHop, double spentRoom, double justBeenFor,
+                       double danger) {
+            this(unopenedDoor, stranger, worthHearingAgain, errand, shop, hunting, neverBeen,
+                    novelty, perHop, spentRoom, justBeenFor, danger, 0);
+        }
 
         public Weights(double unopenedDoor, double stranger, double worthHearingAgain,
                        double errand, double shop, double hunting, double neverBeen,
                        double novelty, double perHop, double spentRoom, double justBeenFor) {
             this(unopenedDoor, stranger, worthHearingAgain, errand, shop, hunting, neverBeen,
-                    novelty, perHop, spentRoom, justBeenFor, 2.0);
+                    novelty, perHop, spentRoom, justBeenFor, 2.0, 0);
         }
     }
 
@@ -70,19 +82,29 @@ public final class Places {
      *                     {@link Yields}) - empty when it knows nothing of what anything gives
      * @param rateHere     what a hunting ground has to beat: what it earns where it is, or 0
      *                     when that is not known
+     * @param passageMaps  where somebody stands who offers passage somewhere it has not been
      */
     public record Facts(String here, Map<String, Integer> visits, String errandMap,
                         Set<String> hearAgain, Set<String> avoid, Map<String, Double> justBeenFor,
                         Set<String> shopMaps, String sentTo, String sentWhy,
                         Map<String, Integer> deaths, int level, Map<String, Integer> huntedAt,
-                        Map<String, Double> expRate, double rateHere) {
+                        Map<String, Double> expRate, double rateHere, Set<String> passageMaps) {
+
+        public Facts(String here, Map<String, Integer> visits, String errandMap,
+                     Set<String> hearAgain, Set<String> avoid, Map<String, Double> justBeenFor,
+                     Set<String> shopMaps, String sentTo, String sentWhy,
+                     Map<String, Integer> deaths, int level, Map<String, Integer> huntedAt,
+                     Map<String, Double> expRate, double rateHere) {
+            this(here, visits, errandMap, hearAgain, avoid, justBeenFor, shopMaps, sentTo, sentWhy,
+                    deaths, level, huntedAt, expRate, rateHere, Set.of());
+        }
 
         public Facts(String here, Map<String, Integer> visits, String errandMap,
                      Set<String> hearAgain, Set<String> avoid, Map<String, Double> justBeenFor,
                      Set<String> shopMaps, String sentTo, String sentWhy,
                      Map<String, Integer> deaths, int level, Map<String, Integer> huntedAt) {
             this(here, visits, errandMap, hearAgain, avoid, justBeenFor, shopMaps, sentTo, sentWhy,
-                    deaths, level, huntedAt, Map.of(), 0);
+                    deaths, level, huntedAt, Map.of(), 0, Set.of());
         }
 
         public Facts(String here, Map<String, Integer> visits, String errandMap,
@@ -224,6 +246,13 @@ public final class Places {
             } else if (known.anyOfIn(map, withoutAvoided(facts.hearAgain(), facts.avoid()))) {
                 value += w.worthHearingAgain();
                 reasons.add("somebody worth talking to again");
+            }
+            // Stalled on foot, somebody offering to take it somewhere it has never been is the
+            // way on: the man selling passage to Orbis and the woman taking the tickets stood in
+            // Ellinia Station, every agent had spoken to both, and nobody went back.
+            if (w.passage() > 0 && facts.passageMaps().contains(map)) {
+                value += w.passage();
+                reasons.add("somebody who offers passage somewhere you have never been");
             }
             if (facts.shopMaps().contains(map)) {
                 value += w.shop();

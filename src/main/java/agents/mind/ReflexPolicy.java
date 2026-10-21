@@ -1585,9 +1585,11 @@ public class ReflexPolicy implements Policy {
             // Something on offer is worth crossing a map for; a chat is worth a wander.
             // Needing levels, a quest on offer keeps its worth - quests are experience too - but
             // a chat with somebody new is worth much less than a hunt.
-            double appeal = cameBackFor ? 1.0
+            // Stalled on foot, whoever offers passage is who it came to see.
+            boolean passage = levellingStalled && offersPassage(mind, npc.typeId());
+            double appeal = cameBackFor || passage ? 1.0
                     : offer.isPresent() ? 0.7
-                    : (0.2 + disposition.curiosity() * 0.3) * (shortOfStats ? LEVELLING_TALK : 1);
+                    : (0.2 + disposition.curiosity() * 0.3) * (shortOfStats && !levellingStalled ? LEVELLING_TALK : 1);
             double score = appeal + NEGLECT_MATTERS * neglect("talk") + urgeFor("talk")
                     + commitmentTo("talk", npc.position());
 
@@ -2096,6 +2098,14 @@ public class ReflexPolicy implements Policy {
         if (towardsDestination.isPresent()) {
             return towardsDestination.get();
         }
+        // The way on is somebody's ride, not a door: no door is the way, so none is taken.
+        // A last resort here walks away from the ride. Agent3's best place was the Ant Tunnel,
+        // by the VIP cab in Ellinia; with a quest to hand in to somebody else in Ellinia the
+        // cab was not to be asked yet, so it took the last-resort doors instead - the Magic
+        // Library, the field west and back - for six hours, and neither handed in nor rode.
+        if (rideIsTheWay) {
+            return null;
+        }
 
         // No route either: the agent has opened every door it has ever seen, or the one it
         // wants is not in this room. Back to picking the least stale door here - but not
@@ -2170,6 +2180,7 @@ public class ReflexPolicy implements Policy {
      */
     private Optional<WorldModel.PortalTarget> towardsDestination(
             KnownWorld known, String here, List<WorldModel.PortalTarget> portals, Mind mind, int mapId) {
+        rideIsTheWay = false;
         if (destination != null && decisionsMade - destinationSince > DESTINATION_PATIENCE) {
             destination = null;
         }
@@ -2188,6 +2199,7 @@ public class ReflexPolicy implements Policy {
                 return door;
             }
             if (rideFirst(known, here, destination)) {
+                rideIsTheWay = true;
                 return Optional.empty();    // the way there is somebody's ride, not a door
             }
             destination = null;         // no longer a way there from here
@@ -2198,6 +2210,7 @@ public class ReflexPolicy implements Policy {
                 // door leads to sent a Magician-to-be to Kerning City and the Nautilus, past
                 // the cab that goes to Lith Harbor and the Magician's statue.
                 setOffFor(place.map(), String.join(", ", place.reasons()), false);
+                rideIsTheWay = true;
                 return Optional.empty();
             }
             Optional<WorldModel.PortalTarget> door = portals.stream()
@@ -2213,6 +2226,9 @@ public class ReflexPolicy implements Policy {
         }
         return Optional.empty();
     }
+
+    /** Whether the way to where it is going was found to start with somebody's ride, not a door. */
+    private boolean rideIsTheWay;
 
     /**
      * Whether the way to somewhere starts with somebody's ride - or with waiting to be carried,
@@ -2264,7 +2280,8 @@ public class ReflexPolicy implements Policy {
         int level = levelOf(mind);
         Places.Facts facts = new Places.Facts(here, visitsTo(mind), errandMap,
                 worthHearingAgain(known), avoid, justBeen, shopMaps, sentMap, sentWhy,
-                deathsNearLevel(mind, level), level, huntedAt(mind), expectedRates, rateHere);
+                deathsNearLevel(mind, level), level, huntedAt(mind), expectedRates, rateHere,
+                levellingStalled ? passageMaps(mind) : Set.of());
         return Places.worthGoing(known, facts, weights(seekingACalling(mind)), recoveredFromDying());
     }
 
@@ -2297,7 +2314,47 @@ public class ReflexPolicy implements Policy {
                 0.3,                                        // the less visited, the better
                 0.35,                                       // each door of walking
                 1.0,                                        // a room already seen all of
-                1.0);                                       // just went there: wipes its reasons, for now
+                1.0,                                        // just went there: wipes its reasons, for now
+                2.0,                                        // each death there, at about this level
+                levellingStalled ? STALLED_PASSAGE : 0);    // somebody offering passage, once stalled
+    }
+
+    /**
+     * What somebody offering passage somewhere new is worth, once levelling has stalled on foot:
+     * enough to outweigh ten maps of walking, which is about how far Ellinia Station is from
+     * the caves the agents in their forties hunt in.
+     */
+    private static final double STALLED_PASSAGE = 8.0;
+
+    /**
+     * Where somebody stands who has offered passage, in so many words, and whose passage has
+     * never been taken - so where it goes is somewhere it has never been.
+     */
+    private static Set<String> passageMaps(Mind mind) {
+        Set<String> offering = new HashSet<>();
+        Set<String> taken = new HashSet<>();
+        for (Belief belief : mind.semantic().liveBeliefs()) {
+            if (belief.predicate().equals(OFFERS_PASSAGE)) {
+                offering.add(belief.subject());
+            } else if (belief.predicate().equals("takes_you_to")) {
+                taken.add(belief.subject());
+            }
+        }
+        offering.removeAll(taken);
+        Set<String> maps = new HashSet<>();
+        for (String npc : offering) {
+            lastSeenIn(mind, npc).ifPresent(maps::add);
+        }
+        return maps;
+    }
+
+    /** The predicate an offer of passage is written down under. */
+    public static final String OFFERS_PASSAGE = "offers_passage";
+
+    private boolean offersPassage(Mind mind, int npcId) {
+        String who = "npc:" + npcId;
+        return mind.semantic().liveBeliefs().stream()
+                .anyMatch(b -> b.subject().equals(who) && b.predicate().equals(OFFERS_PASSAGE));
     }
 
     /**
