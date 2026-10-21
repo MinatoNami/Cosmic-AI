@@ -159,7 +159,7 @@ public final class Navigator {
             int x = p.clamp(to.x);
             return Optional.of(new Step(Kind.WALK, x, new Point(x, p.heightAt(x)), null));
         }
-        return graph.firstEdge(start, from.x, goal, to.x, blockedRopes(mapId))
+        return graph.firstEdge(start, from.x, goal, to.x, blockedRopes(mapId), blockedRooms(mapId))
                 .map(edge -> new Step(edge.kind, edge.departX,
                         new Point(edge.arriveX, graph.platforms.get(edge.to).heightAt(edge.arriveX)),
                         edge.rope, edge.legs, edge.through));
@@ -234,12 +234,94 @@ public final class Navigator {
     }
 
     static synchronized Graph graphOf(int mapId) {
-        return GRAPHS.computeIfAbsent(mapId, id -> {
-            Graph graph = Graph.build(MapGeometry.groundIn(id), MapGeometry.climbsIn(id));
-            graph.linkHops(MapGeometry.hopsIn(id));
-            graph.linkRoomHops(MapGeometry.roomHopsIn(id));
-            return graph;
-        });
+        // Not computeIfAbsent: whether a side room can be crossed is asked of the room's own
+        // graph while this one is being built, and a map may not be added to while it is
+        // being computed into.
+        Graph cached = GRAPHS.get(mapId);
+        if (cached != null) {
+            return cached;
+        }
+        Graph graph = Graph.build(MapGeometry.groundIn(mapId), MapGeometry.climbsIn(mapId));
+        graph.linkHops(MapGeometry.hopsIn(mapId));
+        if (!BUILDING.add(mapId)) {
+            return graph;       // asked again while being built: its floors are enough to cross it by
+        }
+        try {
+            graph.linkRoomHops(MapGeometry.roomHopsIn(mapId).stream().filter(Navigator::crossable).toList());
+        } finally {
+            BUILDING.remove(mapId);
+        }
+        GRAPHS.put(mapId, graph);
+        return graph;
+    }
+
+    private static final Set<Integer> BUILDING = new java.util.HashSet<>();
+
+    /**
+     * Whether a side room can be walked across, from where it is entered to the door it is left
+     * by. Naora Hospital's upper door, out01, comes out on Kerning City's upper floor, and no
+     * floor in the hospital reaches it from the door below; taken for a way up Kerning City,
+     * Agent0 went in, could not get to it, came out, and went in again - for seventeen hours.
+     */
+    static boolean crossable(MapGeometry.RoomHop hop) {
+        return reaches(graphOf(hop.room()), hop.room(), hop.arrival(), hop.exit());
+    }
+
+    /** For tests outside this package. */
+    public static synchronized boolean crossableForTest(MapGeometry.RoomHop hop) {
+        return crossable(hop);
+    }
+
+    /** Whether following the way from one point to another, step after step, gets there. */
+    private static boolean reaches(Graph graph, int mapId, Point from, Point to) {
+        Point at = settleFrom(mapId, from).orElse(from);
+        int goal = graph.platformUnder(to.x, to.y);
+        if (goal < 0) {
+            Optional<Point> under = settleFrom(mapId, to);
+            if (under.isEmpty()) {
+                return false;
+            }
+            goal = graph.platformUnder(under.get().x, under.get().y);
+        }
+        for (int i = 0; i < CROSSING_STEPS; i++) {
+            int here = graph.platformUnder(at.x, at.y);
+            if (here < 0) {
+                return false;
+            }
+            if (here == goal) {
+                return true;
+            }
+            Optional<Edge> edge = graph.firstEdge(here, at.x, goal, to.x);
+            if (edge.isEmpty()) {
+                return false;
+            }
+            at = new Point(edge.get().arriveX, graph.platforms.get(edge.get().to).heightAt(edge.get().arriveX));
+        }
+        return false;
+    }
+
+    private static final int CROSSING_STEPS = 120;
+
+    /** Side rooms not to be gone through for now, by map, as "portal>exit", until a time. */
+    private static final Map<Integer, Map<String, Long>> BLOCKED_ROOMS = new HashMap<>();
+
+    /**
+     * Sets a side room aside after a crossing of it failed, so the way across is planned
+     * without it for a while rather than straight back through it.
+     */
+    public static synchronized void blockRoom(MapGeometry.RoomHop hop, long forMillis) {
+        BLOCKED_ROOMS.computeIfAbsent(hop.map(), m -> new HashMap<>())
+                .put(hop.portal() + ">" + hop.roomExit(), System.currentTimeMillis() + forMillis);
+    }
+
+    static synchronized Set<String> blockedRooms(int mapId) {
+        Map<String, Long> rooms = BLOCKED_ROOMS.get(mapId);
+        if (rooms == null) {
+            return Set.of();
+        }
+        long now = System.currentTimeMillis();
+        rooms.values().removeIf(until -> until < now);
+        return Set.copyOf(rooms.keySet());
     }
 
     /** One stretch of floor you can walk the length of. */
@@ -625,6 +707,11 @@ public final class Navigator {
         }
 
         Optional<Edge> firstEdge(int start, int startX, int goal, int goalX, Set<Integer> blockedRopeXs) {
+            return firstEdge(start, startX, goal, goalX, blockedRopeXs, Set.of());
+        }
+
+        Optional<Edge> firstEdge(int start, int startX, int goal, int goalX, Set<Integer> blockedRopeXs,
+                                 Set<String> blockedRooms) {
             int n = platforms.size();
             long[] cost = new long[n];
             int[] atX = new int[n];
@@ -647,8 +734,11 @@ public final class Navigator {
                     if (!blockedRopeXs.isEmpty() && usesARope(edge, blockedRopeXs)) {
                         continue;
                     }
+                    if (edge.through != null && blockedRooms.contains(edge.through.portal() + ">" + edge.through.roomExit())) {
+                        continue;
+                    }
                     long next = cost[here] + Math.abs(atX[here] - edge.departX) + TRANSITION_COST
-                            + (edge.kind == Kind.CLIMB ? edge.climbing : 0);
+                            + (edge.kind == Kind.CLIMB || edge.kind == Kind.ROOM ? edge.climbing : 0);
                     if (next < cost[edge.to]) {
                         cost[edge.to] = next;
                         atX[edge.to] = edge.arriveX;

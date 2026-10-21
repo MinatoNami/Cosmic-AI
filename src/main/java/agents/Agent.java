@@ -1330,6 +1330,8 @@ public class Agent implements Runnable {
         }
         if (++stepsInSideRoom > SIDE_ROOM_PATIENCE) {
             log.info("{} gives up crossing side room {} for door {}", mind.name(), hop.room(), hop.roomExit());
+            // And plans its way across without this room for a while, or it is straight back in.
+            agents.world.Navigator.blockRoom(hop, ROOM_SET_ASIDE_MILLIS);
             executor.leftTheRoom();
             stepsInSideRoom = 0;
             return false;
@@ -1350,6 +1352,9 @@ public class Agent implements Runnable {
     /** A minute and a half to cross a side room, and ten seconds to be let into one. */
     private static final int SIDE_ROOM_PATIENCE = 150;
     private static final long SIDE_ROOM_ENTRY_MILLIS = 10_000;
+
+    /** How long a side room it failed to cross is left out of its ways across. */
+    private static final long ROOM_SET_ASIDE_MILLIS = 30 * 60_000;
 
     /** Whether a ride it paid for is still under way. */
     boolean inTransit() {

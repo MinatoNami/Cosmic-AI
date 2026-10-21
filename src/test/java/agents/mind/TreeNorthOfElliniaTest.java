@@ -117,4 +117,37 @@ class TreeNorthOfElliniaTest {
 
     @org.junit.jupiter.api.io.TempDir
     java.nio.file.Path dir;
+    /**
+     * Naora Hospital's upper door comes out on Kerning City's upper floor, but nothing in the
+     * hospital leads from its lower door up to it: not a way up Kerning City. Agent0 went in and
+     * out of it for seventeen hours.
+     */
+    @Test
+    void aRoomWhoseExitCannotBeWalkedToIsNoWayAcross() {
+        assertTrue(MapGeometry.roomHopsIn(103000000).stream()
+                .anyMatch(hop -> hop.room() == 103000004 && hop.roomExit().equals("out01")), "the data offers it");
+        MapGeometry.RoomHop up = MapGeometry.roomHopsIn(103000000).stream()
+                .filter(hop -> hop.room() == 103000004 && hop.roomExit().equals("out01")).findFirst().orElseThrow();
+        assertTrue(!Navigator.crossableForTest(up), "not crossable going up: " + up);
+    }
+
+    /** A room crossing given up on is planned around, not through, for a while. */
+    @Test
+    void aSideRoomGivenUpOnIsLeftOutOfTheWayUp() {
+        MapGeometry.RoomHop first = MapGeometry.roomHopsIn(TREE).stream()
+                .filter(hop -> hop.portal().equals("in01") && hop.roomExit().equals("out03")).findFirst().orElseThrow();
+        Point foot = Navigator.settleFrom(TREE, new Point(29, 2080)).orElseThrow();
+        Point high = Navigator.settleFrom(TREE, new Point(46, -1915)).orElseThrow();
+        assertEquals(Navigator.Kind.ROOM, Navigator.nextStep(TREE, foot, high).orElseThrow().kind());
+
+        Navigator.blockRoom(first, 60_000);
+        try {
+            Optional<Navigator.Step> after = Navigator.nextStep(TREE, foot, high);
+            assertTrue(after.isEmpty() || after.get().through() == null
+                    || !after.get().through().roomExit().equals("out03") || !after.get().through().portal().equals("in01"),
+                    "planned around the room given up on: " + after);
+        } finally {
+            Navigator.blockRoom(first, -1);
+        }
+    }
 }

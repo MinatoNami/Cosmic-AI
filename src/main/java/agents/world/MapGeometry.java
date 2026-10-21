@@ -192,7 +192,13 @@ public class MapGeometry {
      * not reach, and between maps the rooms were only somewhere to go and come back from. A
      * Magician with Grendel's letter stood at the foot of the tree for three hours.
      */
-    public record RoomHop(String portal, Point from, Point to, int room, String roomExit) {
+    /**
+     * @param map     the map it is a way across
+     * @param arrival where the room is entered, on its side of the portal
+     * @param exit    where {@code roomExit} stands in the room
+     */
+    public record RoomHop(int map, String portal, Point from, Point to, int room, Point arrival,
+                          String roomExit, Point exit) {
     }
 
     private static final Map<Integer, List<RoomHop>> ROOM_HOPS = new HashMap<>();
@@ -225,6 +231,14 @@ public class MapGeometry {
             String name = DataTool.getString(portal.getChildByPath("pn"), "");
             Point from = new Point(DataTool.getInt(portal.getChildByPath("x"), 0),
                     DataTool.getInt(portal.getChildByPath("y"), 0));
+            Map<String, Point> inRoom = new HashMap<>();
+            for (PortalSighting sighting : portalsIn(room)) {
+                inRoom.putIfAbsent(sighting.name(), sighting.position());
+            }
+            Point arrival = inRoom.get(DataTool.getString(portal.getChildByPath("tn"), ""));
+            if (arrival == null) {
+                continue;
+            }
             List<RoomHop> through = new ArrayList<>();
             boolean sideRoom = true;
             for (Data door : roomData.getChildByPath("portal")) {
@@ -239,8 +253,8 @@ public class MapGeometry {
                 }
                 String comesOutAt = DataTool.getString(door.getChildByPath("tn"), "");
                 Point to = here.get(comesOutAt);
-                if (to != null && !comesOutAt.equals(name)) {
-                    through.add(new RoomHop(name, from, to, room, doorName));
+                if (to != null && !comesOutAt.equals(name) && inRoom.containsKey(doorName)) {
+                    through.add(new RoomHop(mapId, name, from, to, room, arrival, doorName, inRoom.get(doorName)));
                 }
             }
             if (sideRoom) {
