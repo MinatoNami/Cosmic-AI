@@ -2032,4 +2032,21 @@ class ReflexPolicyTest {
                     "decision " + i + ": " + decision.goal());
         }
     }
+    /**
+     * Somewhere it has never hunted - just off the boat - knowing nowhere to hunt within reach
+     * is not levelling stalled: it explores rather than look for passage back.
+     */
+    @Test
+    void nowhereToHuntKnownIsUnexploredNotStalled() {
+        aJunction();
+        mind.saw("map:99", agents.world.Yields.EARNS_PER_MINUTE, agents.world.Yields.measurement(48, 100), 4);
+        mind.saw("monster:1", "present_in", "map:99", 4);
+        world.update(new Observation.MapEntered(5, 10000, 0));
+        world.update(new Observation.StatsChanged(5, Map.of("LEVEL", 48, "JOB", 110, "EXP", 0)));
+        ReflexPolicy policy = new ReflexPolicy(new Random(1), Disposition.FIGHTER);
+
+        policy.decide(mind, world, 5);
+
+        assertFalse(policy.levellingStalled(), "the hunting it knows is beyond reach: explore, not leave");
+    }
 }

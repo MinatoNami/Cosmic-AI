@@ -2387,7 +2387,9 @@ public class ReflexPolicy implements Policy {
         // Unless levelling has stalled on foot: then hunting what it can walk to is what has
         // stopped working, and somewhere new or somebody's offer is the way on.
         boolean levelling = shortOfStats && !levellingStalled;
-        double exploring = levelling && !jobAdvancementPending() ? LEVELLING_EXPLORE : 1;
+        // Nor is somewhere new worth less while levelling when nowhere to hunt is known at all:
+        // finding a hunting ground is what levelling needs first.
+        double exploring = levelling && huntingKnownOnFoot && !jobAdvancementPending() ? LEVELLING_EXPLORE : 1;
         return new Places.Weights(
                 2.0 * exploring,                            // a door never opened
                 (1.2 + disposition.curiosity() * 0.6        // somebody never spoken to,
@@ -3442,7 +3444,12 @@ public class ReflexPolicy implements Policy {
         boolean betterBeyondReach = expectedRates.entrySet().stream()
                 .anyMatch(e -> !reachable.contains(e.getKey()) && !e.getKey().equals(here)
                         && !killingGrounds.contains(e.getKey()) && e.getValue() >= Math.max(onFoot, 1) * BETTER_BY);
-        levellingStalled = !measured.isEmpty() && level >= STALLS_FROM_LEVEL
+        // Nowhere to hunt known within reach is somewhere unexplored, not a stall. Just off the
+        // boat in Orbis, nobody had fought anything in Ossyria, so the best on foot was nothing
+        // and every level an eternity: "stalled", the two agents were drawn back to whoever
+        // offers passage - the boat back to Ellinia - and Orbis Park went unvisited.
+        huntingKnownOnFoot = bestOnFoot > 0 || rateHere > 0;
+        levellingStalled = !measured.isEmpty() && level >= STALLS_FROM_LEVEL && huntingKnownOnFoot
                 && (hoursToLevel(level, bar, onFoot) > STALLED_HOURS || betterBeyondReach);
         betterGround = null;
         outgrownHere = false;
@@ -3517,6 +3524,8 @@ public class ReflexPolicy implements Policy {
     private String betterGround;
     private boolean outgrownHere;
     private boolean levellingStalled;
+    /** Whether anywhere to hunt is known within reach - false on a continent never hunted on. */
+    private boolean huntingKnownOnFoot = true;
     private int ratesKnownAt = Integer.MIN_VALUE / 2;
     private int ratesLevel = -1;
 
