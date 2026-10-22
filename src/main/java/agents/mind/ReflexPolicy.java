@@ -570,6 +570,13 @@ public class ReflexPolicy implements Policy {
         standingAt = standing;
         measureYield(mind, world, tick);
         knowRates(mind, KnownWorld.mapRef(world.mapId()), world.level(), world.stat("EXP"));
+        travelOrder = travelOrder(mind, world.mapId());
+        passageNpcs = travelOrder == null ? Set.of() : mind.semantic().liveBeliefs().stream()
+                .filter(b -> b.predicate().equals(OFFERS_PASSAGE)).map(b -> npcIdIn(b.subject()))
+                .filter(id -> id >= 0).collect(java.util.stream.Collectors.toSet());
+        if (travelOrder != null) {
+            levellingStalled = true;        // told to go, it goes, however well it is levelling here
+        }
         boolean wasStranded = strandedHere;
         // Not while being carried: the room before takeoff has nothing to hunt and no way out
         // on foot, and writing it off as nothing to do had whoever sold the passage refused for
@@ -1404,7 +1411,8 @@ public class ReflexPolicy implements Policy {
             return false;
         }
         Integer greeted = greetedAt.get(npc.typeId());
-        return greeted == null || decisionsMade - greeted >= askAgainAfter();
+        return greeted == null || decisionsMade - greeted >= askAgainAfter()
+                || passageAskedAgain(npc.typeId(), greeted);
     }
 
     /**
@@ -1598,7 +1606,8 @@ public class ReflexPolicy implements Policy {
             boolean cameBackFor = npc.typeId() == errandNpc;
             Integer greeted = greetedAt.get(npc.typeId());
             if (offer.isEmpty() && !cameBackFor
-                    && greeted != null && decisionsMade - greeted < askAgainAfter()) {
+                    && greeted != null && decisionsMade - greeted < askAgainAfter()
+                    && !passageAskedAgain(npc.typeId(), greeted)) {
                 return;     // nothing new to say to this one, for now
             }
             // Something on offer is worth crossing a map for; a chat is worth a wander.
@@ -1732,6 +1741,10 @@ public class ReflexPolicy implements Policy {
         // and walked the whole tree back down and out.
         if (jobAdvancementPending() && errandNpc >= 0
                 && world.visibleNpcs().stream().anyMatch(npc -> npc.typeId() == errandNpc)) {
+            boredom = 0;
+        }
+        // Nor where it was told to take passage: it waits there for the boat.
+        if (KnownWorld.mapRef(world.mapId()).equals(travelOrder)) {
             boredom = 0;
         }
         double score = boredom
@@ -2378,6 +2391,48 @@ public class ReflexPolicy implements Policy {
      * the caves the agents in their forties hunt in.
      */
     private static final double STALLED_PASSAGE = 8.0;
+
+    /**
+     * Where a person told it to go and take passage from - "self told_to_travel_from map:M",
+     * told through the control API - for as long as it has not reached Ossyria. Agents levelling
+     * well on Victoria Island never count as stalled, so nothing else sends them to the boat.
+     */
+    private static String travelOrder(Mind mind, int mapId) {
+        if (mapId >= OSSYRIA_FROM && mapId < OSSYRIA_TO) {
+            return null;        // there: the order is carried out
+        }
+        String order = null;
+        for (Belief belief : mind.semantic().liveBeliefs()) {
+            if (belief.subject().equals("self") && belief.predicate().equals(TOLD_TO_TRAVEL_FROM)) {
+                order = belief.object();
+            }
+        }
+        return order;
+    }
+
+    /** The predicate of a travel order, as told: "self told_to_travel_from map:101000300". */
+    public static final String TOLD_TO_TRAVEL_FROM = "told_to_travel_from";
+
+    private static final int OSSYRIA_FROM = 200_000_000;
+    private static final int OSSYRIA_TO = 300_000_000;
+
+    /** Where it was told to go and take passage from, or null. */
+    private String travelOrder;
+
+    /**
+     * Whoever offers passage, where it was told to take it, is asked again within the minute:
+     * the boat to Orbis boards for four minutes in fifteen, and a greeting held off for the
+     * usual while misses the window.
+     */
+    private boolean passageAskedAgain(int npcId, int greetedAt) {
+        return travelOrder != null && decisionsMade - greetedAt >= PASSAGE_ASK_AGAIN
+                && passageNpcs.contains(npcId);
+    }
+
+    private static final int PASSAGE_ASK_AGAIN = 60;
+
+    /** Who offers passage, as of the last decision. */
+    private Set<Integer> passageNpcs = Set.of();
 
     /**
      * Where somebody stands who has offered passage, in so many words, and whose passage has
@@ -3783,6 +3838,14 @@ public class ReflexPolicy implements Policy {
         // Then grown enough to go back to its trainer, before anything else it was told: a
         // Warrior at 35 followed somebody's directions to the Free Market instead.
         if (backToTrainer(mind, world, here, true)) {
+            return;
+        }
+        // Told by a person to go and take passage from somewhere: that is where it is sent, and
+        // nothing on the way is worth stopping for.
+        if (travelOrder != null && !travelOrder.equals(here) && canGetTo(mind, here, travelOrder)) {
+            sentMap = travelOrder;
+            sentWhy = "where you were told to go and take passage";
+            sentByTrainer = true;
             return;
         }
 

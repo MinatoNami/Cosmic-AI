@@ -1985,4 +1985,35 @@ class ReflexPolicyTest {
         assertEquals(null, policy.pickDoor(JUNCTION_DOORS, mind, 10000, "player:1"),
                 "the way to map:40000 is the cab, not a door");
     }
+    /**
+     * Told to go and take passage from map:20000, an agent levelling well - so never stalled -
+     * goes there anyway, and says yes to what is offered on the way.
+     */
+    @Test
+    void toldToTakePassageItGoes() {
+        aJunction();
+        mind.hear("self", ReflexPolicy.TOLD_TO_TRAVEL_FROM, "map:20000", 4);
+        world.update(new Observation.MapEntered(5, 10000, 0));
+        world.update(new Observation.StatsChanged(5, Map.of("LEVEL", 48, "JOB", 110)));
+        ReflexPolicy policy = new ReflexPolicy(new Random(1), Disposition.FIGHTER);
+        policy.decide(mind, world, 5);
+        policy.cameInAt(new Point(500, 0));
+
+        assertTrue(policy.levellingStalled(), "told to go, it answers offers with a yes");
+        assertEquals("west00", policy.pickDoor(JUNCTION_DOORS, mind, 10000, "player:1").name(),
+                "to map:20000, where it was told to take passage");
+    }
+
+    /** In Ossyria the order is carried out. */
+    @Test
+    void aTravelOrderEndsInOssyria() {
+        mind.take(new Observation.MapEntered(1, 200000100, 0));
+        mind.hear("self", ReflexPolicy.TOLD_TO_TRAVEL_FROM, "map:101000300", 1);
+        world.update(new Observation.MapEntered(2, 200000100, 0));
+        world.update(new Observation.StatsChanged(2, Map.of("LEVEL", 48, "JOB", 110)));
+        ReflexPolicy policy = new ReflexPolicy(new Random(1), Disposition.FIGHTER);
+        policy.decide(mind, world, 2);
+
+        assertFalse(policy.levellingStalled(), "in Orbis Station, nothing left to obey");
+    }
 }
