@@ -582,7 +582,13 @@ public class ReflexPolicy implements Policy {
         if (travelOrder != null) {
             levellingStalled = true;        // told to go, it goes, however well it is levelling here
         }
-        scrollIsQuicker = travelOrder != null && scrollSavesTheWalk(mind, world.mapId(), travelOrder);
+        // Or held where it is because the way on cannot be reached from here: its return town,
+        // when nearer where it is going, is the way round. Agent3 waited at the foot of Deep Ant
+        // Tunnel I for the rope up to Sleepywood, knocked off it every ten minutes, while the
+        // cave's own return scroll goes to Sleepywood.
+        String heldFor = heldForTheWayTo != null && decisionsMade - heldSince > HELD_BEFORE_SCROLL ? heldForTheWayTo : null;
+        scrollIsQuicker = travelOrder != null && scrollSavesTheWalk(mind, world.mapId(), travelOrder)
+                || heldFor != null && scrollSavesTheWalk(mind, world.mapId(), heldFor, 1);
         boolean wasStranded = strandedHere;
         // Not while being carried: the room before takeoff has nothing to hunt and no way out
         // on foot, and writing it off as nothing to do had whoever sold the passage refused for
@@ -2148,8 +2154,10 @@ public class ReflexPolicy implements Policy {
         // cab was not to be asked yet, so it took the last-resort doors instead - the Magic
         // Library, the field west and back - for six hours, and neither handed in nor rode.
         if (rideIsTheWay) {
+            noteHeldFor(destination);
             return null;
         }
+        heldForTheWayTo = null;
 
         // No route either: the agent has opened every door it has ever seen, or the one it
         // wants is not in this room. Back to picking the least stale door here - but not
@@ -2255,7 +2263,9 @@ public class ReflexPolicy implements Policy {
             }
             destination = null;         // no longer a way there from here
         }
-        List<Places.Place> worthGoing = places(known, here, mind);
+        List<Places.Place> worthGoing = places(known, here, mind).stream()
+                .filter(place -> decisionsMade - setAsideAt.getOrDefault(place.map(), Integer.MIN_VALUE / 2) >= SET_ASIDE_FOR)
+                .toList();
         if (!worthGoing.isEmpty() && doorHereOutOfReach(knownWorld(mind), here, worthGoing.get(0).map(), portals, mapId)) {
             setOffFor(worthGoing.get(0).map(), String.join(", ", worthGoing.get(0).reasons()), false);
             rideIsTheWay = true;
@@ -2428,6 +2438,34 @@ public class ReflexPolicy implements Policy {
     private static final int OSSYRIA_FROM = 200_000_000;
     private static final int OSSYRIA_TO = 300_000_000;
 
+    /**
+     * Notes being held where it is for want of the way on - a ride not to be asked yet, a door
+     * of this map it cannot reach - and, held too long, sets that destination aside for a
+     * while. Agent2 stood in Orbis' tunnel to the Ellinia boat with nothing to do, held for a
+     * ride it was not asking for; Agent3 at the foot of a rope it was knocked off every ten
+     * minutes. Waiting is right for a while, and wrong for ever.
+     */
+    private void noteHeldFor(String to) {
+        if (to == null) {
+            return;
+        }
+        if (!to.equals(heldForTheWayTo)) {
+            heldForTheWayTo = to;
+            heldSince = decisionsMade;
+        } else if (decisionsMade - heldSince > HELD_TOO_LONG && !to.equals(travelOrder)) {
+            setAsideAt.put(to, decisionsMade);
+            destination = null;
+            heldForTheWayTo = null;
+        }
+    }
+
+    private String heldForTheWayTo;
+    private int heldSince;
+    private final Map<String, Integer> setAsideAt = new HashMap<>();
+    private static final int HELD_BEFORE_SCROLL = 100;
+    private static final int HELD_TOO_LONG = 400;
+    private static final int SET_ASIDE_FOR = 1500;
+
     /** Where it was told to go and take passage from, or null. */
     private String travelOrder;
 
@@ -2439,6 +2477,10 @@ public class ReflexPolicy implements Policy {
      * read - an agent with no scroll would otherwise ask every step.
      */
     private boolean scrollSavesTheWalk(Mind mind, int mapId, String to) {
+        return scrollSavesTheWalk(mind, mapId, to, SCROLL_SAVES);
+    }
+
+    private boolean scrollSavesTheWalk(Mind mind, int mapId, String to, int savesAtLeast) {
         if (decisionsMade - scrollReadAt < SCROLL_AGAIN) {
             return false;
         }
@@ -2457,7 +2499,7 @@ public class ReflexPolicy implements Policy {
         KnownWorld.Hop fromHere = known.reachableFrom(KnownWorld.mapRef(mapId), Set.of()).get(to);
         KnownWorld.Hop fromTown = KnownWorld.mapRef(town).equals(to) ? new KnownWorld.Hop(0, null)
                 : known.reachableFrom(KnownWorld.mapRef(town), Set.of()).get(to);
-        scrollWeighed = fromTown != null && (fromHere == null || fromHere.hops() - fromTown.hops() >= SCROLL_SAVES);
+        scrollWeighed = fromTown != null && (fromHere == null || fromHere.hops() - fromTown.hops() >= savesAtLeast);
         return scrollWeighed;
     }
 

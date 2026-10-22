@@ -149,4 +149,35 @@ class CaveOfEvilEyeTest {
             KnownWorld.useAtlas(null);
         }
     }
+    /**
+     * Agent3 at the foot of Deep Ant Tunnel I, the rope up to the way out set aside, heading for
+     * Sleepywood: held there a while, it reads the cave's return scroll, which goes to Sleepywood.
+     */
+    @Test
+    void heldAtTheFootOfAShaftItReadsTheScrollToWhereItIsGoing() throws Exception {
+        KnownWorld.useAtlas(new Atlas());
+        int cave = 105060100;
+        MapGeometry.climbsIn(cave).forEach(rope -> Navigator.blockRope(cave, rope.x(), 600_000));
+        try {
+            Mind mind = new Mind("Test", Trace.toFile(dir.resolve("x.jsonl"), "Test"));
+            mind.take(new Observation.MapEntered(1, cave, 0));
+            WorldModel world = new WorldModel();
+            world.update(new Observation.MapEntered(1, cave, 0));
+            world.movedTo(new Point(1927, 1707));
+            world.update(new Observation.StatsChanged(1, Map.of("LEVEL", 51, "JOB", 230)));
+            ReflexPolicy policy = new ReflexPolicy(new Random(1), Disposition.TALKER);
+            var setOff = ReflexPolicy.class.getDeclaredMethod("setOffFor", String.class, String.class, boolean.class);
+            setOff.setAccessible(true);
+            boolean readIt = false;
+            for (int i = 0; i < 200 && !readIt; i++) {
+                setOff.invoke(policy, "map:105040300", "10 people you have never spoken to", false);
+                policy.decide(mind, world, 2 + i);
+                readIt = policy.readAReturnScroll();
+            }
+            assertTrue(readIt, "held below the rope, Sleepywood by scroll");
+        } finally {
+            MapGeometry.climbsIn(cave).forEach(rope -> Navigator.blockRope(cave, rope.x(), -1));
+            KnownWorld.useAtlas(null);
+        }
+    }
 }
