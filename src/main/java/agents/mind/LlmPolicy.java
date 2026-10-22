@@ -606,6 +606,41 @@ public class LlmPolicy implements Policy {
         fallback.rethink();
     }
 
+    // Everything else the agent asks of a policy is the reflexes' to answer, as it is when
+    // there is no model at all. Left to Policy's defaults these said "no" to every question:
+    // the agents run on the model, so none of them ever counted as stalled, waited out a
+    // boat's deck, bought a ticket for a ride or read a return scroll it was told to.
+
+    @Override
+    public boolean levellingStalled() {
+        return fallback.levellingStalled();
+    }
+
+    @Override
+    public void inTransit(boolean riding) {
+        fallback.inTransit(riding);
+    }
+
+    @Override
+    public boolean readAReturnScroll() {
+        return fallback.readAReturnScroll();
+    }
+
+    @Override
+    public void readTheScroll() {
+        fallback.readTheScroll();
+    }
+
+    @Override
+    public void toldToWait(int npcId) {
+        fallback.toldToWait(npcId);
+    }
+
+    @Override
+    public int fetchingFrom() {
+        return fallback.fetchingFrom();
+    }
+
     @Override
     public String name() {
         return "llm:" + oracle.name();

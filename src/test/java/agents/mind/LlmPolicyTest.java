@@ -562,4 +562,23 @@ class LlmPolicyTest {
             return "fixed";
         }
     }
+    /**
+     * Every question the agent asks of a policy, the model's policy passes to the reflexes it
+     * falls back on. Six new ones were left to Policy's defaults - always "no" - and the agents,
+     * all on the model, never bought a ticket, waited out a boat or read a return scroll.
+     */
+    @Test
+    void passesEveryQuestionItDoesNotAnswerItselfToTheReflexes() {
+        for (java.lang.reflect.Method method : Policy.class.getMethods()) {
+            if (!method.isDefault() || method.getName().equals("oracle")) {
+                continue;       // the model is the one thing it answers for itself
+            }
+            try {
+                java.lang.reflect.Method own = LlmPolicy.class.getDeclaredMethod(method.getName(), method.getParameterTypes());
+                assertTrue(own.getDeclaringClass() == LlmPolicy.class, method.getName());
+            } catch (NoSuchMethodException missing) {
+                org.junit.jupiter.api.Assertions.fail("LlmPolicy leaves " + method.getName() + " to Policy's default");
+            }
+        }
+    }
 }
