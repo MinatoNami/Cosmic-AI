@@ -85,6 +85,15 @@ public interface Policy {
     }
 
     /**
+     * Whether reading a return scroll now is the quicker way to where it is going: a long way
+     * out of a dungeon, with its return town much nearer. Asked once a decision has been made;
+     * the agent reads one if it has one.
+     */
+    default boolean readAReturnScroll() {
+        return false;
+    }
+
+    /**
      * Told that whoever it asked for a ride said to wait for the next one, which is not the
      * same as a no.
      */

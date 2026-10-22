@@ -577,6 +577,7 @@ public class ReflexPolicy implements Policy {
         if (travelOrder != null) {
             levellingStalled = true;        // told to go, it goes, however well it is levelling here
         }
+        scrollIsQuicker = travelOrder != null && scrollSavesTheWalk(mind, world.mapId(), travelOrder);
         boolean wasStranded = strandedHere;
         // Not while being carried: the room before takeoff has nothing to hunt and no way out
         // on foot, and writing it off as nothing to do had whoever sold the passage refused for
@@ -2418,6 +2419,42 @@ public class ReflexPolicy implements Policy {
 
     /** Where it was told to go and take passage from, or null. */
     private String travelOrder;
+
+    /**
+     * Whether a return scroll saves a good part of the walk to where it was told to go. Agent1
+     * and Agent2, told to take the boat from Ellinia, were in the Cave of Evil Eye nineteen maps
+     * away, up ropes the Evil Eyes knocked them off; the scroll goes to Sleepywood, eight maps
+     * from the station. Not asked again for a while after it said yes, whether or not it was
+     * read - an agent with no scroll would otherwise ask every step.
+     */
+    private boolean scrollSavesTheWalk(Mind mind, int mapId, String to) {
+        if (decisionsMade - scrollSuggestedAt < SCROLL_AGAIN) {
+            return false;
+        }
+        int town = agents.world.MapGeometry.returnTownOf(mapId);
+        if (town <= 0) {
+            return false;
+        }
+        KnownWorld known = knownWorld(mind);
+        KnownWorld.Hop fromHere = known.reachableFrom(KnownWorld.mapRef(mapId), Set.of()).get(to);
+        KnownWorld.Hop fromTown = KnownWorld.mapRef(town).equals(to) ? new KnownWorld.Hop(0, null)
+                : known.reachableFrom(KnownWorld.mapRef(town), Set.of()).get(to);
+        boolean saves = fromTown != null && (fromHere == null || fromHere.hops() - fromTown.hops() >= SCROLL_SAVES);
+        if (saves) {
+            scrollSuggestedAt = decisionsMade;
+        }
+        return saves;
+    }
+
+    private boolean scrollIsQuicker;
+    private int scrollSuggestedAt = Integer.MIN_VALUE / 2;
+    private static final int SCROLL_AGAIN = 600;
+    private static final int SCROLL_SAVES = 5;
+
+    @Override
+    public boolean readAReturnScroll() {
+        return scrollIsQuicker;
+    }
 
     /**
      * Whoever offers passage, where it was told to take it, is asked again within the minute:

@@ -524,6 +524,23 @@ public class MapGeometry {
     }
 
     /** @see server.maps.MapFactory#getMapName */
+    private static final Map<Integer, Integer> RETURN_TOWNS = new HashMap<>();
+
+    /**
+     * The town a return scroll read in this map goes to - its returnMap, the same thing the
+     * server reads - or -1 when it has none.
+     */
+    public static synchronized int returnTownOf(int mapId) {
+        return RETURN_TOWNS.computeIfAbsent(mapId, id -> {
+            Data mapData = WzData.of(WZFiles.MAP).getData(pathFor(id));
+            if (mapData == null) {
+                return -1;
+            }
+            int town = DataTool.getInt(mapData.getChildByPath("info/returnMap"), -1);
+            return town <= 0 || town == 999999999 || town == id ? -1 : town;
+        });
+    }
+
     private static String pathFor(int mapId) {
         String padded = StringUtil.getLeftPaddedStr(Integer.toString(mapId), '0', 9);
         return "Map/Map" + (mapId / 100000000) + "/" + padded + ".img";

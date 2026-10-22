@@ -643,6 +643,11 @@ public class Agent implements Runnable {
         noticeBeingCarried();
         policy.inTransit(inTransit());
         Policy.Decision decision = policy.decide(mind, world, tick);
+        if (policy.readAReturnScroll() && world.inventory().count(agents.mind.Shopkeeping.RETURN_SCROLL) > 0) {
+            log.info("{} reads a return scroll: its return town is the quicker way to where it is going", mind.name());
+            use(agents.mind.Shopkeeping.RETURN_SCROLL);
+            return;
+        }
 
         // A policy that decided for itself does not bother naming itself; one that handed
         // the decision to its fallback does, and that difference is the whole point of

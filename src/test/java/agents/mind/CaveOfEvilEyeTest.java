@@ -120,4 +120,30 @@ class CaveOfEvilEyeTest {
             KnownWorld.useAtlas(null);
         }
     }
+    /**
+     * Told to take the boat from Ellinia while deep in the Cave of Evil Eye: the cave's return
+     * scroll goes to Sleepywood, much nearer the station than walking out, so it reads one.
+     */
+    @Test
+    void farFromWhereItWasToldToGoAReturnScrollIsQuicker() {
+        KnownWorld.useAtlas(new Atlas());
+        try {
+            assertEquals(105040300, MapGeometry.returnTownOf(105070200), "the cave returns to Sleepywood");
+            Mind mind = new Mind("Test", Trace.toFile(dir.resolve("w.jsonl"), "Test"));
+            mind.take(new Observation.MapEntered(1, 105070200, 0));
+            mind.hear("self", ReflexPolicy.TOLD_TO_TRAVEL_FROM, "map:101000300", 1);
+            WorldModel world = new WorldModel();
+            world.update(new Observation.MapEntered(1, 105070200, 0));
+            world.movedTo(new Point(-284, 1002));
+            world.update(new Observation.StatsChanged(1, Map.of("LEVEL", 48, "JOB", 110)));
+            ReflexPolicy policy = new ReflexPolicy(new Random(1), Disposition.FIGHTER);
+            policy.decide(mind, world, 2);
+
+            assertTrue(policy.readAReturnScroll(), "Sleepywood is the quicker way to Ellinia Station");
+            policy.decide(mind, world, 3);
+            assertTrue(!policy.readAReturnScroll(), "and not asked again straight away");
+        } finally {
+            KnownWorld.useAtlas(null);
+        }
+    }
 }
