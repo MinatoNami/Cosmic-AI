@@ -669,7 +669,11 @@ public class Agent implements Runnable {
         // moment after the calling is picked from his list, and Agent1 had already walked out
         // of his door by then, four times over, so the question was never answered and
         // Fighter never became its job.
-        if (decision.intent() instanceof Intent.EnterPortal && steps - lastRepliedAt < STILL_TALKING_FOR) {
+        if (decision.intent() instanceof Intent.EnterPortal held && steps - lastRepliedAt < STILL_TALKING_FOR) {
+            // And the policy is told it was not tried, or it judges the door by its silence:
+            // Top of the Hill's way down to Orbis, held back twice while an NPC beside it was
+            // still talking, was written off as going nowhere by two agents just off the boat.
+            policy.didNotEnter(held.portalName(), world.mapId());
             return;
         }
         if (decision.intent() instanceof Intent.TalkTo) {

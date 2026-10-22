@@ -642,6 +642,11 @@ public class LlmPolicy implements Policy {
     }
 
     @Override
+    public void didNotEnter(String portalName, int mapId) {
+        fallback.didNotEnter(portalName, mapId);
+    }
+
+    @Override
     public String name() {
         return "llm:" + oracle.name();
     }

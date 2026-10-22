@@ -267,6 +267,11 @@ public class ReflexPolicy implements Policy {
      */
     private final Map<String, Integer> doorsAwaitingVerdict = new HashMap<>();
 
+    @Override
+    public void didNotEnter(String portalName, int mapId) {
+        doorsAwaitingVerdict.remove(portalRef(mapId, portalName));
+    }
+
     /**
      * How long to wait for a door to do something before concluding it does not.
      *

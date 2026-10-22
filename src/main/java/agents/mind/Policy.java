@@ -97,6 +97,10 @@ public interface Policy {
     default void readTheScroll() {
     }
 
+    /** Told that a door it chose was not walked into after all, so its silence proves nothing. */
+    default void didNotEnter(String portalName, int mapId) {
+    }
+
     /**
      * Told that whoever it asked for a ride said to wait for the next one, which is not the
      * same as a no.

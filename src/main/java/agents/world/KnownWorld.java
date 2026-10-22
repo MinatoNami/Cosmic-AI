@@ -34,6 +34,9 @@ public final class KnownWorld {
     /** Where a door goes when walking into it does nothing at all. */
     public static final String NOWHERE = "nowhere";
 
+    /** Separate times a door on the world map must do nothing before it is believed to go nowhere. */
+    private static final int NOWHERE_OVERRULES_THE_MAP = 3;
+
     /** Separate times a door must do nothing before that outweighs having seen it work. */
     private static final int NOWHERE_TAKES = 2;
 
@@ -275,8 +278,14 @@ public final class KnownWorld {
         Map<String, String> fromAtlas = worldMap == null || id <= 0 ? Map.of() : worldMap.exitsOf(id);
         fromAtlas.forEach((door, destination) -> {
             Belief own = bestDestination.get(portalRef(mapRef, door));
-            if (own != null && own.provenance() != Belief.Provenance.HEARSAY) {
-                if (!NOWHERE.equals(own.object())) {
+            // Its own "nowhere" overrules the world map only when found again and again: two
+            // tries that came to nothing - a door held back while somebody was talking - wrote
+            // off Top of the Hill's only way down, and two agents just off the boat walked between
+            // it and the room beside it for hours.
+            boolean ownNowhere = own != null && NOWHERE.equals(own.object());
+            if (own != null && own.provenance() != Belief.Provenance.HEARSAY
+                    && (!ownNowhere || own.supportedBy().size() >= NOWHERE_OVERRULES_THE_MAP)) {
+                if (!ownNowhere) {
                     merged.put(door, own.object());
                 }
             } else {

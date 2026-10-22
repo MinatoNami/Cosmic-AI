@@ -538,12 +538,13 @@ class KnownWorldTest {
         }
     }
 
-    /** But not what it saw for itself: a door it has watched do nothing stays dead. */
+    /** But not what it saw for itself: a door it has watched do nothing, again and again, stays dead. */
     @Test
     void whatItSawOutranksTheWorldMap() {
         agents.memory.SemanticMemory memory = new agents.memory.SemanticMemory();
         memory.assertTriple("portal:1020000/east00", "leads_to", KnownWorld.NOWHERE, 0, 5, agents.memory.Belief.Provenance.INFERRED);
         memory.assertTriple("portal:1020000/east00", "leads_to", KnownWorld.NOWHERE, 1, 6, agents.memory.Belief.Provenance.INFERRED);
+        memory.assertTriple("portal:1020000/east00", "leads_to", KnownWorld.NOWHERE, 2, 7, agents.memory.Belief.Provenance.INFERRED);
         KnownWorld.useAtlas(new Atlas());
         try {
             assertEquals(Optional.of(KnownWorld.NOWHERE),
@@ -695,6 +696,28 @@ class KnownWorldTest {
 
             org.junit.jupiter.api.Assertions.assertEquals(java.util.Set.of(),
                     world().unopenedDoorsIn(KnownWorld.mapRef(100040110)));
+        } finally {
+            KnownWorld.useAtlas(null);
+        }
+    }
+    /**
+     * Top of the Hill's out00 goes down to Orbis on the world map. Twice found to do nothing -
+     * held back while somebody was talking - it is still the way down; three times, it is not.
+     */
+    @Test
+    void aDoorOnTheWorldMapIsWrittenOffOnlyAfterRepeatedFailures() {
+        KnownWorld.useAtlas(new Atlas());
+        try {
+            String door = KnownWorld.portalRef(200000300, "out00");
+            remembered.add(new Belief(remembered.size(), door, "leads_to", KnownWorld.NOWHERE, 0.6,
+                    Belief.Provenance.INFERRED, List.of(1L, 2L), 0, 0, null, null));
+            org.junit.jupiter.api.Assertions.assertEquals(java.util.Optional.of(KnownWorld.mapRef(200000000)),
+                    world().exitTo(KnownWorld.mapRef(200000300), "out00"), "two failures: still the way down");
+
+            remembered.set(remembered.size() - 1, new Belief(remembered.size() - 1, door, "leads_to", KnownWorld.NOWHERE, 0.7,
+                    Belief.Provenance.INFERRED, List.of(1L, 2L, 3L), 0, 0, null, null));
+            org.junit.jupiter.api.Assertions.assertEquals(java.util.Optional.empty(),
+                    world().exitTo(KnownWorld.mapRef(200000300), "out00"), "three: written off");
         } finally {
             KnownWorld.useAtlas(null);
         }
