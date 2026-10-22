@@ -962,6 +962,25 @@ public class ReflexPolicy implements Policy {
      * come from when no monster drops them. A box that has not broken after a dozen hits is
      * left alone: some things in a map only look breakable.
      */
+    /**
+     * The nearest monster it can hit from here or get to. Agent1, a level-47 Fighter, spent the
+     * night under a ledge in the Cave of Evil Eye walking at a monster 350 pixels overhead: the
+     * rope up had been set aside after the Evil Eyes knocked it off three times, and the
+     * nearest monster was still the one to go after, so the Evil Eyes beside it went unhit.
+     * Something standing on no floor - in the air - is judged by distance alone, as before.
+     */
+    private static Optional<WorldModel.Entity> reachableMonster(WorldModel world, Point self) {
+        int map = world.mapId();
+        boolean hasFloors = !agents.world.MapGeometry.groundIn(map).isEmpty();
+        Fighting.Attack attack = Fighting.choose(world);
+        return world.visibleMonsters().stream()
+                .filter(monster -> !hasFloors
+                        || Fighting.canHit(attack, self, monster.position(), MELEE_RANGE)
+                        || agents.world.Navigator.floorHeight(map, monster.position()).isEmpty()
+                        || agents.world.Navigator.nextStep(map, self, monster.position()).isPresent())
+                .min(Comparator.comparingDouble(monster -> monster.position().distance(self)));
+    }
+
     private void somethingToBreak(List<Choice> choices, WorldModel world, Point self, Set<Integer> unfinished) {
         world.visibleReactors().stream()
                 .filter(box -> boxHits.getOrDefault(box.objectId(), 0) < HITS_PER_BOX)
@@ -994,7 +1013,7 @@ public class ReflexPolicy implements Policy {
     private final Map<Integer, Integer> boxHits = new HashMap<>();
 
     private void somethingToFight(List<Choice> choices, WorldModel world, Point self) {
-        world.nearestMonster().ifPresent(monster -> {
+        reachableMonster(world, self).ifPresent(monster -> {
             double distance = monster.position().distance(self);
             double near = nearness(distance, shortOfMoney || shortOfStats
                     ? Math.max(disposition.pursuitRange(), BROKE_PURSUIT) : disposition.pursuitRange());
@@ -2193,6 +2212,10 @@ public class ReflexPolicy implements Policy {
         }
         if (destination != null) {
             Optional<WorldModel.PortalTarget> door = firstDoorTo(known, here, destination, portals);
+            if (door.isEmpty() && doorHereOutOfReach(known, here, destination, portals, mapId)) {
+                rideIsTheWay = true;        // as with a ride: no other door is the way
+                return Optional.empty();
+            }
             if (door.isPresent()) {
                 whyThisDoor = "heading for " + destination
                         + (destinationFromModel ? " (model's choice)" : "") + ": " + destinationWhy;
@@ -2227,8 +2250,29 @@ public class ReflexPolicy implements Policy {
         return Optional.empty();
     }
 
-    /** Whether the way to where it is going was found to start with somebody's ride, not a door. */
+    /**
+     * Whether the way to where it is going starts with somebody's ride, or with a door of this
+     * map it cannot get to just now - either way, not with any door it could take instead.
+     */
     private boolean rideIsTheWay;
+
+    /**
+     * Whether the way somewhere starts with a door of this very map that cannot be walked to
+     * from here just now. The Cave of Evil Eye's levels are shafts, entered at the foot and left
+     * by a door at the top up a rope the Evil Eyes knock you off; with that rope set aside, the
+     * door that could be reached was the one back down, and Agent2 went down and up between two
+     * levels all night. Better to stay and fight until the rope is worth another try.
+     */
+    private static boolean doorHereOutOfReach(KnownWorld known, String here, String to,
+                                              List<WorldModel.PortalTarget> reachable, int mapId) {
+        KnownWorld.Hop hop = known.reachableFrom(here, Set.of()).get(to);
+        if (hop == null || hop.firstDoor() == null || KnownWorld.isRide(hop.firstDoor())) {
+            return false;
+        }
+        boolean aDoorHere = agents.world.MapGeometry.usablePortalsIn(mapId).stream()
+                .anyMatch(portal -> portal.name().equals(hop.firstDoor()));
+        return aDoorHere && reachable.stream().noneMatch(portal -> portal.name().equals(hop.firstDoor()));
+    }
 
     /**
      * Whether the way to somewhere starts with somebody's ride - or with waiting to be carried,
