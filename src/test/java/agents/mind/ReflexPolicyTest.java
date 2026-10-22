@@ -2016,4 +2016,20 @@ class ReflexPolicyTest {
 
         assertFalse(policy.levellingStalled(), "in Orbis Station, nothing left to obey");
     }
+    /** Where it was told to take passage from, there is no door out: it waits there. */
+    @Test
+    void whereItWasToldToTakePassageItWaits() {
+        aJunction();
+        mind.hear("self", ReflexPolicy.TOLD_TO_TRAVEL_FROM, "map:10000", 4);
+        world.update(new Observation.MapEntered(5, 10000, 0));
+        world.update(new Observation.StatsChanged(5, Map.of("LEVEL", 48, "JOB", 110)));
+        ReflexPolicy policy = new ReflexPolicy(new Random(1), Disposition.FIGHTER);
+        policy.urge("door", 500);
+
+        for (int i = 0; i < 10; i++) {
+            Policy.Decision decision = policy.decide(mind, world, 5 + i);
+            assertFalse(decision.intent() instanceof Intent.EnterPortal || decision.goal().startsWith("walk to a way out"),
+                    "decision " + i + ": " + decision.goal());
+        }
+    }
 }

@@ -1678,6 +1678,12 @@ public class ReflexPolicy implements Policy {
 
     private void awayOutOfHere(List<Choice> choices, WorldModel world, Mind mind, Point self,
                                boolean stale) {
+        // Where it was told to take passage from, it waits for the passage: no door out. With
+        // nothing to hunt at Ellinia Station, Agent1 and Agent2 walked out to Ellinia, were sent
+        // back, and walked out again, seven times each.
+        if (KnownWorld.mapRef(world.mapId()).equals(travelOrder)) {
+            return;
+        }
         // Picking a candidate is not the same as setting off for one. Committing here, while
         // merely scoring the option, meant the commitment bonus applied on the very first
         // decision an agent ever made and the door beat everything for the rest of its life -

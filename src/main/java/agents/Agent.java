@@ -222,6 +222,13 @@ public class Agent implements Runnable {
      * Whether a line offers passage somewhere: Joel's "the ship ride to Orbis Station", Cherry's
      * "do you want to go to Orbis?", "travel in this boat", a ticket for a train.
      */
+    /** Whether this NPC is known to offer passage, seen or told. */
+    private boolean offersPassage(int npcId) {
+        String who = "npc:" + npcId;
+        return mind.semantic().liveBeliefs().stream()
+                .anyMatch(b -> b.subject().equals(who) && b.predicate().equals(agents.mind.ReflexPolicy.OFFERS_PASSAGE));
+    }
+
     static boolean offersPassage(String said) {
         return PASSAGE.matcher(said).find();
     }
@@ -1551,6 +1558,16 @@ public class Agent implements Runnable {
         // than here. Rooney in Sleepywood offers HappyVille: nothing to hunt and no way out
         // but asking, and three agents took him up on it over and over for eight hours,
         // getting out each time and going straight back.
+        // Stalled on foot, or told to go and take passage, an offer from somebody known to offer
+        // passage gets a yes before anything here can hold it back. Joel's "are you sure you
+        // want to purchase?" was turned down - "there is still something to do here" - by
+        // Agent1 and Agent2, sent to Ellinia Station to take the boat, every time they asked.
+        if (isAQuestion(dialogue.style()) && policy.levellingStalled() && offersPassage(dialogue.npcId())) {
+            noteAnswer(dialogue.npcId(), dialogue.style(), NPC_YES_OR_NEXT);
+            log.info("{} takes npc:{} up on passage", mind.name(), dialogue.npcId());
+            reply(dialogue.style(), NPC_YES_OR_NEXT, NO_SELECTION);
+            return;
+        }
         if (isAQuestion(dialogue.style()) && leadsNowhereWorthGoing(dialogue.npcId()) && !strandedNow()) {
             log.info("{} turns down npc:{} - it goes somewhere with nothing to do", mind.name(), dialogue.npcId());
             reply(dialogue.style(), NPC_NO, NO_SELECTION);
