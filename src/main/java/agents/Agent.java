@@ -534,6 +534,11 @@ public class Agent implements Runnable {
     }
 
     private void step() {
+        // Whatever somebody told it from outside the world since the last step, heard on its
+        // own thread like a whisper would be.
+        for (Claim told; (told = toldFromOutside.poll()) != null; ) {
+            adopt(told);
+        }
         List<Observation> observations = perceiver.perceive(connection.inbox());
         for (Observation observation : observations) {
             world.update(observation);
@@ -2115,6 +2120,18 @@ public class Agent implements Runnable {
      * episode of hearing it, so the replay shows it as second-hand until the agent sees it
      * for itself.
      */
+    /**
+     * Something a person tells it from outside the world - what whispering it "!know s p o"
+     * would do, for when there is nobody in the world to whisper. Heard as hearsay on the
+     * agent's next step, never written into its mind from another thread.
+     */
+    public void tell(Claim claim) {
+        toldFromOutside.add(claim);
+    }
+
+    private final java.util.concurrent.ConcurrentLinkedQueue<Claim> toldFromOutside =
+            new java.util.concurrent.ConcurrentLinkedQueue<>();
+
     private void adopt(Claim claim) {
         // Never take your own word for something. The speaker check in converse() catches the
         // map-chat echo, but only once the agent knows its own character id - and the first

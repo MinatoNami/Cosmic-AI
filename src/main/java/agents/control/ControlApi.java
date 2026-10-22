@@ -62,6 +62,7 @@ public class ControlApi {
         http.createContext("/api/inheritance/compare", this::compareInheritances);
         http.createContext("/api/inheritance/rebuild", this::rebuildInheritance);
         http.createContext("/api/beliefs/", this::beliefs);
+        http.createContext("/api/tell", this::tell);
         http.createContext("/api/trace/", this::trace);
         http.createContext("/", this::page);
         http.setExecutor(Executors.newFixedThreadPool(4));
@@ -224,6 +225,29 @@ public class ControlApi {
             return;
         }
         send(exchange, 200, diff);
+    }
+
+    /**
+     * Tells an agent something, as whispering it "!know subject predicate object" in the game
+     * would: POST /api/tell?agent=Agent1&claim=npc:1032007 offers_passage true. Heard as
+     * hearsay - it starts less sure than anything the agent sees for itself.
+     */
+    private void tell(HttpExchange exchange) throws IOException {
+        if (!"POST".equals(exchange.getRequestMethod())) {
+            send(exchange, 405, Map.of("error", "POST"));
+            return;
+        }
+        Map<String, String> query = query(exchange.getRequestURI());
+        String agent = query.getOrDefault("agent", "");
+        java.util.Optional<agents.social.Claim> claim =
+                agents.social.Claim.parse("!know " + query.getOrDefault("claim", ""));
+        if (claim.isEmpty()) {
+            send(exchange, 400, Map.of("error", "claim is 'subject predicate object'"));
+            return;
+        }
+        boolean told = population.tell(agent, claim.get());
+        send(exchange, told ? 200 : 404, told ? Map.of("told", agent, "claim", query.get("claim"))
+                : Map.of("error", "no agent called " + agent + " is running"));
     }
 
     private void beliefs(HttpExchange exchange) throws IOException {

@@ -608,6 +608,18 @@ public class Population {
      * would get slower every hour it ran. The trace remains the record of how the beliefs got
      * there; this is only what they are now.
      */
+    /** Tells a running agent something, as a whisper would; false if no agent by that name is running. */
+    public synchronized boolean tell(String agent, agents.social.Claim claim) {
+        for (Running r : running) {
+            if (r.name().equals(agent)) {
+                r.agent().tell(claim);
+                log.info("{} is told {} {} {}", agent, claim.subject(), claim.predicate(), claim.object());
+                return true;
+            }
+        }
+        return false;
+    }
+
     public synchronized List<BeliefView> beliefs(String agent) {
         for (Running r : running) {
             if (r.name().equals(agent)) {
