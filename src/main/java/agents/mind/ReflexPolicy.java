@@ -2428,9 +2428,16 @@ public class ReflexPolicy implements Policy {
      * read - an agent with no scroll would otherwise ask every step.
      */
     private boolean scrollSavesTheWalk(Mind mind, int mapId, String to) {
-        if (decisionsMade - scrollSuggestedAt < SCROLL_AGAIN) {
+        if (decisionsMade - scrollReadAt < SCROLL_AGAIN) {
             return false;
         }
+        // Worked out now and then, not every step: it walks the whole map of the world twice.
+        if (decisionsMade - scrollWeighedAt < SCROLL_WEIGHED_EVERY && mapId == scrollWeighedIn) {
+            return scrollWeighed;
+        }
+        scrollWeighedAt = decisionsMade;
+        scrollWeighedIn = mapId;
+        scrollWeighed = false;
         int town = agents.world.MapGeometry.returnTownOf(mapId);
         if (town <= 0) {
             return false;
@@ -2439,15 +2446,27 @@ public class ReflexPolicy implements Policy {
         KnownWorld.Hop fromHere = known.reachableFrom(KnownWorld.mapRef(mapId), Set.of()).get(to);
         KnownWorld.Hop fromTown = KnownWorld.mapRef(town).equals(to) ? new KnownWorld.Hop(0, null)
                 : known.reachableFrom(KnownWorld.mapRef(town), Set.of()).get(to);
-        boolean saves = fromTown != null && (fromHere == null || fromHere.hops() - fromTown.hops() >= SCROLL_SAVES);
-        if (saves) {
-            scrollSuggestedAt = decisionsMade;
-        }
-        return saves;
+        scrollWeighed = fromTown != null && (fromHere == null || fromHere.hops() - fromTown.hops() >= SCROLL_SAVES);
+        return scrollWeighed;
+    }
+
+    /**
+     * Told by the agent that it read the scroll. Only then is it left alone for a while: asked
+     * before the bag had been shown after logging in, an agent that held two scrolls was told
+     * not to ask again for six hundred decisions, and read neither.
+     */
+    @Override
+    public void readTheScroll() {
+        scrollReadAt = decisionsMade;
+        scrollIsQuicker = false;
     }
 
     private boolean scrollIsQuicker;
-    private int scrollSuggestedAt = Integer.MIN_VALUE / 2;
+    private int scrollReadAt = Integer.MIN_VALUE / 2;
+    private int scrollWeighedAt = Integer.MIN_VALUE / 2;
+    private int scrollWeighedIn = -1;
+    private boolean scrollWeighed;
+    private static final int SCROLL_WEIGHED_EVERY = 50;
     private static final int SCROLL_AGAIN = 600;
     private static final int SCROLL_SAVES = 5;
 

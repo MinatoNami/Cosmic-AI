@@ -93,6 +93,10 @@ public interface Policy {
         return false;
     }
 
+    /** Told that the scroll it asked for was read. */
+    default void readTheScroll() {
+    }
+
     /**
      * Told that whoever it asked for a ride said to wait for the next one, which is not the
      * same as a no.

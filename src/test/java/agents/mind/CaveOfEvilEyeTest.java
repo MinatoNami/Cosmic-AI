@@ -141,7 +141,10 @@ class CaveOfEvilEyeTest {
 
             assertTrue(policy.readAReturnScroll(), "Sleepywood is the quicker way to Ellinia Station");
             policy.decide(mind, world, 3);
-            assertTrue(!policy.readAReturnScroll(), "and not asked again straight away");
+            assertTrue(policy.readAReturnScroll(), "still, until a scroll has been read");
+            policy.readTheScroll();
+            policy.decide(mind, world, 4);
+            assertTrue(!policy.readAReturnScroll(), "and not asked again straight after reading one");
         } finally {
             KnownWorld.useAtlas(null);
         }
