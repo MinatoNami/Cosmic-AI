@@ -2211,11 +2211,14 @@ public class ReflexPolicy implements Policy {
             destination = null;
         }
         if (destination != null) {
-            Optional<WorldModel.PortalTarget> door = firstDoorTo(known, here, destination, portals);
-            if (door.isEmpty() && doorHereOutOfReach(known, here, destination, portals, mapId)) {
+            // Judged on the map of the world as it is, not as seen from where it stands: from
+            // the foot of a shaft whose way up is out of reach, the way round is down a level
+            // and back up - into the foot of this same shaft.
+            if (doorHereOutOfReach(knownWorld(mind), here, destination, portals, mapId)) {
                 rideIsTheWay = true;        // as with a ride: no other door is the way
                 return Optional.empty();
             }
+            Optional<WorldModel.PortalTarget> door = firstDoorTo(known, here, destination, portals);
             if (door.isPresent()) {
                 whyThisDoor = "heading for " + destination
                         + (destinationFromModel ? " (model's choice)" : "") + ": " + destinationWhy;
@@ -2227,7 +2230,13 @@ public class ReflexPolicy implements Policy {
             }
             destination = null;         // no longer a way there from here
         }
-        for (Places.Place place : places(known, here, mind)) {
+        List<Places.Place> worthGoing = places(known, here, mind);
+        if (!worthGoing.isEmpty() && doorHereOutOfReach(knownWorld(mind), here, worthGoing.get(0).map(), portals, mapId)) {
+            setOffFor(worthGoing.get(0).map(), String.join(", ", worthGoing.get(0).reasons()), false);
+            rideIsTheWay = true;
+            return Optional.empty();
+        }
+        for (Places.Place place : worthGoing) {
             if (KnownWorld.isRide(place.firstDoor())) {
                 // The way there starts with somebody's ride. Skipping it for the best place a
                 // door leads to sent a Magician-to-be to Kerning City and the Nautilus, past

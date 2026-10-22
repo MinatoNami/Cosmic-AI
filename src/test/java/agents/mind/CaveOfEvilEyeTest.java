@@ -89,4 +89,35 @@ class CaveOfEvilEyeTest {
             KnownWorld.useAtlas(null);
         }
     }
+    /**
+     * As Agent2 found it: at the foot of Evil Eye III with the ropes up set aside, the way round
+     * seen from where it stands is down a level and back up - into the foot of this same shaft.
+     * The way on is the door up, out of reach for now, so no door is taken.
+     */
+    @Test
+    void theWayRoundDownAndBackUpIsNotTaken() throws Exception {
+        KnownWorld.useAtlas(new Atlas());
+        int cave = 105070300;
+        MapGeometry.climbsIn(cave).forEach(rope -> Navigator.blockRope(cave, rope.x(), 60_000));
+        try {
+            Mind mind = new Mind("Test", Trace.toFile(dir.resolve("v.jsonl"), "Test"));
+            mind.take(new Observation.MapEntered(1, cave, 0));
+            WorldModel world = new WorldModel();
+            world.update(new Observation.MapEntered(1, cave, 0));
+            world.movedTo(new Point(361, 1665));
+            world.update(new Observation.StatsChanged(1, Map.of("LEVEL", 47, "JOB", 420)));
+            ReflexPolicy policy = new ReflexPolicy(new Random(1), Disposition.FORAGER);
+            policy.decide(mind, world, 2);
+            var setOff = ReflexPolicy.class.getDeclaredMethod("setOffFor", String.class, String.class, boolean.class);
+            setOff.setAccessible(true);
+            setOff.invoke(policy, "map:105070001", "somebody who buys and sells, and you need to", false);
+            WorldModel.PortalTarget down = world.portals().stream().filter(p -> p.name().equals("under00")).findFirst().orElseThrow();
+
+            assertEquals(null, policy.pickDoor(List.of(down), mind, cave, "player:1"),
+                    "down a level and back up is no way past the rope");
+        } finally {
+            MapGeometry.climbsIn(cave).forEach(rope -> Navigator.blockRope(cave, rope.x(), -1));
+            KnownWorld.useAtlas(null);
+        }
+    }
 }
