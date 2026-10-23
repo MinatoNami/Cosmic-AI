@@ -2052,6 +2052,25 @@ class ReflexPolicyTest {
     }
 
     /**
+     * Two monsters gone after by turns and neither ever hit: each switch is not a fresh
+     * chase with a fresh progress watch, and in time chasing stops.
+     */
+    @Test
+    void chasingMonstersByTurnsAndNeverHittingOneIsGivenUp() {
+        ReflexPolicy policy = new ReflexPolicy(new Random(1), Disposition.FIGHTER);
+        int chasesLate = 0;
+        for (int i = 0; i < 1000; i++) {
+            Point where = i % 2 == 0 ? new Point(300, 0) : new Point(-300, 0);
+            world.update(new Observation.MonsterAppeared(2 + i, 9001, 100100, where));
+            String goal = policy.decide(mind, world, 2 + i).goal();
+            if (i >= 500 && goal.startsWith("get closer to the thing")) {
+                chasesLate++;
+            }
+        }
+        assertEquals(0, chasesLate, "a chase that never lands a hit is called off");
+    }
+
+    /**
      * The way up to a monster on a ledge starts by walking away from it: a chase begun just
      * inside pursuit range is not dropped as soon as the detour takes it just outside.
      */

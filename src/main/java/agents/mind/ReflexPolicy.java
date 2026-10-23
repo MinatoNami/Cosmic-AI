@@ -666,6 +666,8 @@ public class ReflexPolicy implements Policy {
             doorInMind = null;
             journeyKind = null;         // and nothing here is where we were going
             gaveUpOn.clear();           // and nowhere here is somewhere we failed to reach
+            chasingSince = -1;          // and every monster here is new
+            chaseGivenUpAt = Integer.MIN_VALUE / 2;
             boxHits.clear();            // and every box here is new
             rideWanted = -1;            // and whoever it meant to ask is behind it
             rideTo = null;
@@ -931,6 +933,25 @@ public class ReflexPolicy implements Policy {
         return Math.floorDiv(where.x, SAME_ERRAND) + ":" + Math.floorDiv(where.y, SAME_ERRAND);
     }
 
+    private void hit() {
+        chasingSince = -1;
+        arrived();
+    }
+
+    private void chasing(Point where) {
+        if (chasingSince < 0) {
+            chasingSince = decisionsMade;
+        }
+        settingOff("fight", where);
+    }
+
+    /** When the chase under way began; -1 when there is none, and a hit ends one. */
+    private int chasingSince = -1;
+    private int chaseGivenUpAt = Integer.MIN_VALUE / 2;
+    /** Decisions a chase may go on without a hit, and how long none is begun after. */
+    private static final int CHASE_WITHOUT_A_HIT = 400;
+    private static final int CHASES_REST = 1500;
+
     /** Arrived, or done with it either way. */
     private void arrived() {
         journeyKind = null;
@@ -1069,6 +1090,19 @@ public class ReflexPolicy implements Policy {
                     + commitmentTo("fight", monster.position());
             // From as far as its attack reaches: a Bowman shoots from where it stands.
             boolean withinReach = Fighting.canHit(Fighting.choose(world), self, monster.position(), MELEE_RANGE);
+            // However many monsters it goes after, a chase that lands no hit is one chase.
+            // Agent3 climbed a rope in Sleepy Dungeon II after two monsters by turns, 330
+            // pixels apart, fell back off it, and did that for hours: each switch started the
+            // progress watch afresh, and it never once gave up. What is in reach is still hit.
+            if (!withinReach) {
+                if (chasingSince >= 0 && decisionsMade - chasingSince > CHASE_WITHOUT_A_HIT) {
+                    chaseGivenUpAt = decisionsMade;
+                    chasingSince = -1;
+                }
+                if (decisionsMade - chaseGivenUpAt < CHASES_REST) {
+                    return;
+                }
+            }
             Intent intent = withinReach
                     ? new Intent.Attack(monster.objectId(), monster.position())
                     : new Intent.MoveTo(monster.position());
@@ -1077,7 +1111,7 @@ public class ReflexPolicy implements Policy {
                     : "get closer to the thing I can see";
             Point where = monster.position();
             choices.add(new Choice("fight", intent, goal, score,
-                    withinReach ? this::arrived : () -> settingOff("fight", where)));
+                    withinReach ? this::hit : () -> chasing(where)));
         });
     }
 
