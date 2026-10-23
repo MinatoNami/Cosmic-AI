@@ -22,6 +22,7 @@ import java.util.Set;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ReflexPolicyTest {
@@ -2048,5 +2049,39 @@ class ReflexPolicyTest {
         policy.decide(mind, world, 5);
 
         assertFalse(policy.levellingStalled(), "the hunting it knows is beyond reach: explore, not leave");
+    }
+
+    /**
+     * The way up to a monster on a ledge starts by walking away from it: a chase begun just
+     * inside pursuit range is not dropped as soon as the detour takes it just outside.
+     */
+    @Test
+    void aChaseUnderWayGoesOnPastWhereItWouldHaveBegun() {
+        ReflexPolicy policy = new ReflexPolicy(new Random(1), Disposition.FIGHTER);   // range 732
+        world.update(new Observation.MonsterAppeared(2, 9001, 100100, new Point(700, 0)));
+        assertEquals("get closer to the thing I can see", policy.decide(mind, world, 2).goal());
+
+        world.movedTo(new Point(-80, 0));   // 780 off now, towards the rope
+        assertEquals("get closer to the thing I can see", policy.decide(mind, world, 3).goal(),
+                "the chase goes on round the detour");
+
+        ReflexPolicy fresh = new ReflexPolicy(new Random(1), Disposition.FIGHTER);
+        assertNotEquals("get closer to the thing I can see", fresh.decide(mind, world, 4).goal(),
+                "nothing that far off is set off after");
+    }
+
+    /** Back and forth between the same two maps for good: the return scroll is the way out. */
+    @Test
+    void goingToAndFroForGoodReadsTheReturnScroll() {
+        world.update(new Observation.StatsChanged(1, Map.of("LEVEL", 48, "JOB", 420)));
+        ReflexPolicy policy = new ReflexPolicy(new Random(1), Disposition.FORAGER);
+        boolean scroll = false;
+        for (int i = 0; i < 24 && !scroll; i++) {
+            int map = i % 2 == 0 ? 200000110 : 200000111;
+            world.update(new Observation.MapEntered(2 + i, map, 0));
+            policy.decide(mind, world, 2 + i);
+            scroll = policy.readAReturnScroll();
+        }
+        assertTrue(scroll, "the pier and the tunnel lead only into each other: back to Orbis by scroll");
     }
 }

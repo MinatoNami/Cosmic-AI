@@ -511,6 +511,8 @@ public class ReflexPolicy implements Policy {
     private static final double SHORT_OF_MONEY = 1.5;
     private static final double MONEY_MAKES_HUNTING = 4;
     private static final int BROKE_PURSUIT = 600;
+    /** How much further a chase already under way is followed than one is begun. */
+    private static final double CHASE_GOES_ROUND = 1.5;
 
     /** Where the agent stands as of this decision, so routes start from doors it can walk to. */
     private java.awt.Point standingAt;
@@ -588,7 +590,13 @@ public class ReflexPolicy implements Policy {
         // cave's own return scroll goes to Sleepywood.
         String heldFor = heldForTheWayTo != null && decisionsMade - heldSince > HELD_BEFORE_SCROLL ? heldForTheWayTo : null;
         scrollIsQuicker = travelOrder != null && scrollSavesTheWalk(mind, world.mapId(), travelOrder)
-                || heldFor != null && scrollSavesTheWalk(mind, world.mapId(), heldFor, 1);
+                || heldFor != null && scrollSavesTheWalk(mind, world.mapId(), heldFor, 1)
+                // Or going to and fro between two maps for good, each door it can reach leading
+                // only into the other: Agent2 walked between Orbis' tunnel to the Ellinia boat and
+                // the boat's pier for hours, the way back to the station out of reach from where
+                // it came in. The return scroll goes to Orbis.
+                || bouncedFor >= BOUNCES_BEFORE_SCROLL && decisionsMade - scrollReadAt >= SCROLL_AGAIN
+                   && agents.world.MapGeometry.returnTownOf(world.mapId()) > 0;
         boolean wasStranded = strandedHere;
         // Not while being carried: the room before takeoff has nothing to hunt and no way out
         // on foot, and writing it off as nothing to do had whoever sold the passage refused for
@@ -641,6 +649,9 @@ public class ReflexPolicy implements Policy {
                 // Whatever was drawing it back and forth is not getting it anywhere.
                 destination = null;
                 destinationFromModel = false;
+                bouncedFor++;
+            } else {
+                bouncedFor = 0;
             }
             decisionsHere = 0;
             ridesAskedHere.clear();     // a ride that went somewhere was given
@@ -1034,8 +1045,17 @@ public class ReflexPolicy implements Policy {
     private void somethingToFight(List<Choice> choices, WorldModel world, Point self) {
         reachableMonster(world, self).ifPresent(monster -> {
             double distance = monster.position().distance(self);
-            double near = nearness(distance, shortOfMoney || shortOfStats
-                    ? Math.max(disposition.pursuitRange(), BROKE_PURSUIT) : disposition.pursuitRange());
+            double range = shortOfMoney || shortOfStats
+                    ? Math.max(disposition.pursuitRange(), BROKE_PURSUIT) : disposition.pursuitRange();
+            // A chase under way goes on past where it would have begun one. The way up to a
+            // ledge often starts by walking away from it: Agent3 in Sleepy Dungeon II set off
+            // for a monster 578 pixels off, walked back towards the rope, found it 643 off and
+            // out of range, wandered back, and did that for an hour. The progress watch still
+            // calls off a chase that gets nowhere.
+            if (commitmentTo("fight", monster.position()) > 0) {
+                range *= CHASE_GOES_ROUND;
+            }
+            double near = nearness(distance, range);
             if (near <= 0) {
                 return;
             }
@@ -2514,9 +2534,13 @@ public class ReflexPolicy implements Policy {
     public void readTheScroll() {
         scrollReadAt = decisionsMade;
         scrollIsQuicker = false;
+        bouncedFor = 0;
     }
 
     private boolean scrollIsQuicker;
+    /** Map changes in a row that were back and forth between the same two maps. */
+    private int bouncedFor;
+    private static final int BOUNCES_BEFORE_SCROLL = 8;
     private int scrollReadAt = Integer.MIN_VALUE / 2;
     private int scrollWeighedAt = Integer.MIN_VALUE / 2;
     private int scrollWeighedIn = -1;
