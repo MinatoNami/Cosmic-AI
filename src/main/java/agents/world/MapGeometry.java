@@ -523,6 +523,20 @@ public class MapGeometry {
         return List.copyOf(climbs);
     }
 
+    private static final Map<Integer, Boolean> SWIMS = new HashMap<>();
+
+    /**
+     * Whether characters swim in this map rather than walk: all of Aqua Road, and the foot of
+     * Orbis Tower. In water a character goes where it likes, up as easily as along, and none
+     * of the floors and ropes a walk is planned on are in its way.
+     */
+    public static synchronized boolean isSwim(int mapId) {
+        return SWIMS.computeIfAbsent(mapId, id -> {
+            Data mapData = WzData.of(WZFiles.MAP).getData(pathFor(id));
+            return mapData != null && DataTool.getInt(mapData.getChildByPath("info/swim"), 0) != 0;
+        });
+    }
+
     /** @see server.maps.MapFactory#getMapName */
     private static final Map<Integer, Integer> RETURN_TOWNS = new HashMap<>();
 

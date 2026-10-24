@@ -590,7 +590,9 @@ public class ReflexPolicy implements Policy {
         // over the ship in Nautilus Harbor towards the road out dropped its trip back to its
         // trainer at the same rung every time and went back into the ship.
         Point standing = world.selfPosition();
-        if (standing != null && !agents.world.MapGeometry.groundIn(world.mapId()).isEmpty()) {
+        // Not in water, where there is no floor to have last stood on and none needed.
+        if (standing != null && !agents.world.MapGeometry.groundIn(world.mapId()).isEmpty()
+                && !agents.world.MapGeometry.isSwim(world.mapId())) {
             if (agents.world.Navigator.floorHeight(world.mapId(), standing).isPresent()) {
                 lastOnFloor = standing;
                 lastOnFloorMap = world.mapId();

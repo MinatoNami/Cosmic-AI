@@ -75,8 +75,8 @@ public final class Doorways {
         if (Math.abs(door.x - feet.x) < AT_DOOR && feet.y - door.y < DOOR_FLOATS && door.y - feet.y < AT_DOOR) {
             return true;
         }
-        if (MapGeometry.groundIn(mapId).isEmpty()) {
-            return true;        // no floor data: nothing to rule anything out with
+        if (MapGeometry.groundIn(mapId).isEmpty() || MapGeometry.isSwim(mapId)) {
+            return true;        // no floor data, or water: nothing to rule anything out with
         }
         // To the floor under the door, not the point the door is drawn at: doors are drawn
         // above the floor, some by most of a character's height, and routing to the drawing

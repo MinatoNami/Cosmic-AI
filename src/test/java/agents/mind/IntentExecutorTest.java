@@ -241,6 +241,18 @@ class IntentExecutorTest {
         assertTrue(onAFloor(SOUTHPERRY, world.selfPosition()), "landed in mid-air at " + world.selfPosition());
     }
 
+    /** In water it swims straight at where it is going, upwards as readily as along. */
+    @Test
+    void inWaterItSwimsStraightThere() {
+        int playground = 230010001;
+        WorldModel world = standingAt(playground, new Point(-1291, 518));
+
+        executor.execute(new Intent.MoveTo(new Point(-1291, 200)), world);
+
+        assertEquals(new Point(-1291, 443), world.selfPosition());
+        assertEquals(1, sent.size(), "one stroke: " + sent);
+    }
+
     /** On a rope, a touch is taken where it is: the game's client never knocks a climber off. */
     @Test
     void aTouchOnARopeLeavesItOnTheRope() {

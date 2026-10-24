@@ -444,6 +444,30 @@ class ReflexPolicyTest {
         assertEquals(acrossTheFloor, ((Intent.MoveTo) decision.intent()).destination());
     }
 
+    /**
+     * Penguin's Playground is water. Agent2 came in at the bottom, every Pepe on a ledge
+     * above, judged each one by the walk up - there is none - and left by the door it came in
+     * at, for hours. Swimming, the nearest is simply nearest.
+     */
+    @Test
+    void inWaterAMonsterOverheadIsGoneAfter() {
+        int playground = 230010001;
+        assertTrue(agents.world.MapGeometry.isSwim(playground));
+        world.update(new Observation.MapEntered(2, playground, 11));
+        world.movedTo(new Point(-1291, 518));
+        world.update(new Observation.StatsChanged(2, Map.of("LEVEL", 48, "JOB", 420)));
+        int[][] pepes = {{-864, 159}, {-216, 159}, {826, 39}, {286, 99}, {-369, -561}, {-856, -201}, {-618, 159}};
+        for (int i = 0; i < pepes.length; i++) {
+            world.update(new Observation.MonsterAppeared(3, 9001 + i, 3210450, new Point(pepes[i][0], pepes[i][1])));
+        }
+        ReflexPolicy policy = new ReflexPolicy(new Random(1), Disposition.FORAGER);
+
+        Policy.Decision decision = policy.decide(mind, world, 4);
+
+        assertEquals("get closer to the thing I can see", decision.goal());
+        assertEquals(new Point(-864, 159), ((Intent.MoveTo) decision.intent()).destination());
+    }
+
     /** Leaving a map it hunted in, it writes down how many monsters were about there. */
     @Test
     void leavingAMapNotesHowCrowdedItWas() {

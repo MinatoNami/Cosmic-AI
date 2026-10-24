@@ -107,7 +107,7 @@ public final class Navigator {
     private Navigator() {
     }
 
-    public enum Kind { WALK, DROP, JUMP, CLIMB, HOP, ROOM }
+    public enum Kind { WALK, DROP, JUMP, CLIMB, HOP, ROOM, SWIM }
 
     /**
      * The next thing to do: walk to {@code departX} on the current floor, then make the move.
@@ -148,6 +148,12 @@ public final class Navigator {
      * known way between them.
      */
     public static Optional<Step> nextStep(int mapId, Point from, Point to) {
+        // In water, straight there. Planned as a walk, Penguin's Playground - every monster
+        // above where you come in - had nothing in it to reach, and Agent2 swam in and out of
+        // Aqua Road's maps for hours without a fight.
+        if (MapGeometry.isSwim(mapId)) {
+            return Optional.of(new Step(Kind.SWIM, to.x, new Point(to), null));
+        }
         Graph graph = graphOf(mapId);
         int start = graph.platformUnder(from.x, from.y);
         int goal = graph.platformUnder(to.x, to.y);
@@ -172,6 +178,9 @@ public final class Navigator {
      * takes a rope at the far end of the map to reach.
      */
     public static java.util.OptionalLong routeCost(int mapId, Point from, Point to) {
+        if (MapGeometry.isSwim(mapId)) {
+            return java.util.OptionalLong.of(Math.round(from.distance(to)));
+        }
         Graph graph = graphOf(mapId);
         int start = graph.platformUnder(from.x, from.y);
         int goal = graph.platformUnder(to.x, to.y);

@@ -324,6 +324,10 @@ public class IntentExecutor {
         riding = null;
         legs.clear();
 
+        if (MapGeometry.isSwim(map)) {
+            swim(destination, world, from);
+            return;
+        }
         if (MapGeometry.groundIn(map).isEmpty()) {
             return;         // no floor data at all: better to stand still than to guess
         }
@@ -383,6 +387,18 @@ public class IntentExecutor {
      * Height comes from the floor at the new x, so a slope is walked up and down rather than
      * cut through. A step aimed past the end of the platform stops at the end.
      */
+    /** One stroke straight towards somewhere, as a character in water goes. */
+    private void swim(Point destination, WorldModel world, Point from) {
+        double distance = from.distance(destination);
+        Point step = distance <= STEP_PIXELS ? new Point(destination) : new Point(
+                from.x + (int) Math.round((destination.x - from.x) * STEP_PIXELS / distance),
+                from.y + (int) Math.round((destination.y - from.y) * STEP_PIXELS / distance));
+        byte stance = destination.x >= from.x ? STANCE_WALKING_RIGHT : STANCE_WALKING_LEFT;
+        short duration = (short) Math.max(1, Math.round(from.distance(step) / WALK_PIXELS_PER_SECOND * 1000));
+        session.send(ClientPackets.move(from, step, foothold(world.mapId(), step), stance, duration));
+        world.movedTo(step);
+    }
+
     private void walkAlongFloor(int targetX, WorldModel world, Point from) {
         int map = world.mapId();
         int west = Navigator.floorEnd(map, from, -1).orElse(from.x);
