@@ -563,21 +563,17 @@ public class IntentExecutor {
      * Thrown back by a monster's touch, as a hit character is: a short hop away from it along
      * the floor. Without it a touched agent walked straight on through the monster, and to
      * anyone watching it looked as though nothing had happened.
+     *
+     * Not off a rope or ladder: the game's own client keeps a climbing character where it is
+     * and takes the hit there. Knocking agents off, and giving a rope up after the third
+     * time, had them abandon ropes a hundred times in six hours - Agent0's way up through the
+     * Cave of Evil Eye and Agent2's in Orbis Tower among them.
      */
     public void knockedBack(Point monster, WorldModel world) {
         Point from = world.selfPosition();
         int map = world.mapId();
-        // Knocked off a rope: three times off the same one, and it is not a way up for now.
-        if (riding != null && ridingMap == map) {
-            int ropeX = riding.x();
-            int times = knockedOff.merge(map * 100_000L + ropeX, 1, Integer::sum);
-            if (times >= KNOCKED_OFF_LIMIT) {
-                Navigator.blockRope(map, ropeX, ROPE_BLOCKED_FOR);
-                knockedOff.remove(map * 100_000L + ropeX);
-                log.info("{} gives up on the rope at x={} in map {}: knocked off it {} times", who, ropeX, map, times);
-            }
-            riding = null;
-            legs.clear();
+        if (riding != null && ridingMap == map && Math.abs(from.x - riding.x()) <= ON_THE_ROPE) {
+            return;
         }
         int away = from.x >= monster.x ? 1 : -1;
         int west = Navigator.floorEnd(map, from, -1).orElse(from.x);
@@ -595,9 +591,8 @@ public class IntentExecutor {
 
     private static final int KNOCKBACK_PIXELS = 60;
 
-    private final java.util.Map<Long, Integer> knockedOff = new java.util.HashMap<>();
-    private static final int KNOCKED_OFF_LIMIT = 3;
-    private static final long ROPE_BLOCKED_FOR = 10 * 60_000L;
+    /** How far from a rope's line a character on it can be, as the client grabs one. */
+    private static final int ON_THE_ROPE = 10;
 
     private static short foothold(int map, Point at) {
         return (short) MapGeometry.footholdUnder(map, at.x, at.y);

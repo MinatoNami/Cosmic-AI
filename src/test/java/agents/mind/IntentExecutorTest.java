@@ -241,6 +241,24 @@ class IntentExecutorTest {
         assertTrue(onAFloor(SOUTHPERRY, world.selfPosition()), "landed in mid-air at " + world.selfPosition());
     }
 
+    /** On a rope, a touch is taken where it is: the game's client never knocks a climber off. */
+    @Test
+    void aTouchOnARopeLeavesItOnTheRope() {
+        int cave = 105070300;
+        MapGeometry.Climb rope = MapGeometry.climbsIn(cave).get(0);
+        Point foot = new Point(rope.x(), rope.bottom() + 20);
+        WorldModel world = standingAt(cave, Navigator.settleFrom(cave, foot).orElse(foot));
+
+        executor.execute(new Intent.MoveTo(new Point(rope.x(), rope.top() - 40)), world);
+        Point climbing = world.selfPosition();
+        assertTrue(climbing.x == rope.x() && climbing.y < rope.bottom() + 1, "not on the rope yet: " + climbing);
+        executor.knockedBack(new Point(climbing.x + 30, climbing.y), world);
+
+        assertEquals(climbing, world.selfPosition(), "knocked off the rope");
+        executor.execute(new Intent.MoveTo(new Point(rope.x(), rope.top() - 40)), world);
+        assertTrue(world.selfPosition().y < climbing.y, "and climbs on: " + world.selfPosition());
+    }
+
     /**
      * Heena stands on a ledge above Mushroom Town with no way up to it. A player clicks her
      * from below; an agent that insisted on walking up first paced underneath and never spoke.
