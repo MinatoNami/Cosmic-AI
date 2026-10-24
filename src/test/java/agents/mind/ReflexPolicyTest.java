@@ -431,6 +431,31 @@ class ReflexPolicyTest {
         assertFalse(ReflexPolicy.atPortal(new Point(60, -95), new Point(135, -141)), "nor is across the room");
     }
 
+    /** Sleepy Dungeon II's in00 hangs halfway up the ladder at x=-216, 200px over the floor. */
+    @Test
+    void aPortalOnALadderIsReachedFromItsFoot() {
+        int sleepyDungeonII = 105040302;
+        assertTrue(ReflexPolicy.atPortal(sleepyDungeonII, new Point(-213, 2295), new Point(-213, 2095)));
+        assertFalse(ReflexPolicy.atPortal(sleepyDungeonII, new Point(100, 2295), new Point(100, 2095)),
+                "nothing hangs there: a floor above is still not here");
+        assertFalse(ReflexPolicy.atPortal(sleepyDungeonII, new Point(-300, 2295), new Point(-213, 2095)),
+                "nor is the floor beside the ladder");
+    }
+
+    /** And so the way on is taken, rather than stood under for an hour. */
+    @Test
+    void theWayOnUpTheLadderInSleepyDungeonIIIsTaken() {
+        world.update(new Observation.MapEntered(2, 105040302, 0));
+        world.movedTo(new Point(-213, 2295));
+        ReflexPolicy policy = new ReflexPolicy(new Random(1), Disposition.TALKER);
+        boolean tried = false;
+        for (int i = 0; i < 400 && !tried; i++) {
+            tried = policy.decide(mind, world, 3 + i).intent() instanceof Intent.EnterPortal door
+                    && door.portalName().equals("in00");
+        }
+        assertTrue(tried, "in00 is entered from the foot of its ladder");
+    }
+
     /**
      * One inherited level-1 death on map 40000, agreed by four minds, is one death - not four,
      * and not a killing ground walling off the only way out of the tutorial fields.

@@ -182,7 +182,7 @@ public class LmStudioOracle implements Oracle {
             Thread.currentThread().interrupt();
             return null;
         } catch (Exception e) {
-            log.warn("Could not reach LM Studio at {}, falling back", endpoint, e);
+            log.warn("Could not reach LM Studio at {}, falling back: {}", endpoint, e.toString());
             return null;
         }
     }
@@ -226,7 +226,7 @@ public class LmStudioOracle implements Oracle {
         } catch (NoNativeEndpoint e) {
             throw e;
         } catch (Exception e) {
-            log.warn("Could not reach LM Studio at {}, falling back", nativeEndpoint, e);
+            log.warn("Could not reach LM Studio at {}, falling back: {}", nativeEndpoint, e.toString());
             return null;
         }
     }
@@ -276,7 +276,7 @@ public class LmStudioOracle implements Oracle {
             Thread.currentThread().interrupt();
             return null;
         } catch (Exception e) {
-            log.warn("Could not reach LM Studio at {}, falling back", endpoint, e);
+            log.warn("Could not reach LM Studio at {}, falling back: {}", endpoint, e.toString());
             return null;
         }
     }

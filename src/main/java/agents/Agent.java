@@ -805,13 +805,19 @@ public class Agent implements Runnable {
      * Magic Guard or Iron Body up. Not mid-conversation, and not more often than every few
      * steps, so the server sees each land.
      */
+    private final java.util.Map<Integer, Integer> castLevelLogged = new java.util.HashMap<>();
+
     private void keepBuffsUp() {
         if (pendingDialogue != null || steps - lastCastAt < STEPS_BETWEEN_CASTS) {
             return;
         }
         long now = System.currentTimeMillis();
         agents.mind.Fighting.due(agents.mind.Fighting.buffs(world), buffsLastUntil, now).ifPresent(buff -> {
-            log.info("{} casts skill:{} (level {})", mind.name(), buff.skillId(), buff.level());
+            // Said once per skill and level: recasting the same buff every minute or so was
+            // seven lines in ten of everything the agents logged.
+            if (!Integer.valueOf(buff.level()).equals(castLevelLogged.put(buff.skillId(), buff.level()))) {
+                log.info("{} casts skill:{} (level {})", mind.name(), buff.skillId(), buff.level());
+            }
             connection.session().send(ClientPackets.castOnSelf(buff.skillId(), buff.level()));
             buffsLastUntil.put(buff.skillId(), now + buff.seconds() * 1000L - RECAST_EARLY_MILLIS);
             lastCastAt = steps;

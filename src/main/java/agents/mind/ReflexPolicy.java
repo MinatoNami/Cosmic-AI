@@ -61,8 +61,32 @@ public class ReflexPolicy implements Policy {
                 && self.y - portal.y < PORTAL_FLOATS && portal.y - self.y < PORTAL_RANGE;
     }
 
+    /**
+     * Standing at a portal, or at the foot of the ladder or rope it hangs on.
+     *
+     * Sleepy Dungeon II's way on to III hangs halfway up a ladder, 200px over the floor.
+     * The route to it ended on the floor beneath, which was never at it, so Agent3 stood at
+     * the foot of that ladder 846 times over and stalled in the map for an hour at a time.
+     * The server lets a portal be entered from well over that distance.
+     */
+    static boolean atPortal(int mapId, java.awt.Point self, java.awt.Point portal) {
+        if (atPortal(self, portal)) {
+            return true;
+        }
+        if (self.distance(portal) >= SERVER_PORTAL_REACH) {
+            return false;
+        }
+        return agents.world.MapGeometry.climbsIn(mapId).stream().anyMatch(climb ->
+                Math.abs(climb.x() - portal.x) < PORTAL_RANGE
+                        && portal.y >= climb.top() - PORTAL_RANGE && portal.y <= climb.bottom()
+                        && Math.abs(climb.x() - self.x) < PORTAL_RANGE
+                        && self.y >= climb.bottom() && self.y - climb.bottom() < PORTAL_FLOATS);
+    }
+
     /** How far above the floor under it a portal is drawn, at most. */
     private static final int PORTAL_FLOATS = 80;
+    /** Well inside the server's own limit for entering a portal, about 632px. */
+    private static final int SERVER_PORTAL_REACH = 500;
     private static final int WANDER_STEP = 80;
 
     /**
@@ -1828,7 +1852,7 @@ public class ReflexPolicy implements Policy {
                 // A map that has killed it twice at about this level is a map to get out of.
                 + (deathsHere >= 2 ? LEAVE_A_KILLING_GROUND : 0);
 
-        if (atPortal(self, door.position())) {
+        if (atPortal(world.mapId(), self, door.position())) {
             choices.add(new Choice("door",
                     new Intent.EnterPortal(door.name(), door.position()),
                     "see where this goes", score,
@@ -1876,7 +1900,7 @@ public class ReflexPolicy implements Policy {
     private List<WorldModel.PortalTarget> doorsWithinReach(WorldModel world, Point self, Mind mind) {
         List<WorldModel.PortalTarget> reachable = world.portals().stream()
                 .filter(door -> !outOfMind(door.position()))
-                .filter(door -> atPortal(self, door.position())
+                .filter(door -> atPortal(world.mapId(), self, door.position())
                         || agents.world.Navigator.nextStep(world.mapId(), self, door.position()).isPresent())
                 .toList();
         return reachable;
