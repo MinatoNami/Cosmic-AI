@@ -289,6 +289,11 @@ public class WorldModel {
         return nearest(npcs.values());
     }
 
+    /** Things lying on the ground in sight. */
+    public List<Entity> visibleDrops() {
+        return List.copyOf(drops.values());
+    }
+
     /** Boxes and the like in sight, things that can be hit and are not monsters. */
     public List<Entity> visibleReactors() {
         return List.copyOf(reactors.values());

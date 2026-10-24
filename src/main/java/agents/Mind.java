@@ -113,15 +113,26 @@ public class Mind implements AutoCloseable {
         String because = trace.deliberated(tick, goal, usedBeliefs, considered, by, fellBackBecause);
         String actionRef = trace.acted(tick, intent, detail, because, at);
 
-        decisions.addLast(new DecisionRecord(tick, actionRef, intent, goal, usedBeliefs));
-        while (decisions.size() > DECISIONS_REMEMBERED) {
-            decisions.removeFirst();
+        synchronized (decisions) {
+            decisions.addLast(new DecisionRecord(tick, actionRef, intent, goal, usedBeliefs));
+            while (decisions.size() > DECISIONS_REMEMBERED) {
+                decisions.removeFirst();
+            }
         }
         return actionRef;
     }
 
     public Optional<DecisionRecord> lastDecision() {
-        return Optional.ofNullable(decisions.peekLast());
+        synchronized (decisions) {
+            return Optional.ofNullable(decisions.peekLast());
+        }
+    }
+
+    /** The last few decisions, oldest first; read from other threads, such as the status page. */
+    public List<DecisionRecord> recentDecisions() {
+        synchronized (decisions) {
+            return List.copyOf(decisions);
+        }
     }
 
     /**

@@ -239,6 +239,12 @@ public class LlmPolicy implements Policy {
 
         Reply parsed = Reply.parse(unreadReply, world);
         unreadReply = null;
+        Optional<Places.Place> chosen = parsed.go().flatMap(this::placeLettered);
+        thought = new Thought(System.currentTimeMillis(), parsed.goal().orElse(""),
+                parsed.pursue().orElse(""), chosen.map(Places.Place::map).orElse(""),
+                chosen.map(place -> String.join(", ", place.reasons())).orElse(""),
+                parsed.learned().stream()
+                        .map(t -> t.subject() + " " + t.predicate() + " " + t.object()).toList());
 
         // A calling to go and get comes before anything the model has in mind. It was asked
         // about the moment, and the moment had three agents with the stats for their jobs
@@ -609,6 +615,13 @@ public class LlmPolicy implements Policy {
     public String rideTo() {
         return fallback.rideTo();
     }
+
+    @Override
+    public Optional<Thought> lastThought() {
+        return Optional.ofNullable(thought);
+    }
+
+    private volatile Thought thought;
 
     @Override
     public void rethink() {

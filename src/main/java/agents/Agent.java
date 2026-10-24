@@ -2130,6 +2130,7 @@ public class Agent implements Runnable {
             Optional<Claim> told = Claim.parse(whisper.text());
             if (told.isPresent()) {
                 adopt(told.get());
+                heard(whisper.speakerName(), told.get());
                 voice.reply("noted, though I have not seen that myself",
                         whisper.speakerName(), System.currentTimeMillis());
                 return;
@@ -2321,6 +2322,35 @@ public class Agent implements Runnable {
      */
     public String policyName() {
         return policy.name();
+    }
+
+    /** Something another player whispered it, for people watching knowledge get about. */
+    public record Heard(long atMillis, String from, String subject, String predicate, String object) {
+    }
+
+    private void heard(String from, Claim claim) {
+        recentlyHeard.addLast(new Heard(System.currentTimeMillis(), from,
+                claim.subject(), claim.predicate(), claim.object()));
+        while (recentlyHeard.size() > HEARD_KEPT) {
+            recentlyHeard.pollFirst();
+        }
+    }
+
+    private final java.util.concurrent.ConcurrentLinkedDeque<Heard> recentlyHeard =
+            new java.util.concurrent.ConcurrentLinkedDeque<>();
+    private static final int HEARD_KEPT = 12;
+
+    public List<Heard> recentlyHeard() {
+        return List.copyOf(recentlyHeard);
+    }
+
+    /** Minutes since it last earned experience or moved a quest on. */
+    public long minutesWithoutProgress() {
+        return (long) (steps - lastProgressAt) * TICK.toMillis() / 60_000;
+    }
+
+    public Optional<agents.mind.Policy.Thought> lastThought() {
+        return policy.lastThought();
     }
 
     public Mind mind() {

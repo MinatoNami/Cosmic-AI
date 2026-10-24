@@ -64,6 +64,8 @@ public class ControlApi {
         http.createContext("/api/beliefs/", this::beliefs);
         http.createContext("/api/tell", this::tell);
         http.createContext("/api/trace/", this::trace);
+        http.createContext("/api/view", this::view);
+        http.createContext("/api/geometry/", this::geometry);
         http.createContext("/", this::page);
         http.setExecutor(Executors.newFixedThreadPool(4));
     }
@@ -83,6 +85,26 @@ public class ControlApi {
         body.put("startedAt", population.startedAt());
         body.put("agents", population.status());
         send(exchange, 200, body);
+    }
+
+    /** Every agent, as the broadcast page draws it. */
+    private void view(HttpExchange exchange) throws IOException {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("running", population.isRunning());
+        body.put("at", System.currentTimeMillis());
+        body.put("agents", population.view());
+        send(exchange, 200, body);
+    }
+
+    /** /api/geometry/{mapId}: a map's floors, ropes and doors. */
+    private void geometry(HttpExchange exchange) throws IOException {
+        String path = exchange.getRequestURI().getPath();
+        try {
+            int mapId = Integer.parseInt(path.substring("/api/geometry/".length()));
+            send(exchange, 200, LiveView.geometry(mapId));
+        } catch (NumberFormatException notAMap) {
+            send(exchange, 400, Map.of("error", "/api/geometry/{mapId}"));
+        }
     }
 
     private void start(HttpExchange exchange) throws IOException {

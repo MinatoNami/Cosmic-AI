@@ -129,5 +129,19 @@ public interface Policy {
         return null;
     }
 
+    /**
+     * What the model last made of things, for people watching: what it said it was doing,
+     * what it leaned towards, where it chose to head and why, and what it concluded. Empty
+     * for a policy with no model, or before the first answer.
+     */
+    default java.util.Optional<Thought> lastThought() {
+        return java.util.Optional.empty();
+    }
+
+    /** One answer from the model, as said; {@code atMillis} is when it was read. */
+    record Thought(long atMillis, String goal, String leaning, String headingFor, String why,
+                   List<String> learned) {
+    }
+
     String name();
 }

@@ -571,6 +571,17 @@ public class Population {
         return forgotten;
     }
 
+    /** What every agent is seeing and thinking, for the broadcast page. */
+    public List<Map<String, Object>> view() {
+        List<Running> now;
+        synchronized (this) {
+            now = List.copyOf(running);
+        }
+        Map<String, Agent> everyone = new java.util.LinkedHashMap<>();
+        now.forEach(r -> everyone.put(r.name(), r.agent()));
+        return now.stream().map(r -> LiveView.of(r.name(), r.agent(), r.thread().isAlive(), everyone)).toList();
+    }
+
     /** What every agent is doing, for the status endpoint. */
     public synchronized List<AgentStatus> status() {
         List<AgentStatus> all = new ArrayList<>();
