@@ -316,4 +316,21 @@ class PlacesTest {
         assertTrue(Places.worthGoing(KnownWorld.rememberedBy(memory.liveBeliefs()), facts, WEIGHTS).isEmpty(),
                 "not stalled, a passage is no reason on its own");
     }
+
+    /**
+     * Two places never been to, both two steps away: one through two doors, one through a
+     * door and across the water. The crossing is a quarter of an hour, not a step, so the
+     * place across it is not worth the trip where the one on foot is.
+     */
+    @Test
+    void aPlaceAcrossTheWaterCostsTheCrossing() {
+        door(1, "south00", 6);
+        door(6, "east00", 7);
+        believe("map:6", KnownWorld.CARRIES_YOU_TO, "map:8");
+
+        List<String> offered = rank(null, Set.of(), Map.of()).stream().map(Places.Place::map).toList();
+
+        assertTrue(offered.contains("map:7"), offered.toString());
+        assertFalse(offered.contains("map:8"), offered.toString());
+    }
 }

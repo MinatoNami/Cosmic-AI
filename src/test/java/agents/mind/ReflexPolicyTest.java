@@ -423,6 +423,46 @@ class ReflexPolicyTest {
                 "and after rethinking it sets off for a way out again: " + again);
     }
 
+    /**
+     * In Sleepy Dungeon II, one monster straight overhead on the ledge at y=1995, reached by
+     * the ladder at the west end, and one further off across its own floor: it goes for the
+     * one it can walk to.
+     */
+    @Test
+    void theMonsterNearestByTheWayThereIsTheOneGoneFor() {
+        world.update(new Observation.MapEntered(2, 105040302, 0));
+        world.movedTo(new Point(300, 2295));
+        Point overhead = new Point(320, 1995);
+        Point acrossTheFloor = new Point(-200, 2295);
+        world.update(new Observation.MonsterAppeared(3, 9001, 100100, overhead));
+        world.update(new Observation.MonsterAppeared(3, 9002, 100100, acrossTheFloor));
+        ReflexPolicy policy = new ReflexPolicy(new Random(1), Disposition.FIGHTER);
+
+        Policy.Decision decision = policy.decide(mind, world, 4);
+
+        assertEquals("get closer to the thing I can see", decision.goal());
+        assertEquals(acrossTheFloor, ((Intent.MoveTo) decision.intent()).destination());
+    }
+
+    /** Leaving a map it hunted in, it writes down how many monsters were about there. */
+    @Test
+    void leavingAMapNotesHowCrowdedItWas() {
+        mind.take(new Observation.MapEntered(1, 10000, 0));
+        ReflexPolicy policy = new ReflexPolicy(new Random(1), Disposition.FIGHTER);
+        for (int i = 0; i < 12; i++) {
+            world.update(new Observation.MonsterAppeared(2, 9001 + i, 100100, new Point(3000 + i, 0)));
+        }
+        for (int i = 0; i < 80; i++) {
+            policy.decide(mind, world, 3 + i);
+        }
+        world.update(new Observation.MapEntered(100, 40000, 0));
+        policy.decide(mind, world, 101);
+
+        assertTrue(mind.semantic().liveBeliefs().stream().anyMatch(b -> b.subject().equals("map:10000")
+                        && b.predicate().equals(agents.world.Yields.CROWDED_WITH) && b.object().equals("12")),
+                "no crowd written for map:10000");
+    }
+
     /** Thieves' Hideout's "tutorial" portal floats 46px above its floor; standing under it is at it. */
     @Test
     void standingUnderAFloatingPortalIsStandingAtIt() {

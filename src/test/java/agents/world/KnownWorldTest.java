@@ -679,6 +679,7 @@ class KnownWorldTest {
         KnownWorld.Hop orbis = reach.get(KnownWorld.mapRef(200000100));
         org.junit.jupiter.api.Assertions.assertNotNull(orbis, "Orbis Station is three steps away: " + reach);
         org.junit.jupiter.api.Assertions.assertEquals("npc:1032008", KnownWorld.rideNpc(orbis.firstDoor()));
+        org.junit.jupiter.api.Assertions.assertEquals(1, orbis.rides(), "deck, boat and station are one crossing");
         org.junit.jupiter.api.Assertions.assertTrue(KnownWorld.isCarried(
                 world().reachableFrom(KnownWorld.mapRef(101000301)).get(KnownWorld.mapRef(200000100)).firstDoor()),
                 "on the deck, the way on is to wait");

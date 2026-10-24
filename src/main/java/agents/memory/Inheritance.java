@@ -71,6 +71,7 @@ public final class Inheritance {
             "gives_exp",
             "hurts_you",
             "earns_per_minute", // what hunting somewhere paid a minute, and at what level
+            "crowded_with",  // how many monsters are about there, on average
             // How people play, from recordings of them doing it (see Demonstrations). About
             // the people rather than the world, but just as true for the next generation.
             "ap_share_str", "ap_share_dex", "ap_share_int", "ap_share_luk",

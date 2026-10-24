@@ -177,6 +177,17 @@ public sealed interface Observation {
     }
 
     /**
+     * A buff took hold on the agent: which skill (an item's is negative), for how long, and
+     * which of its stats it raised, as the two masks the server writes them in.
+     */
+    record BuffGiven(long tick, int skillId, int millis, long firstMask, long secondMask) implements Observation {
+    }
+
+    /** Buffs on the agent ended: the stats that went, as the server's two masks. */
+    record BuffCancelled(long tick, long firstMask, long secondMask) implements Observation {
+    }
+
+    /**
      * The agent's experience went up by this much.
      *
      * The stat update says what the total now is; this says what just changed and arrives

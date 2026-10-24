@@ -325,4 +325,26 @@ class ObservationDecoderTest {
         assertEquals(new Observation.SkillChanged(1L, 1001004, 3, 0),
                 decode(PacketCreator.updateSkill(1001004, 3, 0, -1)));
     }
+
+    /** Haste at level 5: the skill, how long it lasts, and the stats it raised. */
+    @Test
+    void aBuffTakingHoldSaysWhichSkillAndForHowLong() {
+        Observation observation = decode(PacketCreator.giveBuff(4201003, 50_000, List.of(
+                new tools.Pair<>(client.BuffStat.SPEED, 20), new tools.Pair<>(client.BuffStat.JUMP, 10))));
+
+        Observation.BuffGiven given = assertInstanceOf(Observation.BuffGiven.class, observation);
+        assertEquals(4201003, given.skillId());
+        assertEquals(50_000, given.millis());
+        long speed = client.BuffStat.SPEED.isFirst() ? given.firstMask() : given.secondMask();
+        assertTrue((speed & client.BuffStat.SPEED.getValue()) != 0, "SPEED not in the masks");
+    }
+
+    @Test
+    void aBuffEndingSaysWhichStatsWent() {
+        Observation observation = decode(PacketCreator.cancelBuff(List.of(client.BuffStat.SPEED)));
+
+        Observation.BuffCancelled cancelled = assertInstanceOf(Observation.BuffCancelled.class, observation);
+        long speed = client.BuffStat.SPEED.isFirst() ? cancelled.firstMask() : cancelled.secondMask();
+        assertTrue((speed & client.BuffStat.SPEED.getValue()) != 0, "SPEED not in the masks");
+    }
 }

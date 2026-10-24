@@ -128,6 +128,13 @@ public final class Places {
         }
     }
 
+    /**
+     * What a boat or train crossing costs, in doors walked. A door is under a minute; a
+     * crossing is a quarter of an hour, but a place across the water is weighed by what it
+     * pays as well, and a full count would leave it never worth the trip.
+     */
+    static final int DOORS_A_RIDE_IS_WORTH = 6;
+
     /** A place worth considering, why, and the first door towards it. */
     public record Place(String map, int hops, String firstDoor, double value, List<String> reasons) {
 
@@ -324,7 +331,14 @@ public final class Places {
                 reasons.add("you died there " + (died == 1 ? "once" : died + " times"));
             }
             value += w.novelty() / Math.sqrt(1 + visits);
-            value -= w.perHop() * hop.hops();
+            value -= w.perHop() * (hop.hops() + hop.rides() * DOORS_A_RIDE_IS_WORTH);
+            if (hop.rides() > 0) {
+                // A boat leaves every fifteen minutes and takes ten to cross: on Cosmic's own
+                // timetable, about seventeen minutes of the agent's time, which no count of
+                // doors says. Bots that farm well plan a crossing as a wait, not a step.
+                reasons.add(hop.rides() == 1 ? "a boat ride away, about seventeen minutes"
+                        : hop.rides() + " boat rides away, about seventeen minutes each");
+            }
             if (known.isSpentRoom(map)) {
                 value -= w.spentRoom();
             }

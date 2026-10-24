@@ -168,7 +168,31 @@ public class ObservationDecoder {
         if (opcode == SendOpcode.SHOW_STATUS_INFO.getValue()) {
             return decodeStatusInfo(tick, p);
         }
+        if (opcode == SendOpcode.GIVE_BUFF.getValue()) {
+            return decodeGiveBuff(tick, p);
+        }
+        if (opcode == SendOpcode.CANCEL_BUFF.getValue()) {
+            return new Observation.BuffCancelled(tick, p.readLong(), p.readLong());
+        }
         return null;
+    }
+
+    /**
+     * Two stat masks, then for each stat raised its amount, the skill and how long it lasts.
+     * Every stat of one cast names the same skill and length, so the first says it.
+     *
+     * @see tools.PacketCreator#giveBuff
+     */
+    private static Observation decodeGiveBuff(long tick, InPacket p) {
+        long first = p.readLong();
+        long second = p.readLong();
+        if (first == 0 && second == 0) {
+            return null;
+        }
+        p.readShort();                                  // how much the first stat went up
+        int skillId = p.readInt();
+        int millis = p.readInt();
+        return new Observation.BuffGiven(tick, skillId, millis, first, second);
     }
 
     /**

@@ -226,7 +226,7 @@ public class LlmPolicy implements Policy {
                     ? reflexes.placesWorthGoing(mind, world, PLACES_OFFERED)
                     : List.of();
             String question = describe(mind, world, recalled, askingBecause, stuckFor(), mapsEntered,
-                    offered);
+                    offered, stalledIn == world.mapId());
             pending = CompletableFuture.supplyAsync(() -> oracle.ask(SYSTEM, question, SCHEMA),
                     thinking);
             waitingToAsk = null;
@@ -346,7 +346,8 @@ public class LlmPolicy implements Policy {
     }
 
     private static int weight(String happened) {
-        return happened.startsWith("nothing new") ? 3 : happened.startsWith("you have just arrived") ? 2 : 1;
+        return happened.equals(STALLED) ? 4 : happened.startsWith("nothing new") ? 3
+                : happened.startsWith("you have just arrived") ? 2 : 1;
     }
 
     private int stuckFor() {
@@ -450,7 +451,7 @@ public class LlmPolicy implements Policy {
     private static String describe(Mind mind, WorldModel world, List<Belief> recalled,
                                    String because, int stuckFor,
                                    java.util.Collection<Integer> mapsEntered,
-                                   List<Places.Place> places) {
+                                   List<Places.Place> places, boolean stalledHere) {
         StringBuilder out = new StringBuilder();
         out.append("You are being asked because ").append(because).append(".\n\n");
 
@@ -541,6 +542,14 @@ public class LlmPolicy implements Policy {
                     .append(" decisions.\n");
         }
         bouncing(mapsEntered).ifPresent(line -> out.append('\n').append(line).append('\n'));
+        // And the one the agent itself noticed: nothing earned and no quest moved on, for long
+        // enough that its plans here were thrown away. Told, the model can choose to leave
+        // rather than be asked the same question from the same place.
+        if (stalledHere) {
+            out.append("\nYou have earned no experience and moved no quest on in map:").append(world.mapId())
+                    .append(" for twenty minutes or more. Whatever you are doing here is not working;"
+                            + " choose somewhere else to go.\n");
+        }
 
         out.append("\nWhat you believe, most relevant first:\n");
         if (recalled.isEmpty()) {
@@ -604,7 +613,15 @@ public class LlmPolicy implements Policy {
     @Override
     public void rethink() {
         fallback.rethink();
+        Integer here = mapsEntered.peekLast();
+        stalledIn = here == null ? -1 : here;
+        waitingToAsk = STALLED;     // and asked about straight away: it outranks everything
     }
+
+    private static final String STALLED = "nothing has come of being here for twenty minutes";
+
+    /** The map the agent stopped making progress in, until it is somewhere else; -1 for none. */
+    private int stalledIn = -1;
 
     // Everything else the agent asks of a policy is the reflexes' to answer, as it is when
     // there is no model at all. Left to Policy's defaults these said "no" to every question:

@@ -592,6 +592,7 @@ public final class KnownWorld {
         record Arrived(String map, String entrance) {
         }
         Map<Arrived, Hop> hops = new HashMap<>();
+        Set<Arrived> carriedInto = new HashSet<>();
         Deque<Arrived> queue = new ArrayDeque<>();
         Arrived start = new Arrived(fromMap, null);
         hops.put(start, new Hop(0, null));
@@ -616,7 +617,13 @@ public final class KnownWorld {
                 if (hops.containsKey(next)) {
                     continue;
                 }
-                Hop hop = new Hop(sofar.hops() + 1, here == start ? door : sofar.firstDoor());
+                // Deck to boat to the far side is one crossing, however many steps it is told in.
+                boolean carried = CARRIED.equals(door);
+                Hop hop = new Hop(sofar.hops() + 1, here == start ? door : sofar.firstDoor(),
+                        sofar.rides() + (carried && !carriedInto.contains(here) ? 1 : 0));
+                if (carried) {
+                    carriedInto.add(next);
+                }
                 hops.put(next, hop);
                 if (visit.test(destination, hop)) {
                     return;
@@ -681,8 +688,17 @@ public final class KnownWorld {
         return this;
     }
 
-    /** How many doors away a map is, and the door to take first. Null door means here. */
-    public record Hop(int hops, String firstDoor) {
+    /**
+     * How many doors away a map is, and the door to take first. Null door means here.
+     *
+     * @param rides how many of those doors are a boat or a train, each a quarter of an hour
+     *              of waiting and riding where a door is a few seconds' walk
+     */
+    public record Hop(int hops, String firstDoor, int rides) {
+
+        public Hop(int hops, String firstDoor) {
+            this(hops, firstDoor, 0);
+        }
     }
 
     /** People known to stand in this map that this agent has not heard speak, leaving some out. */

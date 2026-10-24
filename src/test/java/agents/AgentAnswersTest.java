@@ -227,4 +227,22 @@ class AgentAnswersTest {
         assertFalse(Agent.offersPassage("Are you done with your training? I will send you out."));
         assertFalse(Agent.offersPassage("Zzzzzz..."));
     }
+
+    /** The newest of what it learned the hard way, ahead of the snails it has seen. */
+    @Test
+    void lessonsAreToldNewestFirstAndSightingsAreNot() {
+        java.util.List<agents.memory.Belief> beliefs = java.util.List.of(
+                lesson(1, "map:105040302", agents.world.Yields.EARNS_PER_MINUTE, "51:4143", 10),
+                lesson(2, "monster:100100", "present_in", "map:10000", 99),
+                lesson(3, "map:101000301", agents.world.KnownWorld.CARRIES_YOU_TO, "map:200090010", 50));
+
+        java.util.List<agents.memory.Belief> told = Agent.lessonsWorthTelling(beliefs);
+
+        assertEquals(java.util.List.of(3L, 1L), told.stream().map(agents.memory.Belief::id).toList());
+    }
+
+    private static agents.memory.Belief lesson(long id, String s, String p, String o, long lastSeen) {
+        return new agents.memory.Belief(id, s, p, o, 0.9, agents.memory.Belief.Provenance.FIRST_HAND,
+                java.util.List.of(1L), 0, lastSeen, null, null);
+    }
 }

@@ -1043,17 +1043,37 @@ public class ReflexPolicy implements Policy {
      * rope up had been set aside after the Evil Eyes knocked it off three times, and the
      * nearest monster was still the one to go after, so the Evil Eyes beside it went unhit.
      * Something standing on no floor - in the air - is judged by distance alone, as before.
+     *
+     * And nearest by the way there, not as the crow flies, as bots that farm well choose: one
+     * across the floor beats one straight overhead whose rope is at the far end of the map.
+     * Agent3 went for monsters on a ledge above it in Sleepy Dungeon II, round by a rope, for
+     * hours, with others on its own floor.
      */
     private static Optional<WorldModel.Entity> reachableMonster(WorldModel world, Point self) {
         int map = world.mapId();
         boolean hasFloors = !agents.world.MapGeometry.groundIn(map).isEmpty();
         Fighting.Attack attack = Fighting.choose(world);
-        return world.visibleMonsters().stream()
-                .filter(monster -> !hasFloors
-                        || Fighting.canHit(attack, self, monster.position(), MELEE_RANGE)
-                        || agents.world.Navigator.floorHeight(map, monster.position()).isEmpty()
-                        || agents.world.Navigator.nextStep(map, self, monster.position()).isPresent())
-                .min(Comparator.comparingDouble(monster -> monster.position().distance(self)));
+        WorldModel.Entity best = null;
+        double bestCost = Double.MAX_VALUE;
+        for (WorldModel.Entity monster : world.visibleMonsters()) {
+            double cost;
+            if (Fighting.canHit(attack, self, monster.position(), MELEE_RANGE)) {
+                cost = monster.position().distance(self) / 10;     // no walk at all: first
+            } else if (!hasFloors || agents.world.Navigator.floorHeight(map, monster.position()).isEmpty()) {
+                cost = monster.position().distance(self);
+            } else {
+                java.util.OptionalLong route = agents.world.Navigator.routeCost(map, self, monster.position());
+                if (route.isEmpty()) {
+                    continue;
+                }
+                cost = route.getAsLong();
+            }
+            if (cost < bestCost) {
+                bestCost = cost;
+                best = monster;
+            }
+        }
+        return Optional.ofNullable(best);
     }
 
     private void somethingToBreak(List<Choice> choices, WorldModel world, Point self, Set<Integer> unfinished) {
@@ -3467,6 +3487,12 @@ public class ReflexPolicy implements Policy {
         }
         lastBar = bar;
         monstersWhileMeasuring |= world.monsterCount() > 0;
+        if (map != crowdMap) {
+            noteTheCrowd(mind, tick);
+            crowdMap = map;
+        }
+        crowdSeen += world.monsterCount();
+        crowdLooks++;
         boolean moved = map != yieldMap || level != yieldLevel;
         if (!moved && now - yieldSince < YIELD_PERIOD) {
             return;
@@ -3498,6 +3524,25 @@ public class ReflexPolicy implements Policy {
         earned = 0;
         monstersWhileMeasuring = world.monsterCount() > 0;
     }
+
+    /**
+     * Writes down how crowded the map just left was, when it was there long enough to say, and
+     * only where something lived: a town is not an empty hunting ground.
+     */
+    private void noteTheCrowd(Mind mind, long tick) {
+        if (crowdMap > 0 && crowdLooks >= CROWD_LEAST_LOOKS && crowdSeen > 0) {
+            mind.saw(KnownWorld.mapRef(crowdMap), Yields.CROWDED_WITH,
+                    String.valueOf(Math.round((double) crowdSeen / crowdLooks)), tick);
+        }
+        crowdSeen = 0;
+        crowdLooks = 0;
+    }
+
+    private int crowdMap = -1;
+    private long crowdSeen;
+    private int crowdLooks;
+    /** Decisions in a map before how crowded it is says anything. */
+    private static final int CROWD_LEAST_LOOKS = 60;
 
     /**
      * What it expects a minute anywhere and what it has measured, and whether somewhere it can

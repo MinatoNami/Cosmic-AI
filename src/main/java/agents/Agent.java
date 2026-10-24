@@ -553,6 +553,7 @@ public class Agent implements Runnable {
             mind.take(observation);
             acknowledgeArrival(observation);
             answerNpc(observation);
+            buffClock.heard(observation, System.currentTimeMillis());
             // And picking up anything from the etc pocket: a job test's monsters give no
             // experience, only the marbles that pass it, and Agent3 was logged out of the
             // Magician's test for making no progress while it collected them.
@@ -562,6 +563,7 @@ public class Agent implements Runnable {
                        && picked.quantity() > 0 && picked.itemId() / 1_000_000 == 4) {
                 lastProgressAt = steps;
                 rethought = false;
+                scrolledOut = false;
             }
             if (observation instanceof Observation.QuestStateChanged quest && quest.state() == 1
                     && talkingWith > 0) {
@@ -767,7 +769,7 @@ public class Agent implements Runnable {
      * corpse around, as far as anyone watching could tell, and nothing would happen.
      */
     private void awaitRevival() {
-        buffsLastUntil.clear();     // dying takes every buff with it
+        buffClock.died();           // dying takes every buff with it
         if (deadFor++ == 0) {
             log.info("{} died in map {}", mind.name(), world.mapId());
             // First-hand, and at the level it happened: a map that killed a level-8 character
@@ -805,29 +807,27 @@ public class Agent implements Runnable {
      * Magic Guard or Iron Body up. Not mid-conversation, and not more often than every few
      * steps, so the server sees each land.
      */
-    private final java.util.Map<Integer, Integer> castLevelLogged = new java.util.HashMap<>();
-
     private void keepBuffsUp() {
         if (pendingDialogue != null || steps - lastCastAt < STEPS_BETWEEN_CASTS) {
             return;
         }
         long now = System.currentTimeMillis();
-        agents.mind.Fighting.due(agents.mind.Fighting.buffs(world), buffsLastUntil, now).ifPresent(buff -> {
+        buffClock.due(agents.mind.Fighting.buffs(world), now).ifPresent(buff -> {
             // Said once per skill and level: recasting the same buff every minute or so was
             // seven lines in ten of everything the agents logged.
             if (!Integer.valueOf(buff.level()).equals(castLevelLogged.put(buff.skillId(), buff.level()))) {
                 log.info("{} casts skill:{} (level {})", mind.name(), buff.skillId(), buff.level());
             }
             connection.session().send(ClientPackets.castOnSelf(buff.skillId(), buff.level()));
-            buffsLastUntil.put(buff.skillId(), now + buff.seconds() * 1000L - RECAST_EARLY_MILLIS);
+            buffClock.cast(buff, now);
             lastCastAt = steps;
         });
     }
 
-    private final java.util.Map<Integer, Long> buffsLastUntil = new java.util.HashMap<>();
+    private final agents.mind.BuffClock buffClock = new agents.mind.BuffClock();
+    private final java.util.Map<Integer, Integer> castLevelLogged = new java.util.HashMap<>();
     private int lastCastAt = Integer.MIN_VALUE / 2;
     private static final int STEPS_BETWEEN_CASTS = 5;
-    private static final long RECAST_EARLY_MILLIS = 3000;
 
     private static final java.util.regex.Pattern CALLING = java.util.regex.Pattern.compile(
             "(?i)(?:be(?:come)? an?|be the)\\s*(?:#[a-z])*\\s*(warrior|bowman|archer|magician|mage|thief|rogue|pirate)\\b");
@@ -996,6 +996,18 @@ public class Agent implements Runnable {
             policy.rethink();
             rethought = true;
         }
+        // Then out by the map's own return scroll, before the population logs it back in -
+        // which puts it back where it was. The escalation bots that farm well use: think
+        // again, try another way, leave by scroll, and only then start over.
+        int map = world.mapId();
+        int town = agents.world.MapGeometry.returnTownOf(map);
+        if (stalled >= SCROLL_AFTER && !scrolledOut && town > 0 && town != map
+                && world.inventory().count(agents.mind.Shopkeeping.RETURN_SCROLL) > 0) {
+            log.warn("{} has made no progress in {} minutes in map {} - reads a return scroll", mind.name(),
+                    stalled * TICK.toMillis() / 60_000, map);
+            use(agents.mind.Shopkeeping.RETURN_SCROLL);
+            scrolledOut = true;
+        }
     }
 
     /**
@@ -1103,11 +1115,13 @@ public class Agent implements Runnable {
         return steps - lastProgressAt >= RELOG_AFTER;
     }
 
-    /** About twenty and forty minutes of steps. */
+    /** About twenty, thirty and forty minutes of steps. */
     private static final int RETHINK_AFTER = 2000;
+    private static final int SCROLL_AFTER = 3000;
     private static final int RELOG_AFTER = 4000;
     private int lastProgressAt;
     private boolean rethought;
+    private boolean scrolledOut;
 
     /** Whether this NPC's offer is known to go to a map known to have nothing to do. */
     private boolean leadsNowhereWorthGoing(int npcId) {
@@ -2207,8 +2221,15 @@ public class Agent implements Runnable {
         if (!sayWhereIAm && worthSaying.isEmpty()) {
             return;
         }
+        // And every other time it speaks of the world, one of its newest lessons: what a place
+        // paid, how crowded it was, where a boat goes, what killed it. Turn by turn through a
+        // hundred thousand beliefs, those came round about once a day; the others did not
+        // hear that the drakes pay until they had found out for themselves.
+        List<Belief> lessons = (nextToShare / 2) % 2 == 0 ? lessonsWorthTelling(worthSaying) : List.of();
         String claim = sayWhereIAm
                 ? Claim.announce("player:" + world.characterId(), "in_map", "map:" + world.mapId())
+                : !lessons.isEmpty()
+                ? Claim.announce(lessons.get((nextToShare / 4) % lessons.size()))
                 : Claim.announce(worthSaying.get((nextToShare / 2) % worthSaying.size()));
 
         long now = System.currentTimeMillis();
@@ -2221,6 +2242,26 @@ public class Agent implements Runnable {
         // people takes four beats, as it would if you were doing the telling.
         acquaintances().forEach(name -> voice.tell(claim, name, now));
     }
+
+    /**
+     * What it learned the hard way, newest first: the things bots that farm well pass between
+     * themselves, rather than every snail it has seen.
+     */
+    static List<Belief> lessonsWorthTelling(List<Belief> beliefs) {
+        return beliefs.stream()
+                .filter(b -> LESSONS.contains(b.predicate()))
+                .sorted(Comparator.comparingLong(Belief::lastSeen).reversed())
+                .limit(LESSONS_TOLD)
+                .toList();
+    }
+
+    private static final Set<String> LESSONS = Set.of(
+            agents.world.Yields.EARNS_PER_MINUTE, agents.world.Yields.CROWDED_WITH,
+            KnownWorld.CARRIES_YOU_TO, "takes_you_to", "offers_passage", "strands_you",
+            "killed_you_at_level", "too_hard_at_level", "hurts_you", "gives_exp",
+            "nothing_to_do", "does_not_answer");
+    /** The newest lessons rotated through, so the freshest go round quickly. */
+    private static final int LESSONS_TOLD = 20;
 
     /** Names of players it has seen, from its own beliefs. */
     private List<String> acquaintances() {

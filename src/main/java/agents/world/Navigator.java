@@ -165,6 +165,27 @@ public final class Navigator {
                         edge.rope, edge.legs, edge.through));
     }
 
+    /**
+     * What getting from one point to another costs, in walking pixels with a charge for every
+     * change of floor and every climb, or empty when there is no known way. What a chase is
+     * judged on: a monster across the floor is nearer than one straight above on a ledge that
+     * takes a rope at the far end of the map to reach.
+     */
+    public static java.util.OptionalLong routeCost(int mapId, Point from, Point to) {
+        Graph graph = graphOf(mapId);
+        int start = graph.platformUnder(from.x, from.y);
+        int goal = graph.platformUnder(to.x, to.y);
+        if (start < 0 || goal < 0) {
+            return java.util.OptionalLong.empty();
+        }
+        if (start == goal) {
+            return java.util.OptionalLong.of(Math.abs(from.x - graph.platforms.get(goal).clamp(to.x)));
+        }
+        return graph.cheapest(start, from.x, goal, blockedRopes(mapId), blockedRooms(mapId))
+                .map(arrived -> java.util.OptionalLong.of(arrived[0] + Math.abs(arrived[1] - to.x)))
+                .orElse(java.util.OptionalLong.empty());
+    }
+
     /** The height of the floor a point is standing on, if it is standing on one. */
     public static Optional<Integer> floorHeight(int mapId, Point at) {
         Graph graph = graphOf(mapId);
@@ -712,6 +733,21 @@ public final class Navigator {
 
         Optional<Edge> firstEdge(int start, int startX, int goal, int goalX, Set<Integer> blockedRopeXs,
                                  Set<String> blockedRooms) {
+            return search(start, startX, goal, blockedRopeXs, blockedRooms).first();
+        }
+
+        /** The cost of the cheapest way to the goal floor and where on it that arrives, or empty. */
+        Optional<long[]> cheapest(int start, int startX, int goal, Set<Integer> blockedRopeXs,
+                                  Set<String> blockedRooms) {
+            Search found = search(start, startX, goal, blockedRopeXs, blockedRooms);
+            return found.first().map(edge -> new long[] {found.cost(), found.arriveX()});
+        }
+
+        private record Search(Optional<Edge> first, long cost, int arriveX) {
+        }
+
+        private Search search(int start, int startX, int goal, Set<Integer> blockedRopeXs,
+                              Set<String> blockedRooms) {
             int n = platforms.size();
             long[] cost = new long[n];
             int[] atX = new int[n];
@@ -747,7 +783,7 @@ public final class Navigator {
                     }
                 }
             }
-            return Optional.ofNullable(first[goal]);
+            return new Search(Optional.ofNullable(first[goal]), cost[goal], atX[goal]);
         }
     }
 }

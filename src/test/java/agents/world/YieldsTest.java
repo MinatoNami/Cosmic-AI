@@ -67,6 +67,35 @@ class YieldsTest {
         assertEquals(400 * 2 * Yields.ESTIMATE_TRUST, forest, 0.01);
     }
 
+    /**
+     * Kills come quicker where more lives: two places with the same monsters, one four times as
+     * crowded as where the pace was measured, are estimated twice as high (the square root).
+     */
+    @Test
+    void aCrowdedPlaceIsEstimatedHigherThanAnEmptyOne() {
+        believe("monster:pig", "present_in", "map:field", 1);
+        believe("monster:pig", "gives_exp", "150", 3);
+        believe("map:field", Yields.EARNS_PER_MINUTE, Yields.measurement(45, 300), 1);
+        believe("map:field", Yields.CROWDED_WITH, "10", 1);
+        believe("monster:lupin", "present_in", "map:crowded", 1);
+        believe("monster:lupin", "present_in", "map:quiet", 1);
+        believe("monster:lupin", "gives_exp", "200", 3);
+        believe("map:crowded", Yields.CROWDED_WITH, "40", 1);
+        believe("map:quiet", Yields.CROWDED_WITH, "10", 1);
+
+        Map<String, Double> expected = Yields.expected(memory.liveBeliefs(), 45);
+
+        assertEquals(200 * 2 * Yields.ESTIMATE_TRUST, expected.get("map:quiet"), 0.01);
+        assertEquals(200 * 2 * 2 * Yields.ESTIMATE_TRUST, expected.get("map:crowded"), 0.01);
+    }
+
+    @Test
+    void howCrowdedNowhereIsKnownChangesNothing() {
+        assertEquals(1.0, Yields.crowdFactor(null, 10));
+        assertEquals(1.0, Yields.crowdFactor(30.0, 0));
+        assertEquals(Yields.CROWD_SWAY, Yields.crowdFactor(1000.0, 10));
+    }
+
     @Test
     void whatAPlacePaidLevelsAgoSaysNothingNow() {
         believe("map:field", Yields.EARNS_PER_MINUTE, Yields.measurement(20, 400), 1);

@@ -450,6 +450,36 @@ class LlmPolicyTest {
                 oracle.prompts.get(askedBefore));
     }
 
+    /** Once the agent has stalled and rethought, the model is told, until it is somewhere else. */
+    @Test
+    void theModelIsToldWhenTheAgentHasStalledWhereItIs() {
+        StubOracle oracle = new StubOracle("GOAL: x\nPURSUE: exploring");
+        LlmPolicy policy = new LlmPolicy(oracle, reflex, 10_000);
+        policy.decide(mind, world, 0);
+        waitFor(policy);
+        assertFalse(oracle.prompts.get(0).contains("earned no experience"), oracle.prompts.get(0));
+
+        for (int decision = 1; decision < 15; decision++) {
+            policy.decide(mind, world, decision);
+            waitFor(policy);
+        }
+        policy.rethink();       // which is itself a reason to ask
+        policy.decide(mind, world, 20);
+        waitFor(policy);
+        assertTrue(oracle.prompts.get(oracle.prompts.size() - 1).contains("earned no experience"),
+                oracle.prompts.get(oracle.prompts.size() - 1));
+
+        for (int decision = 21; decision < 35; decision++) {
+            policy.decide(mind, world, decision);
+            waitFor(policy);
+        }
+        world.update(new Observation.MapEntered(40, 20000, 0));
+        policy.decide(mind, world, 40);
+        waitFor(policy);
+        assertFalse(oracle.prompts.get(oracle.prompts.size() - 1).contains("earned no experience"),
+                "somewhere else now");
+    }
+
     /** A run of events is still no more than one question per gap. */
     @Test
     void aBurstOfArrivalsDoesNotAskOnEveryDecision() {

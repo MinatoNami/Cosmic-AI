@@ -38,6 +38,19 @@ public final class Yields {
     /** The predicate a measurement is written under. */
     public static final String EARNS_PER_MINUTE = "earns_per_minute";
 
+    /**
+     * How many monsters were about in a map, on average, while the agent was there.
+     *
+     * Bots that farm well estimate a map from how much lives in it before they ever hunt
+     * there; a player sees as much on walking in. Kills come quicker where there is more to
+     * hit, so an estimate made at one crowd is scaled to another - by the square root, since
+     * a crowd shortens the walk between kills but not the kills themselves.
+     */
+    public static final String CROWDED_WITH = "crowded_with";
+
+    /** The furthest a crowd moves an estimate, either way. */
+    static final double CROWD_SWAY = 2;
+
     /** Measurements this many levels either side of the agent's still say something about it. */
     static final int NEAR_LEVELS = 3;
 
@@ -92,12 +105,15 @@ public final class Yields {
             }
         });
         double killsPerMinute = killsPerMinute(measured, worthAKill);
+        Map<String, Double> crowds = crowds(beliefs);
+        double usualCrowd = usualCrowd(measured, crowds);
         // And never more than a few times the best it has managed: what a monster gives says
         // nothing about whether this agent can kill it, and the more it gives the less likely.
         double ceiling = Collections.max(measured.values()) * ESTIMATE_CEILING;
         Map<String, Double> expected = new HashMap<>();
         worthAKill.forEach((map, exp) -> expected.put(map,
-                Math.min(ceiling, exp * killsPerMinute * ESTIMATE_TRUST)));
+                Math.min(ceiling, exp * killsPerMinute * crowdFactor(crowds.get(map), usualCrowd)
+                        * ESTIMATE_TRUST)));
         expected.putAll(measured);
         return expected;
     }
@@ -129,6 +145,47 @@ public final class Yields {
         Map<String, Double> rates = new HashMap<>();
         sums.forEach((map, sum) -> rates.put(map, sum[0] / sum[1]));
         return rates;
+    }
+
+    /** How crowded each map has been found, on average. */
+    static Map<String, Double> crowds(List<Belief> beliefs) {
+        Map<String, double[]> sums = new HashMap<>();
+        for (Belief belief : beliefs) {
+            if (!belief.predicate().equals(CROWDED_WITH)) {
+                continue;
+            }
+            try {
+                double count = Double.parseDouble(belief.object());
+                double[] sum = sums.computeIfAbsent(belief.subject(), m -> new double[2]);
+                sum[0] += count;
+                sum[1]++;
+            } catch (NumberFormatException ignored) {
+                // not a count
+            }
+        }
+        Map<String, Double> crowds = new HashMap<>();
+        sums.forEach((map, sum) -> crowds.put(map, sum[0] / sum[1]));
+        return crowds;
+    }
+
+    /** The middle crowd of the places its kill rate was measured in, or 0 when none is known. */
+    static double usualCrowd(Map<String, Double> measured, Map<String, Double> crowds) {
+        List<Double> known = new ArrayList<>(measured.keySet().stream()
+                .filter(crowds::containsKey).map(crowds::get).filter(c -> c > 0).toList());
+        if (known.isEmpty()) {
+            return 0;
+        }
+        Collections.sort(known);
+        return known.get(known.size() / 2);
+    }
+
+    /** What a crowd does to a kill rate measured at the usual one; 1 when either is unknown. */
+    static double crowdFactor(Double crowd, double usualCrowd) {
+        if (crowd == null || crowd <= 0 || usualCrowd <= 0) {
+            return 1;
+        }
+        double factor = Math.sqrt(crowd / usualCrowd);
+        return Math.max(1 / CROWD_SWAY, Math.min(CROWD_SWAY, factor));
     }
 
     /**
