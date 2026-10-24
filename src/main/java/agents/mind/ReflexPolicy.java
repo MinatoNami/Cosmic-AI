@@ -4362,9 +4362,8 @@ public class ReflexPolicy implements Policy {
 
     /** The map an NPC was last perceived in, whether by seeing it or by talking to it. */
     private static Optional<String> lastSeenIn(Mind mind, String npcRef) {
-        return mind.semantic().liveBeliefs().stream()
-                .filter(b -> b.subject().equals(npcRef)
-                        && (b.predicate().equals("present_in") || b.predicate().equals("talks_in")))
+        return mind.semantic().about(npcRef).stream()
+                .filter(b -> b.predicate().equals("present_in") || b.predicate().equals("talks_in"))
                 .map(Belief::object)
                 .findFirst();
     }

@@ -255,7 +255,7 @@ public final class Survival {
     private static java.util.stream.Stream<Belief> beliefAbout(Mind mind, int itemId, String need) {
         String subject = "item:" + itemId;
         String predicate = "restores_" + need;
-        return mind.semantic().liveBeliefs().stream()
-                .filter(b -> b.subject().equals(subject) && b.predicate().equals(predicate));
+        return mind.semantic().about(subject).stream()
+                .filter(b -> b.predicate().equals(predicate));
     }
 }

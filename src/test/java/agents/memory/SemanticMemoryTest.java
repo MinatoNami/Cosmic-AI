@@ -132,4 +132,37 @@ class SemanticMemoryTest {
         assertEquals(List.of("6"), memory.liveBeliefs().stream()
                 .filter(b -> b.predicate().equals("dex")).map(b -> b.object()).toList());
     }
+
+    /** The indexes answer what reading everything answered, through revisions and retractions. */
+    @Test
+    void indexedLookupsAgreeWithReadingEverything() {
+        java.util.Random random = new java.util.Random(3);
+        SemanticMemory memory = new SemanticMemory();
+        String[] subjects = {"self", "npc:1", "npc:2", "map:3"};
+        String[] predicates = {"hp", "present_in", "talks_in", "state"};
+        for (int i = 0; i < 2000; i++) {
+            if (random.nextInt(10) == 0 && memory.size() > 0) {
+                memory.retract(random.nextInt(memory.size()), i);
+            } else {
+                memory.assertTriple(subjects[random.nextInt(4)], predicates[random.nextInt(4)],
+                        String.valueOf(random.nextInt(5)), i, i, Belief.Provenance.FIRST_HAND);
+            }
+            if (i % 97 == 0) {
+                java.util.List<Belief> everything = new java.util.ArrayList<>();
+                for (Belief b : memory.all()) {
+                    if (b.isLive()) {
+                        everything.add(b);
+                    }
+                }
+                assertEquals(everything, memory.liveBeliefs(), "live list stale after " + i);
+                for (String subject : subjects) {
+                    assertEquals(everything.stream().filter(b -> b.subject().equals(subject)).toList(),
+                            memory.about(subject), subject);
+                }
+            }
+        }
+        // And never two live beliefs saying the same thing.
+        assertEquals(memory.liveBeliefs().size(), memory.liveBeliefs().stream()
+                .map(b -> b.subject() + "|" + b.predicate() + "|" + b.object()).distinct().count());
+    }
 }

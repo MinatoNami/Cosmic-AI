@@ -2,9 +2,12 @@ package agents.memory;
 
 import agents.memory.Belief.Provenance;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
@@ -58,18 +61,32 @@ public class SemanticMemory {
     private final List<Belief> beliefs = new CopyOnWriteArrayList<>();
 
     /**
+     * Where to find things without reading everything. Agents in their forties hold 110 to
+     * 156 thousand beliefs, and two-thirds of all the time four of them spent was one NPC
+     * looked up at a time by reading every one; the laptop they run on sat at 101C and hung.
+     * A belief keeps its subject, predicate and object for life - only whether it is live
+     * changes - so the indexes only ever grow, on add.
+     */
+    private final Map<String, List<Integer>> bySubject = new ConcurrentHashMap<>();
+    private final Map<String, Integer> byTriple = new ConcurrentHashMap<>();
+
+    /** The live beliefs as of a version of the memory, kept until the memory changes. */
+    private record Live(long version, List<Belief> beliefs) {
+    }
+
+    private volatile long version;
+    private volatile Live live;
+
+    /**
      * Records a triple, merging with an existing belief where one already says the same
      * thing.
      *
      * @return what the memory holds afterwards, whether newly created or corroborated
      */
-    public Assertion assertTriple(String subject, String predicate, String object,
-                                  long episodeId, long tick, Provenance provenance) {
-        Optional<Belief> identical = liveBeliefs().stream()
-                .filter(b -> b.subject().equals(subject)
-                        && b.predicate().equals(predicate)
-                        && b.object().equals(object))
-                .findFirst();
+    public synchronized Assertion assertTriple(String subject, String predicate, String object,
+                                               long episodeId, long tick, Provenance provenance) {
+        Integer sameId = byTriple.get(triple(subject, predicate, object));
+        Optional<Belief> identical = Optional.ofNullable(sameId).map(beliefs::get).filter(Belief::isLive);
 
         if (identical.isPresent()) {
             Belief existing = identical.get();
@@ -90,8 +107,8 @@ public class SemanticMemory {
         if (FUNCTIONAL_PREDICATES.contains(predicate)) {
             // Every one, not just the first: a mind saved before a predicate was made
             // single-valued carries several, and they should all give way to the new one.
-            List<Belief> conflicting = liveBeliefs().stream()
-                    .filter(b -> b.subject().equals(subject) && b.predicate().equals(predicate))
+            List<Belief> conflicting = about(subject).stream()
+                    .filter(b -> b.predicate().equals(predicate))
                     .toList();
             for (Belief old : conflicting) {
                 replace(old, old.invalidatedAt(tick, created.id()));
@@ -99,7 +116,7 @@ public class SemanticMemory {
             contradicted = conflicting.isEmpty() ? null : conflicting.get(0);
         }
 
-        beliefs.add(created);
+        add(created);
         return new Assertion(created, contradicted, true);
     }
 
@@ -161,6 +178,24 @@ public class SemanticMemory {
 
     private void replace(Belief old, Belief updated) {
         beliefs.set((int) old.id(), updated);
+        version++;
+    }
+
+    private void add(Belief belief) {
+        beliefs.add(belief);
+        int id = (int) belief.id();
+        List<Integer> ids = bySubject.computeIfAbsent(belief.subject(), s -> new ArrayList<>());
+        synchronized (ids) {
+            ids.add(id);
+        }
+        // The first live one is the one that counts, as reading them in order found it.
+        byTriple.merge(triple(belief.subject(), belief.predicate(), belief.object()), id,
+                (held, added) -> beliefs.get(held).isLive() ? held : added);
+        version++;
+    }
+
+    private static String triple(String subject, String predicate, String object) {
+        return subject + '\u0000' + predicate + '\u0000' + object;
     }
 
     /**
@@ -169,16 +204,27 @@ public class SemanticMemory {
      * Belief ids are positions too, and {@code replace} writes by index, so an out-of-order
      * restore would corrupt every later revision. Loudly refused rather than repaired.
      */
-    public void restore(Belief belief) {
+    public synchronized void restore(Belief belief) {
         if (belief.id() != beliefs.size()) {
             throw new IllegalArgumentException("Beliefs restore in id order: expected "
                     + beliefs.size() + ", got " + belief.id());
         }
-        beliefs.add(belief);
+        add(belief);
     }
 
+    /**
+     * Every live belief, in id order. Worked out once per change rather than once per ask:
+     * a decision asks dozens of times and the memory changes a few times a tick.
+     */
     public List<Belief> liveBeliefs() {
-        return beliefs.stream().filter(Belief::isLive).toList();
+        long now = version;
+        Live held = live;
+        if (held != null && held.version() == now) {
+            return held.beliefs();
+        }
+        List<Belief> fresh = beliefs.stream().filter(Belief::isLive).toList();
+        live = new Live(now, fresh);
+        return fresh;
     }
 
     /** Including invalidated ones, which is what a replay wants. */
@@ -193,8 +239,24 @@ public class SemanticMemory {
         return Optional.of(beliefs.get((int) id));
     }
 
+    /** Live beliefs about one subject, in id order, without reading the rest. */
     public List<Belief> about(String subject) {
-        return liveBeliefs().stream().filter(b -> b.subject().equals(subject)).toList();
+        List<Integer> ids = bySubject.get(subject);
+        if (ids == null) {
+            return List.of();
+        }
+        List<Integer> snapshot;
+        synchronized (ids) {
+            snapshot = List.copyOf(ids);
+        }
+        List<Belief> about = new ArrayList<>(snapshot.size());
+        for (int id : snapshot) {
+            Belief belief = beliefs.get(id);
+            if (belief.isLive()) {
+                about.add(belief);
+            }
+        }
+        return about;
     }
 
     public int size() {

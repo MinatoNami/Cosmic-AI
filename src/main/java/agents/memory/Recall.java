@@ -1,10 +1,8 @@
 package agents.memory;
 
-import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 /**
  * Picks the beliefs worth putting in front of a decision.
@@ -30,13 +28,37 @@ public final class Recall {
     private Recall() {
     }
 
+    /**
+     * The best {@code limit} by score, ties in id order. Each belief is scored once and only
+     * the best few are kept: sorting every belief by a comparator that scored both sides
+     * scored each of 150 thousand beliefs some seventeen times over, a regex split each time,
+     * and was a seventh of everything the agents spent.
+     */
     public static List<Belief> mostRelevant(SemanticMemory memory, String query, long nowTick, int limit) {
         Set<String> queryTerms = terms(query);
-
-        return memory.liveBeliefs().stream()
-                .sorted(Comparator.comparingDouble((Belief b) -> -score(b, queryTerms, nowTick)))
-                .limit(limit)
+        List<Belief> beliefs = memory.liveBeliefs();
+        if (limit <= 0) {
+            return List.of();
+        }
+        // Worst at the head, so the next better one replaces it; on a tie the later loses.
+        java.util.PriorityQueue<Scored> best = new java.util.PriorityQueue<>(
+                Comparator.comparingDouble(Scored::score).thenComparing(Comparator.comparingInt(Scored::order).reversed()));
+        for (int i = 0; i < beliefs.size(); i++) {
+            Scored scored = new Scored(beliefs.get(i), score(beliefs.get(i), queryTerms, nowTick), i);
+            if (best.size() < limit) {
+                best.add(scored);
+            } else if (best.comparator().compare(scored, best.peek()) > 0) {
+                best.poll();
+                best.add(scored);
+            }
+        }
+        return best.stream()
+                .sorted(Comparator.comparingDouble(Scored::score).reversed().thenComparingInt(Scored::order))
+                .map(Scored::belief)
                 .toList();
+    }
+
+    private record Scored(Belief belief, double score, int order) {
     }
 
     static double score(Belief belief, Set<String> queryTerms, long nowTick) {
@@ -50,9 +72,13 @@ public final class Recall {
         if (queryTerms.isEmpty()) {
             return 0;
         }
-        Set<String> beliefTerms = terms(belief.asSentence());
-        long hits = queryTerms.stream().filter(beliefTerms::contains).count();
-        return (double) hits / queryTerms.size();
+        Set<String> hits = new java.util.HashSet<>();
+        forEachTerm(belief.asSentence(), term -> {
+            if (queryTerms.contains(term)) {
+                hits.add(term);
+            }
+        });
+        return (double) hits.size() / queryTerms.size();
     }
 
     private static double recency(Belief belief, long nowTick) {
@@ -60,9 +86,25 @@ public final class Recall {
         return Math.pow(0.5, age / RECENCY_HALF_LIFE);
     }
 
-    private static Set<String> terms(String text) {
-        return Arrays.stream(text.toLowerCase().split("[^a-z0-9]+"))
-                .filter(t -> !t.isBlank())
-                .collect(Collectors.toSet());
+    static Set<String> terms(String text) {
+        Set<String> terms = new java.util.HashSet<>();
+        forEachTerm(text, terms::add);
+        return terms;
+    }
+
+    /** The runs of a-z and 0-9 in the text, lower-cased: what splitting on anything else gave. */
+    private static void forEachTerm(String text, java.util.function.Consumer<String> term) {
+        String lower = text.toLowerCase();
+        int start = -1;
+        for (int i = 0; i <= lower.length(); i++) {
+            char c = i < lower.length() ? lower.charAt(i) : ' ';
+            boolean inTerm = c >= 'a' && c <= 'z' || c >= '0' && c <= '9';
+            if (inTerm && start < 0) {
+                start = i;
+            } else if (!inTerm && start >= 0) {
+                term.accept(lower.substring(start, i));
+                start = -1;
+            }
+        }
     }
 }
