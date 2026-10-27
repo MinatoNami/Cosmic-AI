@@ -1542,6 +1542,29 @@ class ReflexPolicyTest {
         assertTrue(policy.jobAdvancementPending());
     }
 
+    /**
+     * Nor does a price it can pay to somebody here hold the ride up: Agent2 kept a fare to
+     * somebody in El Nath as its errand, and never asked for the ride to the Dark Lord.
+     */
+    @Test
+    void ridesTowardsWhereTheChiefSendsItBeforeAnyPriceItCanPay() {
+        aJunction();
+        mind.saw("npc:2020011", "present_in", "map:20000", 4);
+        mind.saw("npc:1052001", "present_in", "map:50000", 4);
+        mind.saw("npc:9000021", "present_in", "map:10000", 4);
+        mind.saw("npc:9000021", "present_in", "map:60000", 4);
+        mind.saw("npc:9000021", "takes_you_to", "map:50000", 4);
+        mind.saw("npc:2020003", "present_in", "map:20000", 4);
+        mind.hear("npc:2020003", "wants_first", "1500 mesos", 4);
+        mind.take(new Observation.StatsChanged(4, Map.of("MESO", 394000)));
+        mind.hear("npc:2020011", "sends_you_to", "npc:1052001", 5);
+        aBanditAt(70);
+        ReflexPolicy policy = new ReflexPolicy(new Random(1), Disposition.WANDERER);
+        policy.decide(mind, world, 10);
+
+        assertEquals(9000021, policy.rideWanted(), "the ride, not the fare");
+    }
+
     /** Once it has been there since being told, the instruction is spent. */
     @Test
     void anInstructionIsSpentOnceCarriedOut() {

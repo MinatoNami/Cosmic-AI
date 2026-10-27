@@ -3172,6 +3172,11 @@ public class ReflexPolicy implements Policy {
             errandMap = payableMap;
         } else if (sentMap != null || errandNpc >= 0) {
             errandMap = null;
+        } else if (sentByTrainer && !cutOffFrom.isEmpty()) {
+            // Sent across a sea for its job, the ride over is the errand, not a price somebody
+            // here named: Agent2, sent from El Nath to the Dark Lord, kept a fare it could pay
+            // to somebody in town as its errand, and the ride was never asked for.
+            errandMap = null;
         } else {
             errandNpc = payableNpc;
         }
