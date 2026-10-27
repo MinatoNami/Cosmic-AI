@@ -96,7 +96,7 @@ class ShopkeepingTest {
     /** The proof of a test, a letter for an instructor: kept, however full the bag. */
     @Test
     void keepsWhatIsForAQuestOrForSomebody() {
-        mind.saw("item:4000018", "given_by", "npc:1072000", 1);
+        mind.saw("npc:1072000", "asked_you_to", "bring 5 item:4000018", 1);
         carrying(0,
                 new Item(4, 1, 4031012, 1, null),
                 new Item(4, 2, 4000018, 5, null),
@@ -105,6 +105,68 @@ class ShopkeepingTest {
         List<Integer> spare = shop.spare(world, mind).stream().map(Item::itemId).toList();
 
         assertEquals(List.of(SNAIL_SHELL), spare);
+    }
+
+    /**
+     * Handed over is not asked for: an event's Monster Cards and a box's Stiff Feathers were
+     * kept for having been given, and filled half a Thief's etc bag for good.
+     */
+    @Test
+    void sellsWhatWasHandedOverThatNobodyAsksFor() {
+        mind.saw("item:4030012", "given_by", "npc:1095002", 1);
+        carrying(0,
+                new Item(4, 1, 4031045, 1, null),
+                new Item(4, 2, 4030012, 1000, null));
+
+        List<Integer> spare = shop.spare(world, mind).stream().map(Item::itemId).toList();
+
+        assertEquals(List.of(4030012), spare, "the cards go; the ticket, a quest item, stays");
+    }
+
+    private static final int WORN_TOP = 1040002;
+    private static final int SHORT_OF_DEX = 1040097;
+    private static final int NOT_YET_LEVEL = 1040111;
+    private static final int WEARABLE = 1040059;
+
+    private final Shopkeeping thiefShop = new Shopkeeping(id -> switch (id) {
+        case SHORT_OF_DEX -> new EquipInfo(new int[]{-5}, 50, 0, 0, 90, 0, 140, false, false);
+        case NOT_YET_LEVEL -> new EquipInfo(new int[]{-5}, 80, 0, 0, 120, 0, 200, false, false);
+        case WEARABLE -> new EquipInfo(new int[]{-5}, 30, 0, 0, 30, 0, 80, false, false);
+        default -> new EquipInfo(new int[]{-5}, 0, 0, 0, 0, 0, 0, false, false);
+    });
+
+    private static Item.EquipStats top(int luk, int wdef) {
+        return new Item.EquipStats(0, 0, 0, luk, 0, 0, 0, 0, wdef, 0, 0, 0, 0, 0, 7);
+    }
+
+    /**
+     * A level-70 Thief with DEX 38 carried thirty-two pieces of thief gear asking DEX 45 to
+     * 100, wore none of them, and kept every one because each was better than what it had on.
+     */
+    @Test
+    void sellsGearItIsOldEnoughForButShortOfTheStatsToWear() {
+        world.update(new Observation.StatsChanged(1, Map.of("JOB", 420, "LEVEL", 70, "DEX", 38, "LUK", 319)));
+        carrying(0,
+                new Item(1, -5, WORN_TOP, 1, top(0, 10)),
+                new Item(1, 1, SHORT_OF_DEX, 1, top(5, 60)),
+                new Item(1, 2, NOT_YET_LEVEL, 1, top(8, 80)),
+                new Item(1, 3, WEARABLE, 1, top(3, 40)));
+
+        List<Integer> spare = thiefShop.spare(world, mind).stream().map(Item::itemId).toList();
+
+        assertEquals(List.of(SHORT_OF_DEX), spare,
+                "not what it will be level enough for, not what it can wear now");
+    }
+
+    /** Stats it has not been told are not stats it is short of. */
+    @Test
+    void keepsGearWhileItsStatsAreUnknown() {
+        world.update(new Observation.StatsChanged(1, Map.of("JOB", 420, "LEVEL", 70)));
+        carrying(0,
+                new Item(1, -5, WORN_TOP, 1, top(0, 10)),
+                new Item(1, 1, SHORT_OF_DEX, 1, top(5, 60)));
+
+        assertTrue(thiefShop.spare(world, mind).isEmpty());
     }
 
     @Test

@@ -21,8 +21,9 @@ import java.util.function.IntFunction;
  * What to do at a shop counter: sell what is spare, stock up on what heals, walk away.
  *
  * <p>Spare is everything in the etc bag - things monsters drop, which the agent has no use
- * for that it knows of - equipment no better than what it wears, and anything drinkable it
- * has found does nothing. Kept is anything it wears or might yet wear, anything drinkable it
+ * for that it knows of - equipment no better than what it wears or asking stats it lacks at
+ * a level it has reached, and anything drinkable it has found does nothing. Kept is anything
+ * it wears or might yet wear, anything drinkable it
  * has not tried, and every scroll: nothing here decides a scroll is worthless, because the
  * agent has no way to have found out.
  *
@@ -104,10 +105,15 @@ public final class Shopkeeping {
         return ClientPackets.leaveShop();
     }
 
+    /** Whether a counter would take anything off its hands. */
+    public boolean anythingSpare(WorldModel world, Mind mind) {
+        return !spare(world, mind).isEmpty();
+    }
+
     /** What is spare, by the rules above, in the order it will be sold. */
     List<Item> spare(WorldModel world, Mind mind) {
         Inventory inventory = world.inventory();
-        // Not the things it was given or asked to bring: a Warrior passed its second-job test,
+        // Not quest items or what it was asked to bring: a Warrior passed its second-job test,
         // was handed the proof, and sold it with the snail shells on its way back to Dances -
         // and before that, the letter for the test, more than once.
         Set<Integer> keep = keptForSomebody(mind);
@@ -115,7 +121,7 @@ public final class Shopkeeping {
                 .filter(item -> !keep.contains(item.itemId()) && item.itemId() / 1000 != QUEST_ITEMS)
                 .toList());
         for (Item equipment : inventory.carried(Item.EQUIP)) {
-            if (noBetterThanWorn(equipment, world)) {
+            if (neverWorthWearing(equipment, world)) {
                 spare.add(equipment);
             }
         }
@@ -138,17 +144,17 @@ public final class Shopkeeping {
 
     private static final java.util.regex.Pattern ITEM_REF = java.util.regex.Pattern.compile("item:(\\d+)");
 
-    /** Items somebody gave it, or asked it to bring or use. */
+    /**
+     * Items somebody asked it to bring or use. Not everything somebody handed over: what is
+     * handed over for a reason - a letter, a proof, a ticket - is a quest item and kept as
+     * one, and the rest is a reward like any drop. Kept for having been given, five thousand
+     * Monster Cards and six hundred Stiff Feathers filled half a Thief's etc bag for good.
+     */
     private static Set<Integer> keptForSomebody(Mind mind) {
         Set<Integer> keep = new java.util.HashSet<>();
         for (agents.memory.Belief belief : mind.semantic().liveBeliefs()) {
             String predicate = belief.predicate();
-            if (predicate.equals("given_by")) {
-                java.util.regex.Matcher id = ITEM_REF.matcher(belief.subject());
-                if (id.find()) {
-                    keep.add(Integer.parseInt(id.group(1)));
-                }
-            } else if (predicate.equals("wants_first") || predicate.equals("asked_you_to")) {
+            if (predicate.equals("wants_first") || predicate.equals("asked_you_to")) {
                 java.util.regex.Matcher id = ITEM_REF.matcher(belief.object());
                 while (id.find()) {
                     keep.add(Integer.parseInt(id.group(1)));
@@ -183,12 +189,19 @@ public final class Shopkeeping {
 
     /**
      * Equipment is spare when wearing it could never help: nothing better than what is on
-     * that part of the body, or not for this job at all. Something better that the agent is
-     * simply not yet level enough for is kept.
+     * that part of the body, not for this job at all, or asking for stats the agent has not
+     * got at a level it has already reached. Something better that the agent is simply not
+     * yet level enough for is kept.
      */
-    private boolean noBetterThanWorn(Item equipment, WorldModel world) {
+    private boolean neverWorthWearing(Item equipment, WorldModel world) {
         EquipInfo info = tooltips.apply(equipment.itemId());
         if (info.slots().length == 0 || !info.allowsJob(Math.max(0, world.job()))) {
+            return true;
+        }
+        // Old enough for it and still short of the stats is short for good: a level-70 Thief
+        // with DEX 38 carried thirty-two pieces of thief gear asking DEX 45 to 100, wore none
+        // of them, and kept every one because each was better than what it had on.
+        if (world.level() >= info.reqLevel() && Wardrobe.statsShortFor(info, world)) {
             return true;
         }
         // Valued as worn, job and all: Athena's bow looked worse than the spear a Bowman was

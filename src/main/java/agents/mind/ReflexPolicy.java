@@ -1208,7 +1208,8 @@ public class ReflexPolicy implements Policy {
     /**
      * A shopkeeper, when the agent needs one.
      *
-     * Needing one is a full bag - the loot it walks past is the cost of not going - or
+     * Needing one is a full bag with something spare in it - the loot it walks past is the
+     * cost of not going - or
      * knowing what heals and carrying none of it, with money to buy some. A shopkeeper is
      * anyone whose conversation has opened a shop before; one in sight is walked to and
      * talked to, and the counter does the rest. One elsewhere becomes a reason to travel,
@@ -1225,7 +1226,7 @@ public class ReflexPolicy implements Policy {
         if (!needsAShop(world, mind, tick)) {
             return;
         }
-        boolean toSell = world.inventoryFull(tick);
+        boolean toSell = somethingToSell(world, mind, tick);
         Set<String> keepers = toSell ? shopkeepers(mind)
                 : Wardrobe.needsAWeapon(world) ? weaponSellers(mind, world)
                 : Fighting.wantsAmmunition(world) ? ammunitionSellers(mind, world)
@@ -1271,9 +1272,22 @@ public class ReflexPolicy implements Policy {
     /** Decisions before walking up to a shopkeeper who did not open a shop again. */
     private static final int SHOP_AGAIN = 30;
 
-    /** Whether the agent has business with a shop: no room, or nothing left that heals. */
+    /** Sizes up the bag the way the counter will, without standing at one. */
+    private static final Shopkeeping APPRAISER = new Shopkeeping();
+
+    /**
+     * A full bag with something in it a shop would take. Full of nothing spare, a shop is no
+     * help: a Thief's equipment and etc bags filled with gear it had not the DEX to wear and
+     * stacks it was keeping, and it rode the Danger Zone Taxi 161 times in a day between
+     * Glibber and the El Nath shop, selling nothing at either.
+     */
+    static boolean somethingToSell(WorldModel world, Mind mind, long tick) {
+        return world.inventoryFull(tick) && APPRAISER.anythingSpare(world, mind);
+    }
+
+    /** Whether the agent has business with a shop: something to sell, or nothing left that heals. */
     static boolean needsAShop(WorldModel world, Mind mind, long tick) {
-        if (world.inventoryFull(tick)) {
+        if (somethingToSell(world, mind, tick)) {
             return true;
         }
         if (world.inventory().meso() < MONEY_FOR_POTIONS) {

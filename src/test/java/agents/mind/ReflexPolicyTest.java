@@ -1374,6 +1374,22 @@ class ReflexPolicyTest {
         assertFalse(ReflexPolicy.needsAShop(world, mind, 4));
     }
 
+    /**
+     * A full bag of nothing a shop would take is no business with one: a Thief rode the
+     * Danger Zone Taxi 161 times in a day between two shops, selling nothing at either.
+     */
+    @Test
+    void hasNoBusinessWithAShopWhenNothingInTheFullBagIsSpare() {
+        mind.take(new Observation.ShopOpened(2, 1012000, List.of()));
+        world.update(new Observation.InventoryShown(2, 0, Map.of(1, 24, 2, 24, 3, 24, 4, 1, 5, 24),
+                List.of(new agents.percept.Item(4, 1, 4031012, 1, null))));
+        world.update(new Observation.NpcAppeared(3, 7001, 1012000, new Point(20, 0)));
+
+        assertFalse(ReflexPolicy.needsAShop(world, mind, 4));
+        String goal = policy.decide(mind, world, 4).goal();
+        assertFalse(goal.contains("sell"), goal);
+    }
+
     /** Knowing what heals and carrying none of it, with money, is business too. */
     @Test
     void goesShoppingWhenOutOfWhatHeals() {

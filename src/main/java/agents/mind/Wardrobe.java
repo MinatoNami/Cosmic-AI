@@ -193,6 +193,19 @@ public final class Wardrobe {
                 && total("LUK", world) >= info.reqLuk();
     }
 
+    /**
+     * Whether a stat the agent knows falls short of what the tooltip asks. A stat it has not
+     * been told is not short: not knowing is no reason to sell.
+     */
+    static boolean statsShortFor(EquipInfo info, WorldModel world) {
+        return shortOf("STR", info.reqStr(), world) || shortOf("DEX", info.reqDex(), world)
+                || shortOf("INT", info.reqInt(), world) || shortOf("LUK", info.reqLuk(), world);
+    }
+
+    private static boolean shortOf(String stat, int required, WorldModel world) {
+        return required > 0 && world.stat(stat) >= 0 && total(stat, world) < required;
+    }
+
     /** A stat with what is already worn added, which is what the server checks against. */
     private static int total(String stat, WorldModel world) {
         int base = Math.max(0, world.stat(stat));
