@@ -4101,6 +4101,10 @@ public class ReflexPolicy implements Policy {
         if (backToTrainer(mind, world, here, true)) {
             return;
         }
+        // Grown into its third job: to its chief, and on to whoever the chief sends it to.
+        if (towardsThirdJob(mind, world, here)) {
+            return;
+        }
         // Told by a person to go and take passage from somewhere: that is where it is sent, and
         // nothing on the way is worth stopping for.
         if (travelOrder != null && !travelOrder.equals(here) && canGetTo(mind, here, travelOrder)) {
@@ -4236,6 +4240,55 @@ public class ReflexPolicy implements Policy {
         }
         return true;
     }
+
+    /**
+     * At level 70 in a second job, goes to its family's chief in El Nath, and from there to
+     * whoever the chief last sent it to, until it has heard from them since.
+     *
+     * Where the chief stands is the one thing given rather than found (see {@link ThirdJob});
+     * who he sends it to next is what he says, written down like any other instruction. That
+     * is its second-job instructor first - "Remember #p1052001# from Kerning City? Go see
+     * him" - and the rest of the test after.
+     */
+    private boolean towardsThirdJob(Mind mind, WorldModel world, String here) {
+        if (!ThirdJob.due(world.job(), world.level())) {
+            return false;
+        }
+        String chief = "npc:" + ThirdJob.chiefFor(world.job());
+        Belief sentOn = null;
+        for (Belief belief : mind.semantic().about(chief)) {
+            if (belief.predicate().equals("sends_you_to") && belief.object().startsWith("npc:")
+                    && (sentOn == null || belief.lastSeen() > sentOn.lastSeen())) {
+                sentOn = belief;
+            }
+        }
+        if (sentOn != null) {
+            if (lastHeardFrom(mind, sentOn.object()) >= sentOn.lastSeen()) {
+                return false;   // done what the chief said; what they said next is the errand
+            }
+            Optional<String> map = lastSeenIn(mind, sentOn.object());
+            if (map.isEmpty()) {
+                return false;
+            }
+            errandNpc = npcIdIn(sentOn.object());
+            if (!map.get().equals(here)) {
+                sentMap = map.get();
+                sentWhy = "where " + chief + " sent you for your third job";
+            }
+            sentByTrainer = true;
+            return true;
+        }
+        String room = lastSeenIn(mind, chief).orElse(ThirdJob.CHIEFS_ROOM);
+        errandNpc = npcIdIn(chief);
+        if (!room.equals(here)) {
+            sentMap = room;
+            sentWhy = THIRD_JOB_WHY;
+        }
+        sentByTrainer = true;
+        return true;
+    }
+
+    static final String THIRD_JOB_WHY = "your chief, for your third job";
 
     /** Whether an instruction heard at a tick has been carried out since. */
     private static boolean followed(Mind mind, String target, long heardAt) {

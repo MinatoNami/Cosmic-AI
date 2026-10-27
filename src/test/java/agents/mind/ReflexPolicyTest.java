@@ -1459,6 +1459,65 @@ class ReflexPolicyTest {
                 "the unopened door east is the better trip, and it should lose to being sent west");
     }
 
+    private void aBanditAt(int level) {
+        world.update(new Observation.MapEntered(10, 10000, 0));
+        world.update(new Observation.StatsChanged(10, Map.of("LEVEL", level, "JOB", 420)));
+    }
+
+    /** At 70 in a second job, its chief is where it goes, without anybody saying so. */
+    @Test
+    void goesToItsChiefAtSeventyInASecondJob() {
+        aJunction();
+        mind.saw("npc:2020011", "present_in", "map:20000", 4);
+        aBanditAt(70);
+        ReflexPolicy policy = new ReflexPolicy(new Random(1), Disposition.WANDERER);
+        policy.decide(mind, world, 10);
+        policy.cameInAt(new Point(-500, 0));
+
+        assertTrue(policy.jobAdvancementPending());
+        assertEquals("west00", policy.pickDoor(JUNCTION_DOORS, mind, 10000, "player:1").name(),
+                "Arec, over the unopened door east");
+    }
+
+    @Test
+    void hasNoChiefToSeeAtSixtyNine() {
+        aJunction();
+        mind.saw("npc:2020011", "present_in", "map:20000", 4);
+        aBanditAt(69);
+        ReflexPolicy policy = new ReflexPolicy(new Random(1), Disposition.WANDERER);
+        policy.decide(mind, world, 10);
+
+        assertFalse(policy.jobAdvancementPending());
+    }
+
+    /**
+     * "Remember #p1052001# from Kerning City? Go see him": the chief sends it to its second-job
+     * instructor, and once they have spoken that errand is done.
+     */
+    @Test
+    void goesWhereTheChiefSendsItUntilTheyHaveSpoken() {
+        aJunction();
+        mind.saw("npc:2020011", "present_in", "map:20000", 4);
+        mind.saw("npc:1052001", "present_in", "map:30000", 4);
+        mind.hear("npc:2020011", "sends_you_to", "npc:1052001", 5);
+        aBanditAt(70);
+        ReflexPolicy policy = new ReflexPolicy(new Random(1), Disposition.WANDERER);
+        policy.decide(mind, world, 10);
+        policy.cameInAt(new Point(-500, 0));
+
+        assertEquals("east00", policy.pickDoor(JUNCTION_DOORS, mind, 10000, "player:1").name(),
+                "to the Dark Lord, not back to Arec");
+
+        mind.take(new Observation.MapEntered(11, 30000, 0));
+        mind.take(new Observation.DialogueShown(12, 1052001, "There you are.", 0));
+        mind.take(new Observation.MapEntered(13, 10000, 0));
+        world.update(new Observation.MapEntered(13, 10000, 0));
+        ReflexPolicy after = new ReflexPolicy(new Random(1), Disposition.WANDERER);
+        after.decide(mind, world, 13);
+
+        assertFalse(after.jobAdvancementPending());
+    }
+
     /** Once it has been there since being told, the instruction is spent. */
     @Test
     void anInstructionIsSpentOnceCarriedOut() {

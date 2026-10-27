@@ -1495,6 +1495,24 @@ public class Agent implements Runnable {
                 return;
             }
         }
+        // And the third: with a second job and the level for the next, its chief gets "I want
+        // to make the 3th job advancement" from his list and a yes after, and whoever he sends
+        // it to is gone along with. Left to a model, the list's other line - the Zakum quest -
+        // was as good an answer as any.
+        if (thirdJobTalk(dialogue.npcId())) {
+            if (dialogue.style() == MENU) {
+                int pick = agents.mind.ThirdJob.optionForAdvancement(dialogue.text());
+                if (pick >= 0) {
+                    log.info("{} picks option {} from npc:{} on the way to its third job", mind.name(), pick, dialogue.npcId());
+                    reply(MENU, NPC_YES_OR_NEXT, pick);
+                    return;
+                }
+            } else {
+                noteAnswer(dialogue.npcId(), dialogue.style(), NPC_YES_OR_NEXT);
+                reply(dialogue.style(), NPC_YES_OR_NEXT, NO_SELECTION);
+                return;
+            }
+        }
         // Somewhere off limits, a way out is a yes whatever else is on offer; an offer going
         // somewhere off limits is a no whatever the policy wants.
         String hereRef = KnownWorld.mapRef(world.mapId());
@@ -1814,6 +1832,17 @@ public class Agent implements Runnable {
             }
         }
         return false;
+    }
+
+    /** Whether this conversation is part of going for the third job: the chief, or whoever he sent it to. */
+    private boolean thirdJobTalk(int npcId) {
+        if (!agents.mind.ThirdJob.due(world.job(), world.level())) {
+            return false;
+        }
+        String chief = "npc:" + agents.mind.ThirdJob.chiefFor(world.job());
+        String npc = "npc:" + npcId;
+        return npc.equals(chief) || mind.semantic().about(chief).stream()
+                .anyMatch(b -> b.predicate().equals("sends_you_to") && b.object().equals(npc));
     }
 
     private static final int SECOND_JOB_AT = 30;
