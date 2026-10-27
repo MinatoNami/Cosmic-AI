@@ -4270,21 +4270,30 @@ public class ReflexPolicy implements Policy {
             if (map.isEmpty()) {
                 return false;
             }
-            errandNpc = npcIdIn(sentOn.object());
-            if (!map.get().equals(here)) {
-                sentMap = map.get();
-                sentWhy = "where " + chief + " sent you for your third job";
-            }
-            sentByTrainer = true;
-            return true;
+            return goForThirdJob(mind, here, map.get(), npcIdIn(sentOn.object()),
+                    "where " + chief + " sent you for your third job");
         }
         String room = lastSeenIn(mind, chief).orElse(ThirdJob.CHIEFS_ROOM);
-        errandNpc = npcIdIn(chief);
-        if (!room.equals(here)) {
-            sentMap = room;
-            sentWhy = THIRD_JOB_WHY;
-        }
+        return goForThirdJob(mind, here, room, npcIdIn(chief), THIRD_JOB_WHY);
+    }
+
+    /**
+     * Someone to see for the third job, there or - across a sea it knows no way over on foot -
+     * by whoever's ride lands nearest. Arec sent Agent2 to the Dark Lord in Kerning City, and
+     * with no walk from El Nath to Victoria Island it knew of, being sent there was never
+     * offered as a place to go: it went back to hunting around El Nath.
+     */
+    private boolean goForThirdJob(Mind mind, String here, String map, int npc, String why) {
         sentByTrainer = true;
+        if (!canGetTo(mind, here, map)) {
+            cutOffFrom.add(map);
+            return true;
+        }
+        errandNpc = npc;
+        if (!map.equals(here)) {
+            sentMap = map;
+            sentWhy = why;
+        }
         return true;
     }
 

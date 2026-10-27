@@ -1518,6 +1518,30 @@ class ReflexPolicyTest {
         assertFalse(after.jobAdvancementPending());
     }
 
+    /**
+     * Sent across a sea it knows no walk over, it asks for a ride: Arec sent Agent2 to the Dark
+     * Lord in Kerning City, and with no way from El Nath to Victoria it knew of on foot, it
+     * went back to hunting.
+     */
+    @Test
+    void ridesTowardsWhereTheChiefSendsItWhenThereIsNoWalkThere() {
+        aJunction();
+        mind.saw("npc:2020011", "present_in", "map:20000", 4);
+        mind.saw("npc:1052001", "present_in", "map:50000", 4);
+        // Like the two in El Nath whose rides reach Victoria, it stands in more than one town,
+        // so its ride is no walk the known world counts; it has to be asked.
+        mind.saw("npc:9000021", "present_in", "map:10000", 4);
+        mind.saw("npc:9000021", "present_in", "map:60000", 4);
+        mind.saw("npc:9000021", "takes_you_to", "map:50000", 4);
+        mind.hear("npc:2020011", "sends_you_to", "npc:1052001", 5);
+        aBanditAt(70);
+        ReflexPolicy policy = new ReflexPolicy(new Random(1), Disposition.WANDERER);
+        policy.decide(mind, world, 10);
+
+        assertEquals(9000021, policy.rideWanted(), "the ride that lands where the Dark Lord is");
+        assertTrue(policy.jobAdvancementPending());
+    }
+
     /** Once it has been there since being told, the instruction is spent. */
     @Test
     void anInstructionIsSpentOnceCarriedOut() {
