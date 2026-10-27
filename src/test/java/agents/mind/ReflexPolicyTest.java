@@ -1565,6 +1565,34 @@ class ReflexPolicyTest {
         assertEquals(9000021, policy.rideWanted(), "the ride, not the fare");
     }
 
+    /**
+     * In a pocket it knows no door out of, with nobody to ask for a ride, it reads a return
+     * scroll: Agent1 spent hours between two of Orbis's Cloud Parks with its chief to see.
+     */
+    @Test
+    void readsAReturnScrollOutOfAPocketWithNoRideInReach() {
+        mind.saw("npc:2020008", "present_in", "map:211000001", 4);
+        world.update(new Observation.MapEntered(10, 200070000, 0));
+        world.update(new Observation.StatsChanged(10, Map.of("LEVEL", 71, "JOB", 110)));
+        ReflexPolicy policy = new ReflexPolicy(new Random(1), Disposition.WANDERER);
+        policy.decide(mind, world, 10);
+
+        assertTrue(policy.readAReturnScroll(), "Orbis, where people with rides stand");
+
+        policy.readTheScroll();
+        assertFalse(policy.readAReturnScroll(), "and not again straight away");
+    }
+
+    @Test
+    void readsNoScrollWithNothingToCrossFor() {
+        world.update(new Observation.MapEntered(10, 200070000, 0));
+        world.update(new Observation.StatsChanged(10, Map.of("LEVEL", 69, "JOB", 110)));
+        ReflexPolicy policy = new ReflexPolicy(new Random(1), Disposition.WANDERER);
+        policy.decide(mind, world, 10);
+
+        assertFalse(policy.readAReturnScroll());
+    }
+
     /** Once it has been there since being told, the instruction is spent. */
     @Test
     void anInstructionIsSpentOnceCarriedOut() {

@@ -2628,6 +2628,7 @@ public class ReflexPolicy implements Policy {
     public void readTheScroll() {
         scrollReadAt = decisionsMade;
         scrollIsQuicker = false;
+        scrollForARide = false;
         bouncedFor = 0;
     }
 
@@ -2645,8 +2646,34 @@ public class ReflexPolicy implements Policy {
 
     @Override
     public boolean readAReturnScroll() {
-        return scrollIsQuicker;
+        return scrollIsQuicker || (scrollForARide && decisionsMade - scrollReadAt >= SCROLL_AGAIN);
     }
+
+    /**
+     * Sent across a sea for its job with nobody in reach to ask for the ride, and no walk it
+     * knows of back to town, where the people with rides stand: the scroll is the way out. All
+     * three agents due their third job were in pockets of a few maps they knew no door out of -
+     * Agent1 in two of Orbis's Cloud Parks, Agent2 in El Nath's Dead Mine, Agent3 in Sleepy
+     * Dungeon - and hunted there for hours with the errand set and nothing to act on.
+     */
+    private boolean scrollForARide;
+
+    private boolean townOutOfReach(Mind mind, int mapId) {
+        if (decisionsMade - townWeighedAt < SCROLL_WEIGHED_EVERY && mapId == townWeighedIn) {
+            return townWeighed;
+        }
+        townWeighedAt = decisionsMade;
+        townWeighedIn = mapId;
+        int town = agents.world.MapGeometry.returnTownOf(mapId);
+        townWeighed = town > 0 && town != mapId
+                && !knownWorld(mind).reachableFrom(KnownWorld.mapRef(mapId), Set.of())
+                        .containsKey(KnownWorld.mapRef(town));
+        return townWeighed;
+    }
+
+    private int townWeighedAt = Integer.MIN_VALUE / 2;
+    private int townWeighedIn = -1;
+    private boolean townWeighed;
 
     /**
      * Whoever offers passage, where it was told to take it, is asked again within the minute:
@@ -3183,6 +3210,8 @@ public class ReflexPolicy implements Policy {
         if (errandNpc < 0 && sentMap == null && !cutOffFrom.isEmpty()) {
             askForARideBack(mind, here);
         }
+        scrollForARide = sentByTrainer && !cutOffFrom.isEmpty() && rideWanted < 0
+                && townOutOfReach(mind, world.mapId());
         if (KnownWorld.isOffLimits(here)) {
             leaveOffLimits(mind, world, here);
         }
