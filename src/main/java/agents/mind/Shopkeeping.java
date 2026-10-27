@@ -188,6 +188,16 @@ public final class Shopkeeping {
     private static final int RETURN_SCROLLS_WANTED = 2;
 
     /**
+     * Due its third job and carrying fewer than the two scrolls it keeps for it. The test sends
+     * it across seas and down into dungeons, and all three agents due it were stuck in pockets
+     * of maps with none.
+     */
+    public static boolean wantsReturnScrolls(WorldModel world) {
+        return ThirdJob.due(world.job(), world.level())
+                && world.inventory().count(RETURN_SCROLL) < RETURN_SCROLLS_WANTED;
+    }
+
+    /**
      * Equipment is spare when wearing it could never help: nothing better than what is on
      * that part of the body, not for this job at all, or asking for stats the agent has not
      * got at a level it has already reached. Something better that the agent is simply not
@@ -248,12 +258,14 @@ public final class Shopkeeping {
         }
         // Then something to get back to town with, from somewhere nothing walks out of - a Magician
         // spent nine hours on the floor of the Nautilus' Generator Room after dropping in.
-        if (world.inventory().count(RETURN_SCROLL) == 0) {
+        int scrolls = world.inventory().count(RETURN_SCROLL);
+        if (scrolls == 0 || wantsReturnScrolls(world)) {
+            int wanted = RETURN_SCROLLS_WANTED - scrolls;
             Optional<Packet> scroll = open.items().stream()
                     .filter(item -> item.itemId() == RETURN_SCROLL)
-                    .filter(item -> item.price() > 0 && item.price() * RETURN_SCROLLS_WANTED <= meso / 5)
+                    .filter(item -> item.price() > 0 && item.price() * wanted <= meso / 5)
                     .findFirst()
-                    .map(item -> ClientPackets.buyFromShop(item.index(), item.itemId(), RETURN_SCROLLS_WANTED));
+                    .map(item -> ClientPackets.buyFromShop(item.index(), item.itemId(), wanted));
             if (scroll.isPresent()) {
                 return scroll;
             }

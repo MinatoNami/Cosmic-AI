@@ -251,6 +251,30 @@ class ShopkeepingTest {
         assertEquals(Shopkeeping.TO_TRY, buy.readShort());
     }
 
+    /** Due its third job, it keeps two scrolls home: one in the bag, so one more. */
+    @Test
+    void keepsTwoScrollsHomeOnceDueItsThirdJob() {
+        world.update(new Observation.StatsChanged(1, Map.of("JOB", 420, "LEVEL", 70)));
+        carrying(100_000, new Item(2, 1, RETURN_SCROLL, 1, null));
+        shop.opened(selling(new Observation.ShopOpened.ShopItem(0, RETURN_SCROLL, 400)), world, mind);
+
+        InPacket buy = read(shop.next(world, mind));
+
+        assertEquals(0, buy.readByte(), "buy");
+        assertEquals(0, buy.readShort());
+        assertEquals(RETURN_SCROLL, buy.readInt());
+        assertEquals(1, buy.readShort(), "one more, to make two");
+    }
+
+    @Test
+    void oneScrollHomeIsEnoughBeforeThen() {
+        world.update(new Observation.StatsChanged(1, Map.of("JOB", 420, "LEVEL", 69)));
+        carrying(100_000, new Item(2, 1, RETURN_SCROLL, 1, null));
+        shop.opened(selling(new Observation.ShopOpened.ShopItem(0, RETURN_SCROLL, 400)), world, mind);
+
+        assertEquals(3, read(shop.next(world, mind)).readByte(), "straight out again");
+    }
+
     @Test
     void buysNothingWithNoMoney() {
         mind.infer("item:" + RED_POTION, "restores_hp", "true", 1);

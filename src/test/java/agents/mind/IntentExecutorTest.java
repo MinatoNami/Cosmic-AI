@@ -315,4 +315,43 @@ class IntentExecutorTest {
 
         assertTrue(end.distance(new Point(-1035, -1575)) <= 40, "never reached the upper door: " + end);
     }
+
+    /**
+     * Sleepy Dungeon IV's way up hangs 51 pixels past the end of the ledges, caught with a jump
+     * off the end. Without that, from the door in from below the way out was not there, and
+     * Agent3 went between the deeper levels for days.
+     */
+    @Test
+    void climbsSleepyDungeonIVByJumpingAcrossToTheRope() {
+        int map = 105040304;
+        WorldModel world = standingAt(map, Navigator.settleFrom(map, new Point(-214, 2176)).orElseThrow());
+
+        Point door = new Point(615, 74);    // up the ladder it hangs on
+
+        Point end = walkTowards(world, door, 1200);
+
+        assertTrue(ReflexPolicy.atPortal(map, end, door), "never reached the way out: " + end);
+    }
+
+    /** Cloud Park V, from the door up from VI to the one on top, by ropes beside the clouds. */
+    @Test
+    void climbsCloudParkVToItsTopDoor() {
+        int map = 200070000;
+        WorldModel world = standingAt(map, Navigator.settleFrom(map, new Point(698, 22)).orElseThrow());
+
+        Point end = walkTowards(world, new Point(-911, -1779), 1200);
+
+        assertTrue(end.distance(new Point(-911, -1779)) <= 40, "never reached the top door: " + end);
+    }
+
+    /** The Dead Mine's way up, a rope beyond the end of a ledge halfway up. */
+    @Test
+    void climbsOutOfTheDeadMine() {
+        int map = 211041600;
+        WorldModel world = standingAt(map, Navigator.settleFrom(map, new Point(1100, 1156)).orElseThrow());
+
+        Point end = walkTowards(world, new Point(-583, 75), 1200);
+
+        assertTrue(end.distance(new Point(-583, 75)) <= 40, "never reached the top door: " + end);
+    }
 }

@@ -4,6 +4,7 @@ import agents.Mind;
 import agents.percept.Observation;
 import agents.trace.Trace;
 import agents.world.KnownWorld;
+import agents.world.Navigator;
 import agents.world.QuestBoard;
 import agents.world.WorldModel;
 import org.junit.jupiter.api.BeforeEach;
@@ -1581,6 +1582,94 @@ class ReflexPolicyTest {
 
         policy.readTheScroll();
         assertFalse(policy.readAReturnScroll(), "and not again straight away");
+    }
+
+    /**
+     * With nobody to ask for a ride and no scroll to read, it walks out by the door it has never
+     * opened before it hunts: Agent1 hunted between Cloud Parks V and VI for days, past V's top door.
+     */
+    @Test
+    void walksOutOfAPocketByTheDoorItHasNeverOpenedBeforeHunting() {
+        cloudParksVAndVI();
+        Point under = Navigator.settleFrom(CLOUD_PARK_V, new Point(698, 22)).orElseThrow();
+        world.movedTo(under);
+        world.update(new Observation.MonsterAppeared(11, 9001, 100100, new Point(under.x - 150, under.y)));
+        ReflexPolicy policy = new ReflexPolicy(new Random(1), Disposition.FIGHTER);
+
+        Policy.Decision decision = policy.decide(mind, world, 12);
+
+        assertTrue(decision.goal().contains("top00") && decision.goal().contains("never opened"),
+                decision.goal());
+    }
+
+    /** A scroll in the bag is the quicker way out, and that is read instead. */
+    @Test
+    void withAScrollToReadItDoesNotGoLookingForADoor() {
+        cloudParksVAndVI();
+        world.update(new Observation.InventoryShown(11, 0, Map.of(1, 24, 2, 24, 3, 24, 4, 24, 5, 24),
+                List.of(new agents.percept.Item(2, 1, Shopkeeping.RETURN_SCROLL, 1, null))));
+        world.movedTo(Navigator.settleFrom(CLOUD_PARK_V, new Point(698, 22)).orElseThrow());
+        ReflexPolicy policy = new ReflexPolicy(new Random(1), Disposition.FIGHTER);
+
+        Policy.Decision decision = policy.decide(mind, world, 12);
+
+        assertTrue(policy.readAReturnScroll());
+        assertFalse(decision.goal().contains("never opened"), decision.goal());
+    }
+
+    /**
+     * The door never opened a map away: Agent3, in Sleepy Dungeon V, had only ever arrived in IV
+     * at the door from V, below the rope up to IV's way out.
+     */
+    @Test
+    void headsForTheNearestDoorItHasNeverOpened() {
+        mind.saw("npc:2020010", "present_in", "map:211000001", 4);
+        int four = 105040304;
+        int five = 105040305;
+        mind.take(new Observation.MapEntered(5, four, 0));
+        mind.take(new Observation.MapEntered(6, five, 0));
+        mind.infer(KnownWorld.portalRef(four, "in00"), "leads_to", KnownWorld.mapRef(five), 6);
+        mind.infer(KnownWorld.portalRef(five, "out00"), "leads_to", KnownWorld.mapRef(four), 6);
+        mind.infer(KnownWorld.portalRef(five, "hiden00"), "leads_to", KnownWorld.mapRef(105040306), 6);
+        mind.saw(KnownWorld.mapRef(four), "has_door", "in00", 6);
+        mind.saw(KnownWorld.mapRef(four), "has_door", "out00", 6);
+        world.update(new Observation.MapEntered(10, five, 0));
+        world.update(new Observation.StatsChanged(10, Map.of("LEVEL", 84, "JOB", 310)));
+        ReflexPolicy policy = new ReflexPolicy(new Random(1), Disposition.FORAGER);
+        policy.decide(mind, world, 10);
+
+        List<WorldModel.PortalTarget> doors = List.of(
+                new WorldModel.PortalTarget("out00", new Point(-200, 0)),
+                new WorldModel.PortalTarget("hiden00", new Point(200, 0)));
+        assertEquals("out00", policy.pickDoor(doors, mind, five, "player:1").name());
+    }
+
+    private static final int CLOUD_PARK_V = 200070000;
+
+    /** A Fighter at 71 that knows Cloud Parks V and VI and nothing of Orbis or El Nath. */
+    private void cloudParksVAndVI() {
+        mind.saw("npc:2020008", "present_in", "map:211000001", 4);
+        mind.take(new Observation.MapEntered(5, 200080000, 0));
+        mind.take(new Observation.MapEntered(6, CLOUD_PARK_V, 0));
+        mind.infer(KnownWorld.portalRef(CLOUD_PARK_V, "under00"), "leads_to", KnownWorld.mapRef(200080000), 6);
+        mind.infer(KnownWorld.portalRef(200080000, "top00"), "leads_to", KnownWorld.mapRef(CLOUD_PARK_V), 6);
+        world.update(new Observation.MapEntered(10, CLOUD_PARK_V, 0));
+        world.update(new Observation.StatsChanged(10, Map.of("LEVEL", 71, "JOB", 110)));
+    }
+
+    /** Due its third job with no scrolls home, and somebody known to sell them: business. */
+    @Test
+    void goesForScrollsHomeOnceDueItsThirdJob() {
+        mind.take(new Observation.ShopOpened(2, 1012000, List.of(
+                new Observation.ShopOpened.ShopItem(0, Shopkeeping.RETURN_SCROLL, 400))));
+        world.update(new Observation.InventoryShown(2, 100_000, Map.of(1, 24, 2, 24, 3, 24, 4, 24, 5, 24),
+                List.of(new agents.percept.Item(1, -11, 1332000, 1, null))));     // a dagger in hand
+        world.update(new Observation.StatsChanged(2, Map.of("LEVEL", 70, "JOB", 420)));
+
+        assertTrue(ReflexPolicy.needsAShop(world, mind, 4));
+
+        world.update(new Observation.StatsChanged(3, Map.of("LEVEL", 69)));
+        assertFalse(ReflexPolicy.needsAShop(world, mind, 4), "not before then");
     }
 
     @Test

@@ -1131,7 +1131,8 @@ public class ReflexPolicy implements Policy {
                     // On its way to a calling elsewhere, what is on the road is worth a third:
                     // a Warrior due its second job hunted its way across every field between
                     // Henesys and Perion and never arrived.
-                    * (jobAdvancementPending() && (errandMap != null || sentMap != null) ? ON_THE_WAY : 1)
+                    // So is what is in the pocket it is walking out of to get to one.
+                    * (jobAdvancementPending() && (errandMap != null || sentMap != null || walkingOut) ? ON_THE_WAY : 1)
                     + NEGLECT_MATTERS * neglect("fight") + urgeFor("fight")
                     + commitmentTo("fight", monster.position());
             // From as far as its attack reaches: a Bowman shoots from where it stands.
@@ -1230,6 +1231,7 @@ public class ReflexPolicy implements Policy {
         Set<String> keepers = toSell ? shopkeepers(mind)
                 : Wardrobe.needsAWeapon(world) ? weaponSellers(mind, world)
                 : Fighting.wantsAmmunition(world) ? ammunitionSellers(mind, world)
+                : Shopkeeping.wantsReturnScrolls(world) && !scrollSellers(mind).isEmpty() ? scrollSellers(mind)
                 : knownHealers(mind).stream().anyMatch(item -> world.inventory().count(itemIdIn(item)) > 0)
                         ? stocking(mind, knownManaRestorers(mind))
                         : stocking(mind, knownHealers(mind));
@@ -1252,7 +1254,9 @@ public class ReflexPolicy implements Policy {
                 + commitmentTo("shop", npc.position());
         String why = toSell ? "sell what I cannot carry"
                 : Wardrobe.needsAWeapon(world) ? "buy a weapon I can fight with"
-                : Fighting.wantsAmmunition(world) ? "buy something to fire" : "buy something that heals";
+                : Fighting.wantsAmmunition(world) ? "buy something to fire"
+                : Shopkeeping.wantsReturnScrolls(world) && !scrollSellers(mind).isEmpty() ? "buy scrolls home"
+                : "buy something that heals";
         if (!IntentExecutor.canSpeakTo(world.mapId(), self, npc.position(), NPC_RANGE)) {
             Point where = npc.position();
             choices.add(new Choice("shop", new Intent.MoveTo(where),
@@ -1296,6 +1300,9 @@ public class ReflexPolicy implements Policy {
         // Nothing left to fire is as good as no weapon at all for a Bowman, and no weapon its
         // job fights with is no weapon at all.
         if (Fighting.wantsAmmunition(world) || Wardrobe.needsAWeapon(world)) {
+            return true;
+        }
+        if (Shopkeeping.wantsReturnScrolls(world) && !scrollSellers(mind).isEmpty()) {
             return true;
         }
         Set<String> healers = knownHealers(mind);
@@ -1371,6 +1378,11 @@ public class ReflexPolicy implements Policy {
     }
 
     /** Shopkeepers seen with any of these on their shelves. */
+    /** Whoever it has seen with scrolls home on their shelves. */
+    private static Set<String> scrollSellers(Mind mind) {
+        return stocking(mind, Set.of("item:" + Shopkeeping.RETURN_SCROLL));
+    }
+
     private static Set<String> stocking(Mind mind, Set<String> items) {
         Set<String> keepers = new HashSet<>();
         for (Belief belief : mind.semantic().liveBeliefs()) {
@@ -1879,12 +1891,15 @@ public class ReflexPolicy implements Policy {
         if (KnownWorld.mapRef(world.mapId()).equals(travelOrder)) {
             boredom = 0;
         }
+        // Walking out of a pocket is going for its calling, by the only way left.
+        boolean outOfThePocket = doorOutOfThePocket && door == doorInMind;
         double score = boredom
-                + (errandMap != null || sentMap != null || !shopMaps.isEmpty() ? ERRAND : 0)
+                + (errandMap != null || sentMap != null || !shopMaps.isEmpty() || outOfThePocket ? ERRAND : 0)
                 // A calling elsewhere outweighs anything to chat about here. Henesys has quests
                 // on every corner, and a talker with the INT for Magician started and handed
                 // them in one after another, the Magician's statue a door-score away for good.
-                + (errandMap != null && errandForACalling || sentMap != null && jobAdvancementPending() ? CALLING_PULL : 0)
+                + (errandMap != null && errandForACalling || sentMap != null && jobAdvancementPending()
+                        || outOfThePocket ? CALLING_PULL : 0)
                 // A map that has killed it twice at about this level is a map to get out of.
                 + (deathsHere >= 2 ? LEAVE_A_KILLING_GROUND : 0);
 
@@ -2173,10 +2188,13 @@ public class ReflexPolicy implements Policy {
         List<WorldModel.PortalTarget> towardsSomewhereNew = new ArrayList<>();
         List<WorldModel.PortalTarget> worthTrying = new ArrayList<>();
         List<WorldModel.PortalTarget> intoDanger = new ArrayList<>();
+        List<WorldModel.PortalTarget> didNothing = new ArrayList<>();
+        doorOutOfThePocket = false;
         for (WorldModel.PortalTarget portal : portals) {
             Optional<String> leadsTo =
                     known.destinationOf(KnownWorld.portalRef(mapId, portal.name()));
             if (leadsTo.filter(NOWHERE::equals).isPresent()) {
+                didNothing.add(portal);
                 continue;       // tried it, nothing happened, not trying it again
             }
             // Nor into somewhere that keeps killing it, by any tier. Routing avoided it and the
@@ -2217,6 +2235,13 @@ public class ReflexPolicy implements Policy {
             Optional<WorldModel.PortalTarget> through = towardsDestination(known, here, intoDanger, mind, mapId);
             if (through.isPresent()) {
                 return through.get();
+            }
+        }
+        if (walkingOut) {
+            WorldModel.PortalTarget out = wayOutOfThePocket(known, portals, untried, didNothing, mapId);
+            if (out != null) {
+                doorOutOfThePocket = true;
+                return out;
             }
         }
         if (worthTrying.isEmpty()) {
@@ -2306,6 +2331,39 @@ public class ReflexPolicy implements Policy {
                 : preferred == notBackIntoARoom ? "not a room again" : "last resort")
                 + " " + preferred.size() + "/" + portals.size();
         return onwardOf(preferred);
+    }
+
+    /**
+     * The way out of a pocket of maps, when nothing else gets it to its calling: a door here it
+     * has never opened, else the first door towards the nearest one, else a door here that once
+     * did nothing, tried once more - it may only have been out of reach.
+     */
+    private WorldModel.PortalTarget wayOutOfThePocket(KnownWorld known, List<WorldModel.PortalTarget> portals,
+                                                      List<WorldModel.PortalTarget> untried,
+                                                      List<WorldModel.PortalTarget> didNothing, int mapId) {
+        String cutOff = cutOffFrom.iterator().next();
+        if (!untried.isEmpty()) {
+            whyThisDoor = "never opened, cut off from " + cutOff;
+            return onwardOf(untried);
+        }
+        Optional<KnownWorld.Route> frontier = known.routeToNearestUnopenedDoor(KnownWorld.mapRef(mapId));
+        if (frontier.isPresent()) {
+            Optional<WorldModel.PortalTarget> door = portals.stream()
+                    .filter(portal -> portal.name().equals(frontier.get().firstDoor()))
+                    .findFirst();
+            if (door.isPresent()) {
+                whyThisDoor = "towards a door never opened in " + frontier.get().towards() + ", "
+                        + frontier.get().hops() + " maps off, cut off from " + cutOff;
+                return door.get();
+            }
+        }
+        for (WorldModel.PortalTarget door : didNothing) {
+            if (retriedWhileCutOff.add(KnownWorld.portalRef(mapId, door.name()))) {
+                whyThisDoor = "did nothing once, cut off from " + cutOff;
+                return door;
+            }
+        }
+        return null;
     }
 
     /**
@@ -2657,6 +2715,20 @@ public class ReflexPolicy implements Policy {
      * Dungeon - and hunted there for hours with the errand set and nothing to act on.
      */
     private boolean scrollForARide;
+
+    /**
+     * Cut off from its calling with nobody to ask for a ride and no scroll to read: it walks
+     * out, by doors it has never opened, before it levels. With the errand set and nothing to
+     * act on, all three agents due their third job hunted in their pockets for days, past the
+     * one door in each they had never been through.
+     */
+    private boolean walkingOut;
+
+    /** Whether the door in mind is one of those. */
+    private boolean doorOutOfThePocket;
+
+    /** Doors that once did nothing, tried again while walking out: each once a spell. */
+    private final Set<String> retriedWhileCutOff = new HashSet<>();
 
     private boolean townOutOfReach(Mind mind, int mapId) {
         if (decisionsMade - townWeighedAt < SCROLL_WEIGHED_EVERY && mapId == townWeighedIn) {
@@ -3212,6 +3284,15 @@ public class ReflexPolicy implements Policy {
         }
         scrollForARide = sentByTrainer && !cutOffFrom.isEmpty() && rideWanted < 0
                 && townOutOfReach(mind, world.mapId());
+        boolean wasWalkingOut = walkingOut;
+        walkingOut = sentByTrainer && !cutOffFrom.isEmpty() && rideWanted < 0
+                && !(readAReturnScroll() && world.inventory().count(Shopkeeping.RETURN_SCROLL) > 0);
+        if (walkingOut != wasWalkingOut) {
+            doorInMind = null;      // chosen for some other reason
+        }
+        if (!walkingOut) {
+            retriedWhileCutOff.clear();
+        }
         if (KnownWorld.isOffLimits(here)) {
             leaveOffLimits(mind, world, here);
         }

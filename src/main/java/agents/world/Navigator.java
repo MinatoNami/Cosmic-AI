@@ -263,6 +263,28 @@ public final class Navigator {
         return Optional.of(direction < 0 ? platform.minX : platform.maxX);
     }
 
+    /**
+     * Where a rope is caught by jumping off the end of the floor a point stands at, if the
+     * point is at that end, the floor stops short of the rope, and the rope passes within reach.
+     */
+    public static Optional<Point> ropeCaughtFrom(int mapId, Point at, MapGeometry.Climb rope) {
+        Graph graph = graphOf(mapId);
+        int p = graph.platformUnder(at.x, at.y);
+        if (p < 0 || graph.platforms.get(p).spans(rope.x())) {
+            return Optional.empty();
+        }
+        Platform platform = graph.platforms.get(p);
+        int end = rope.x() > platform.maxX ? platform.maxX : platform.minX;
+        if (Math.abs(at.x - end) > AT_THE_END || Math.abs(rope.x() - end) > JUMP_REACH) {
+            return Optional.empty();
+        }
+        int catchY = Graph.catchHeight(rope, platform.heightAt(end));
+        return catchY == Graph.NO_CATCH ? Optional.empty() : Optional.of(new Point(rope.x(), catchY));
+    }
+
+    /** How near the end of a floor counts as at it, for jumping off. */
+    private static final int AT_THE_END = 8;
+
     static synchronized Graph graphOf(int mapId) {
         // Not computeIfAbsent: whether a side room can be crossed is asked of the room's own
         // graph while this one is being built, and a map may not be added to while it is
@@ -591,8 +613,39 @@ public final class Navigator {
                 if (top >= 0 && top != bottom) {
                     climbFrom(top, rope, rope.top(), climbs);
                 }
+                // Or caught with a jump off the end of a floor that stops short of it. The way
+                // out of Sleepy Dungeon IV, Cloud Park V and the Dead Mine each hangs 40 to 65
+                // pixels past the end of a ledge, and with only floors under a rope to board it
+                // from, all three were pockets an agent could not walk out of.
+                for (int from = 0; from < platforms.size(); from++) {
+                    Platform p = platforms.get(from);
+                    if (p.spans(rope.x())) {
+                        continue;
+                    }
+                    int end = rope.x() > p.maxX() ? p.maxX() : p.minX();
+                    if (Math.abs(rope.x() - end) > JUMP_REACH) {
+                        continue;
+                    }
+                    int floorY = p.heightAt(end);
+                    int catchY = catchHeight(rope, floorY);
+                    if (catchY != NO_CATCH && from != bottom && from != top) {
+                        climbFrom(from, rope, catchY, climbs, end);
+                    }
+                }
             }
         }
+
+        /**
+         * Where a jump off a floor at {@code floorY} catches a rope beside it, or {@link #NO_CATCH}
+         * when the rope does not pass within reach: no higher than a jump rises, no lower than a
+         * short fall.
+         */
+        static int catchHeight(MapGeometry.Climb rope, int floorY) {
+            int catchY = Math.max(rope.top(), Math.min(rope.bottom(), floorY - JUMP_RISE / 2));
+            return catchY >= floorY - JUMP_RISE && catchY <= floorY + ROPE_REACH ? catchY : NO_CATCH;
+        }
+
+        static final int NO_CATCH = Integer.MIN_VALUE;
 
         /** Ropes in a chain worth following before giving up on it. */
         private static final int MOST_ROPES = 6;
@@ -609,9 +662,15 @@ public final class Navigator {
          * each floor becomes one climbing edge, with its legs.
          */
         private void climbFrom(int from, MapGeometry.Climb first, int boardY, List<MapGeometry.Climb> climbs) {
+            climbFrom(from, first, boardY, climbs, first.x());
+        }
+
+        /** As above, setting off from {@code departX} on the floor: its end, for a rope caught with a jump. */
+        private void climbFrom(int from, MapGeometry.Climb first, int boardY, List<MapGeometry.Climb> climbs,
+                               int departX) {
             Map<Integer, Edge> best = new HashMap<>();
             Deque<Holding> queue = new ArrayDeque<>();
-            queue.add(new Holding(first, boardY, List.of(), 0));
+            queue.add(new Holding(first, boardY, List.of(), departX == first.x() ? 0 : JUMP_COST));
             Set<MapGeometry.Climb> held = new HashSet<>();
             while (!queue.isEmpty()) {
                 Holding h = queue.poll();
@@ -622,14 +681,14 @@ public final class Navigator {
                 if (rope.offAtTop()) {
                     int top = floorNear(rope.x(), rope.top());
                     if (top >= 0) {
-                        keep(best, from, first, h, new Leg(rope, rope.top(), LegEnd.TOP,
+                        keep(best, from, first, departX, h, new Leg(rope, rope.top(), LegEnd.TOP,
                                 new Point(rope.x(), platforms.get(top).heightAt(rope.x()))), top,
                                 Math.abs(h.y() - rope.top()));
                     }
                 }
                 int under = platformUnder(rope.x(), rope.bottom());
                 if (under >= 0) {
-                    keep(best, from, first, h, new Leg(rope, rope.bottom(), LegEnd.DROP,
+                    keep(best, from, first, departX, h, new Leg(rope, rope.bottom(), LegEnd.DROP,
                             new Point(rope.x(), platforms.get(under).heightAt(rope.x()))), under,
                             Math.abs(h.y() - rope.bottom()));
                 }
@@ -645,7 +704,7 @@ public final class Navigator {
                             continue;       // above where a jump from the top could reach
                         }
                         int leaveY = Math.max(rope.top(), Math.min(rope.bottom(), floorY));
-                        keep(best, from, first, h, new Leg(rope, leaveY, LegEnd.JUMP, new Point(x, floorY)),
+                        keep(best, from, first, departX, h, new Leg(rope, leaveY, LegEnd.JUMP, new Point(x, floorY)),
                                 i, Math.abs(h.y() - leaveY) + JUMP_COST);
                     }
                 }
@@ -667,8 +726,8 @@ public final class Navigator {
         }
 
         /** The cheapest climbing edge to each floor, legs and all. */
-        private static void keep(Map<Integer, Edge> best, int from, MapGeometry.Climb first, Holding h, Leg last,
-                                 int to, int climbed) {
+        private static void keep(Map<Integer, Edge> best, int from, MapGeometry.Climb first, int departX, Holding h,
+                                 Leg last, int to, int climbed) {
             if (to == from) {
                 return;
             }
@@ -679,7 +738,7 @@ public final class Navigator {
             }
             List<Leg> legs = new ArrayList<>(h.legs());
             legs.add(last);
-            best.put(to, new Edge(to, Kind.CLIMB, first.x(), last.next().x, first, List.copyOf(legs), cost));
+            best.put(to, new Edge(to, Kind.CLIMB, departX, last.next().x, first, List.copyOf(legs), cost));
         }
 
         /**

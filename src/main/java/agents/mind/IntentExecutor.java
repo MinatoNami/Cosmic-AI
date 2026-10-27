@@ -458,6 +458,12 @@ public class IntentExecutor {
         MapGeometry.Climb rope = riding;
         int map = world.mapId();
         if (Math.abs(from.x - rope.x()) > ARRIVED_PIXELS) {
+            // At the end of a floor that stops short of the rope, jump across and catch it.
+            Optional<Point> caught = Navigator.ropeCaughtFrom(map, from, rope);
+            if (caught.isPresent()) {
+                leap(from, caught.get(), world, true);
+                return true;
+            }
             walkAlongFloor(rope.x(), world, from);      // to the foot of it first
             return true;
         }
