@@ -2,6 +2,7 @@ package agents.mind;
 
 import agents.Mind;
 import agents.memory.Belief;
+import agents.world.Crossings;
 import agents.world.KnownWorld;
 import agents.world.Places;
 import agents.world.QuestBoard;
@@ -1825,7 +1826,11 @@ public class ReflexPolicy implements Policy {
         // merely scoring the option, meant the commitment bonus applied on the very first
         // decision an agent ever made and the door beat everything for the rest of its life -
         // seven tests said so at once.
-        if (rideOnTheWay(choices, world, mind, self)) {
+        if (fareOnTheWay(choices, world, mind, self)) {
+            return;         // buying the ticket for a ride further on
+        }
+        // Not asking for a ride while the ticket for one further on is sold somewhere else.
+        if (fareMap == null && rideOnTheWay(choices, world, mind, self)) {
             return;         // the way on is somebody to ask, not a door
         }
         boolean alreadyOnTheWay = committedPortal != null;
@@ -2405,6 +2410,14 @@ public class ReflexPolicy implements Policy {
     private Optional<WorldModel.PortalTarget> towardsDestination(
             KnownWorld known, String here, List<WorldModel.PortalTarget> portals, Mind mind, int mapId) {
         rideIsTheWay = false;
+        // For the ticket the way on takes, first, from wherever it is sold.
+        if (fareMap != null) {
+            Optional<WorldModel.PortalTarget> door = firstDoorTo(known, here, fareMap, portals);
+            if (door.isPresent()) {
+                whyThisDoor = "for the ticket the way on takes, sold in " + fareMap;
+                return door;
+            }
+        }
         if (destination != null && decisionsMade - destinationSince > DESTINATION_PATIENCE) {
             destination = null;
         }
@@ -4009,7 +4022,9 @@ public class ReflexPolicy implements Policy {
                 }
             }
         }
-        return Optional.empty();
+        // Or the ticket a boat everybody knows of takes.
+        return Crossings.rideBy(npcIdIn(npcRef)).filter(ride -> ride.ticket() > 0)
+                .map(ride -> new int[] {ride.ticket(), 1});
     }
 
     private static final int ETC = 4;
@@ -4028,6 +4043,7 @@ public class ReflexPolicy implements Policy {
                 givers.add(npcIdIn(belief.object()));
             }
         }
+        givers.addAll(sellersOf(mind, itemId, rideNpc));
         givers.remove(rideNpc);
         Optional<WorldModel.Entity> giver = world.visibleNpcs().stream()
                 .filter(n -> givers.contains(n.typeId())).findFirst();
@@ -4051,6 +4067,7 @@ public class ReflexPolicy implements Policy {
                 "get what the ride costs from npc:" + giverId, ERRAND + RIDE,
                 () -> {
                     fetchingFrom = giverId;
+                    fetchingFor = rideNpc;
                     if (close) {
                         greetedAt.put(giverId, decisionsMade);
                     }
@@ -4066,6 +4083,128 @@ public class ReflexPolicy implements Policy {
     @Override
     public int fetchingFrom() {
         return fetchingFrom;
+    }
+
+    /** The ride the ticket being bought is for, or -1. */
+    private int fetchingFor = -1;
+
+    @Override
+    public int fetchingFor() {
+        return fetchingFor;
+    }
+
+    /**
+     * Where the ticket for a ride further on is sold, when that is somewhere else on the way:
+     * gone to first, and no ride asked for until it is bought.
+     */
+    private String fareMap;
+
+    /**
+     * A ticket for a ride on the way, bought before setting off for the ride, from wherever it
+     * is sold. Orbis's ticket booth is in the station hall, and Rini, who takes the ticket for
+     * Ellinia, on a platform past the usher; the price was looked for only beside her, and with
+     * nobody there to sell it her ride was struck off.
+     *
+     * @return whether buying it here is what to do now; otherwise {@link #fareMap} says where
+     *         to go for it, if anywhere
+     */
+    private boolean fareOnTheWay(List<Choice> choices, WorldModel world, Mind mind, Point self) {
+        String wasFareMap = fareMap;
+        fareMap = null;
+        try {
+            if (destination == null) {
+                return false;
+            }
+            String here = KnownWorld.mapRef(world.mapId());
+            KnownWorld known = knownWorld(mind);
+            Map<String, KnownWorld.Hop> reach = known.reachableFrom(here, Set.of());
+            KnownWorld.Hop whole = reach.get(destination);
+            if (whole == null) {
+                return false;
+            }
+            for (int[] ride : ridesWithAPrice(mind)) {
+                Optional<int[]> price = itemPrice(mind, "npc:" + ride[0]);
+                if (price.isEmpty() || world.inventory().count(price.get()[0]) >= price.get()[1]) {
+                    continue;
+                }
+                KnownWorld.Hop toRide = reach.get(KnownWorld.mapRef(ride[1]));
+                String landing = KnownWorld.mapRef(ride[2]);
+                KnownWorld.Hop after = landing.equals(destination) ? new KnownWorld.Hop(0, null)
+                        : known.reachableFrom(landing, Set.of()).get(destination);
+                if (toRide == null || after == null || toRide.hops() + 1 + after.hops() > whole.hops()) {
+                    continue;       // not on the way
+                }
+                Set<Integer> sellers = sellersOf(mind, price.get()[0], ride[0]);
+                if (world.visibleNpcs().stream().anyMatch(npc -> sellers.contains(npc.typeId()))) {
+                    return fetchThePrice(choices, world, mind, self, price.get()[0], ride[0]);
+                }
+                for (int seller : sellers) {
+                    Optional<String> sold = whereSold(mind, seller);
+                    if (sold.isPresent() && !sold.get().equals(here) && reach.containsKey(sold.get())) {
+                        fareMap = sold.get();
+                        return false;
+                    }
+                }
+            }
+            return false;
+        } finally {
+            if (!java.util.Objects.equals(fareMap, wasFareMap)) {
+                doorInMind = null;      // chosen for the way, not the ticket - or the other way round
+            }
+        }
+    }
+
+    /** Rides it knows of that take a ticket, as {npc, from map, to map}. */
+    private static List<int[]> ridesWithAPrice(Mind mind) {
+        List<int[]> rides = new ArrayList<>();
+        for (Crossings.Ride ride : Crossings.RIDES) {
+            if (ride.ticket() > 0) {
+                rides.add(new int[] {ride.npc(), ride.from(), ride.to()});
+            }
+        }
+        for (Belief belief : mind.semantic().liveBeliefs()) {
+            if (!belief.predicate().equals("ride_to") || !belief.subject().startsWith("portal:")) {
+                continue;
+            }
+            int slash = belief.subject().indexOf('/');
+            int npc = slash < 0 || !belief.subject().startsWith("npc:", slash + 1)
+                    ? -1 : npcIdIn(belief.subject().substring(slash + 1));
+            if (npc < 0 || Crossings.rideBy(npc).isPresent() || itemPrice(mind, "npc:" + npc).isEmpty()) {
+                continue;
+            }
+            try {
+                int from = Integer.parseInt(belief.subject().substring("portal:".length(), slash));
+                int to = Integer.parseInt(belief.object().substring("map:".length()));
+                rides.add(new int[] {npc, from, to});
+            } catch (NumberFormatException | StringIndexOutOfBoundsException notAMap) {
+                // not a ride between maps
+            }
+        }
+        return rides;
+    }
+
+    /** Who it knows sells, or has handed over, a ride's ticket - never the one giving the ride. */
+    private static Set<Integer> sellersOf(Mind mind, int itemId, int rideNpc) {
+        Set<Integer> sellers = new HashSet<>();
+        for (Belief belief : mind.semantic().liveBeliefs()) {
+            if (belief.subject().equals("item:" + itemId) && belief.predicate().equals("given_by")) {
+                sellers.add(npcIdIn(belief.object()));
+            }
+        }
+        Crossings.rideBy(rideNpc).filter(ride -> ride.ticket() == itemId).ifPresent(ride -> sellers.add(ride.seller()));
+        sellers.remove(rideNpc);
+        sellers.remove(-1);
+        return sellers;
+    }
+
+    /** Where a seller stands: where everybody knows, else where it last saw them. */
+    private static Optional<String> whereSold(Mind mind, int seller) {
+        for (Crossings.Ride ride : Crossings.RIDES) {
+            if (ride.seller() == seller) {
+                return Optional.of(KnownWorld.mapRef(ride.sellerMap()));
+            }
+        }
+        return lastSeenIn(mind, "npc:" + seller);
     }
 
     /**
@@ -4428,16 +4567,34 @@ public class ReflexPolicy implements Policy {
         return lastHeardFrom(mind, target) >= heardAt;
     }
 
-    /** When this NPC last spoke to the agent itself, or -1. */
-    private static long lastHeardFrom(Mind mind, String npc) {
+    /**
+     * When this NPC last spoke to the agent itself, or -1: the last conversation the belief
+     * rests on, not when it was last told so. Being told where somebody talks refreshes the
+     * belief too, and an agent hears its own whispers back - Agent1, sent by Tylus to Dances
+     * with Balrog, heard itself say "npc:1022000 talks_in map:102000003" in Orbis, took that for
+     * having spoken to him, and never set off for Perion.
+     */
+    static long lastHeardFrom(Mind mind, String npc) {
         long last = -1;
         for (Belief belief : mind.semantic().liveBeliefs()) {
             if (belief.subject().equals(npc) && belief.predicate().equals("talks_in")
                     && belief.provenance() == Belief.Provenance.FIRST_HAND) {
-                last = Math.max(last, belief.lastSeen());
+                for (long id : belief.supportedBy()) {
+                    Optional<agents.memory.Episode> seen = mind.episodic().byId(id);
+                    if (seen.isPresent() && !wordOfMouth(seen.get().observation())) {
+                        last = Math.max(last, seen.get().tick());
+                    }
+                }
             }
         }
         return last;
+    }
+
+    /** Something somebody said, not something that happened in front of it. */
+    private static boolean wordOfMouth(agents.percept.Observation observation) {
+        String type = observation instanceof agents.percept.Observation.Recalled recalled
+                ? recalled.type() : observation.getClass().getSimpleName();
+        return type.equals("WhisperHeard") || type.equals("ChatHeard");
     }
 
     /** When the agent reached the level it is at now. */

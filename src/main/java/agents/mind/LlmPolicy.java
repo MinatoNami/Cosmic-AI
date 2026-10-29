@@ -672,6 +672,11 @@ public class LlmPolicy implements Policy {
     }
 
     @Override
+    public int fetchingFor() {
+        return fallback.fetchingFor();
+    }
+
+    @Override
     public void didNotEnter(String portalName, int mapId) {
         fallback.didNotEnter(portalName, mapId);
     }

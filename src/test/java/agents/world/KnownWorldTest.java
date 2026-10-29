@@ -685,6 +685,25 @@ class KnownWorldTest {
                 "on the deck, the way on is to wait");
     }
     /**
+     * The boat back from Orbis is known without ever having ridden it: the usher to the
+     * platform, Rini for the ticket, and the boat to Ellinia Station. Three agents due their
+     * third job knew only the way over from Ellinia, and none could get back.
+     */
+    @Test
+    void theBoatFromOrbisIsKnownWithoutHavingRiddenIt() {
+        believe(KnownWorld.portalRef(200000110, "east00"), "leads_to", KnownWorld.mapRef(200000111));
+
+        KnownWorld.Hop ellinia = world().reachableFrom(KnownWorld.mapRef(200000100))
+                .get(KnownWorld.mapRef(101000300));
+
+        org.junit.jupiter.api.Assertions.assertNotNull(ellinia, "Ellinia Station, over the sea");
+        org.junit.jupiter.api.Assertions.assertEquals("npc:2012006", KnownWorld.rideNpc(ellinia.firstDoor()),
+                "the platform usher first");
+        org.junit.jupiter.api.Assertions.assertNotNull(world().reachableFrom(KnownWorld.mapRef(101000300))
+                .get(KnownWorld.mapRef(200000100)), "and Cherry's boat the other way");
+    }
+
+    /**
      * Downstairs at the Forest's up00 and dw00 hop between its own floors. Remembered as doors,
      * they were never opened; the world map says they are no way out, so they are not unopened.
      */

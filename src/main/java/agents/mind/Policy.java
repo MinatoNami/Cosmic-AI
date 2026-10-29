@@ -124,6 +124,11 @@ public interface Policy {
         return -1;
     }
 
+    /** The ride that ticket is for, or -1. */
+    default int fetchingFor() {
+        return -1;
+    }
+
     /** Where that ride is wanted to go, as a map ref, or null if anywhere it goes will do. */
     default String rideTo() {
         return null;

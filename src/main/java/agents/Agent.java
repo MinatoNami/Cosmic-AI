@@ -1539,6 +1539,16 @@ public class Agent implements Runnable {
         boolean unwantedCalling = callingHere.isPresent() && world.job() == 0
                 && !disposition.callingsThatSuit().contains(callingHere.get())
                 && world.level() < agents.mind.Disposition.ANY_CALLING_AFTER;
+        // Orbis's booth sells a ticket for every boat: the one for the ride it is buying for.
+        if (dialogue.npcId() == policy.fetchingFrom() && dialogue.style() == MENU) {
+            int ticket = optionNaming(dialogue.text(), townOfRide(policy.fetchingFor()));
+            if (ticket >= 0) {
+                log.info("{} asks npc:{} for the ticket for npc:{}'s ride (option {})", mind.name(),
+                        dialogue.npcId(), policy.fetchingFor(), ticket);
+                reply(MENU, NPC_YES_OR_NEXT, ticket);
+                return;
+            }
+        }
         // Buying the fare for a ride it means to take: the ticket seller asks "are you sure?"
         if (dialogue.npcId() == policy.fetchingFrom() && isAQuestion(dialogue.style())) {
             noteAnswer(dialogue.npcId(), dialogue.style(), NPC_YES_OR_NEXT);
@@ -1549,6 +1559,10 @@ public class Agent implements Runnable {
         if (dialogue.npcId() == policy.rideWanted() && !unwantedCalling) {
             if (dialogue.style() == MENU) {
                 int going = optionThatGoes(dialogue.text(), policy.rideTo());
+                // Orbis's platform usher names each platform by the town its boat goes to.
+                if (going < 0) {
+                    going = optionNaming(dialogue.text(), townOfRide(dialogue.npcId()));
+                }
                 if (going >= 0) {
                     wentAlongWith = dialogue.npcId();
                     acceptedAtStep = steps;
@@ -1935,6 +1949,25 @@ public class Agent implements Runnable {
         return -1;
     }
 
+    /** The option in a list naming a place - a platform or a ticket, by its town - or -1. */
+    static int optionNaming(String said, String place) {
+        if (place == null) {
+            return -1;
+        }
+        java.util.regex.Matcher option = OPTION.matcher(said);
+        while (option.find()) {
+            if (option.group(2).toLowerCase(java.util.Locale.ROOT).contains(place.toLowerCase(java.util.Locale.ROOT))) {
+                return Integer.parseInt(option.group(1));
+            }
+        }
+        return -1;
+    }
+
+    /** The town a ride everybody knows of heads for, or null. */
+    private static String townOfRide(int npc) {
+        return agents.world.Crossings.rideBy(npc).map(agents.world.Crossings.Ride::town).orElse(null);
+    }
+
     /** sendSimple: a list of #L options. */
     private static final int MENU = 4;
 
@@ -2154,6 +2187,9 @@ public class Agent implements Runnable {
         String replyTo;
 
         if (observation instanceof Observation.WhisperHeard whisper) {
+            if (whisper.speakerName().equals(mind.name())) {
+                return;     // its own whisper, come back
+            }
             // A claim is a claim whichever way it arrives, and whispering one is how a
             // person tells an agent something without shouting it at the whole map.
             Optional<Claim> told = Claim.parse(whisper.text());
@@ -2293,11 +2329,16 @@ public class Agent implements Runnable {
     /** The newest lessons rotated through, so the freshest go round quickly. */
     private static final int LESSONS_TOLD = 20;
 
-    /** Names of players it has seen, from its own beliefs. */
+    /**
+     * Names of players it has seen, from its own beliefs - not counting itself. It had seen
+     * itself, so it told itself everything it shared, and every echo refreshed what it knew
+     * as if it had just seen it again.
+     */
     private List<String> acquaintances() {
         return mind.semantic().liveBeliefs().stream()
                 .filter(b -> b.predicate().equals("named") && b.subject().startsWith("player:"))
                 .map(Belief::object)
+                .filter(name -> !name.equals(mind.name()))
                 .distinct()
                 .toList();
     }

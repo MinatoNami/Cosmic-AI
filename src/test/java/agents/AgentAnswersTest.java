@@ -140,6 +140,17 @@ class AgentAnswersTest {
                 + "(100 mesos)#l\r\n#L2##m101000000# (80 mesos)#l", "map:101000000"), "a taxi's list is towns");
     }
 
+    /** Orbis's usher and ticket booth name each boat by the town it heads for. */
+    @Test
+    void picksThePlatformAndTheTicketByTheTown() {
+        assertEquals(0, Agent.optionNaming("Which platform will you take?\r\n\r\n#L0##bThe platform to the ship "
+                + "that heads to Ellinia.#l\r\n#L1##bThe platform to the train that heads to Ludibrium.#l", "Ellinia"));
+        assertEquals(1, Agent.optionNaming("Which ticket would you like to purchase?\r\n#L0##bLudibrium#k#l"
+                + "\r\n#L1##bEllinia of Victoria Island#k#l", "Ellinia"));
+        assertEquals(-1, Agent.optionNaming("#L0##bLudibrium#k#l", "Ellinia"));
+        assertEquals(-1, Agent.optionNaming("#L0##bEllinia#k#l", null));
+    }
+
     /** The second job: past the explanations to the choosing, then the branch its weapon suits. */
     @Test
     void choosesTheSecondJobItsWeaponSuits() {

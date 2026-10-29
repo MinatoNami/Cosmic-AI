@@ -1520,6 +1520,76 @@ class ReflexPolicyTest {
     }
 
     /**
+     * Told where somebody talks is not talking to them: Agent2, sent by Arec to the Dark Lord,
+     * heard itself and two others whisper that he talks in Kerning City, took that for having
+     * seen him, and never went.
+     */
+    @Test
+    void aWhisperIsNoConversation() {
+        aJunction();
+        mind.take(new Observation.MapEntered(5, 30000, 0));
+        mind.take(new Observation.DialogueShown(5, 1052001, "There you are.", 0));
+        mind.take(new Observation.MapEntered(6, 10000, 0));
+        mind.saw("npc:2020011", "present_in", "map:20000", 6);
+        mind.hear("npc:2020011", "sends_you_to", "npc:1052001", 7);
+        mind.take(new Observation.WhisperHeard(8, "Agent2", "!know npc:1052001 talks_in map:30000"));
+        mind.hear("npc:1052001", "talks_in", "map:30000", 8);
+        aBanditAt(70);
+        ReflexPolicy policy = new ReflexPolicy(new Random(1), Disposition.WANDERER);
+        policy.decide(mind, world, 10);
+
+        assertTrue(policy.jobAdvancementPending(), "still to see the Dark Lord");
+        assertEquals(5, ReflexPolicy.lastHeardFrom(mind, "npc:1052001"), "the conversation, not the whisper");
+    }
+
+    /** In Orbis Station's hall, sent over the sea: the ticket first, from the booth there. */
+    @Test
+    void buysTheTicketInTheHallBeforeAskingTheUsher() {
+        orbisStationAndBeyond();
+        world.update(new Observation.MapEntered(10, ORBIS_STATION, 0));
+        world.update(new Observation.StatsChanged(10, Map.of("LEVEL", 70, "JOB", 420)));
+        world.update(new Observation.NpcAppeared(10, 7001, 2012000, new Point(100, 0)));
+        world.update(new Observation.NpcAppeared(10, 7002, 2012006, new Point(-100, 0)));
+        ReflexPolicy policy = new ReflexPolicy(new Random(1), Disposition.WANDERER);
+        policy.decide(mind, world, 11);
+
+        Policy.Decision decision = policy.decide(mind, world, 12);
+
+        assertEquals("get what the ride costs from npc:2012000", decision.goal());
+    }
+
+    /** On the platform without one, back to the hall for it rather than asking Rini. */
+    @Test
+    void goesBackToTheHallForTheTicket() {
+        orbisStationAndBeyond();
+        mind.infer(KnownWorld.portalRef(200000111, "west00"), "leads_to", KnownWorld.mapRef(200000110), 6);
+        mind.infer(KnownWorld.portalRef(200000110, "west00"), "leads_to", KnownWorld.mapRef(ORBIS_STATION), 6);
+        world.update(new Observation.MapEntered(10, 200000111, 0));
+        world.movedTo(Navigator.settleFrom(200000111, new Point(-900, 140)).orElseThrow());
+        world.update(new Observation.StatsChanged(10, Map.of("LEVEL", 70, "JOB", 420)));
+        world.update(new Observation.NpcAppeared(10, 7003, 2012001, new Point(200, 140)));
+        ReflexPolicy policy = new ReflexPolicy(new Random(1), Disposition.WANDERER);
+        policy.decide(mind, world, 11);
+
+        Policy.Decision decision = policy.decide(mind, world, 12);
+
+        assertTrue(decision.goal().contains("for the ticket"), decision.goal());
+    }
+
+    private static final int ORBIS_STATION = 200000100;
+
+    /** Arec has sent a Bandit to the Dark Lord, who stands just past Ellinia Station. */
+    private void orbisStationAndBeyond() {
+        mind.take(new Observation.MapEntered(1, ORBIS_STATION, 0));
+        mind.saw("npc:2020011", "present_in", "map:211000001", 2);
+        mind.saw("npc:1052001", "present_in", "map:101000000", 2);
+        mind.saw("npc:2012000", "present_in", KnownWorld.mapRef(ORBIS_STATION), 2);
+        mind.hear("npc:2020011", "sends_you_to", "npc:1052001", 3);
+        mind.infer(KnownWorld.portalRef(200000110, "east00"), "leads_to", KnownWorld.mapRef(200000111), 4);
+        mind.infer(KnownWorld.portalRef(101000300, "out00"), "leads_to", KnownWorld.mapRef(101000000), 4);
+    }
+
+    /**
      * Sent across a sea it knows no walk over, it asks for a ride: Arec sent Agent2 to the Dark
      * Lord in Kerning City, and with no way from El Nath to Victoria it knew of on foot, it
      * went back to hunting.

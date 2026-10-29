@@ -77,8 +77,11 @@ public final class KnownWorld {
         atlas = worldMap;
     }
 
-    /** How far a search over the whole world map goes. */
-    private static final int ATLAS_HOPS = 30;
+    /**
+     * How far a search over the whole world map goes. It was 30, and Orbis Tower alone is twenty
+     * floors: El Nath to Kerning City is 32 maps, and neither way was there.
+     */
+    private static final int ATLAS_HOPS = 50;
 
     /** Each map's exits as this agent understands them, worked out once per reading. */
     private final Map<String, Map<String, String>> understood = new HashMap<>();
@@ -233,6 +236,13 @@ public final class KnownWorld {
                 world.exits.computeIfAbsent(map, m -> new TreeMap<>()).put(door, belief.object());
             }
         });
+        // And the boat between Victoria and Orbis, which nobody has to find out by riding.
+        for (Crossings.Ride ride : Crossings.RIDES) {
+            String to = mapRef(ride.to());
+            world.rides.computeIfAbsent(mapRef(ride.from()), m -> new TreeMap<>())
+                    .putIfAbsent(rideTo("npc:" + ride.npc(), to), to);
+        }
+        Crossings.CARRIES.forEach((from, to) -> world.carries.putIfAbsent(mapRef(from), mapRef(to)));
         // A ride written down before rides kept where they started is still a ride, from the
         // one place the NPC is known to stand. Somebody seen in several places is left out:
         // Spinel stands in every town and takes you somewhere different from each.
