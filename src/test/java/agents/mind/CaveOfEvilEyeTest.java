@@ -18,6 +18,7 @@ import java.util.Map;
 import java.util.Random;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -145,6 +146,28 @@ class CaveOfEvilEyeTest {
             policy.readTheScroll();
             policy.decide(mind, world, 4);
             assertTrue(!policy.readAReturnScroll(), "and not asked again straight after reading one");
+        } finally {
+            KnownWorld.useAtlas(null);
+        }
+    }
+    /** The last scroll is kept for somewhere nothing walks out of, not read to save a walk. */
+    @Test
+    void keepsItsLastScrollRatherThanSaveAWalk() {
+        KnownWorld.useAtlas(new Atlas());
+        try {
+            Mind mind = new Mind("Test", Trace.toFile(dir.resolve("l.jsonl"), "Test"));
+            mind.take(new Observation.MapEntered(1, 105070200, 0));
+            mind.hear("self", ReflexPolicy.TOLD_TO_TRAVEL_FROM, "map:101000300", 1);
+            WorldModel world = new WorldModel();
+            world.update(new Observation.MapEntered(1, 105070200, 0));
+            world.movedTo(new Point(-284, 1002));
+            world.update(new Observation.StatsChanged(1, Map.of("LEVEL", 48, "JOB", 110)));
+            world.update(new Observation.InventoryShown(1, 0, Map.of(1, 24, 2, 24, 3, 24, 4, 24, 5, 24),
+                    List.of(new agents.percept.Item(2, 1, Shopkeeping.RETURN_SCROLL, 1, null))));
+            ReflexPolicy policy = new ReflexPolicy(new Random(1), Disposition.FIGHTER);
+            policy.decide(mind, world, 2);
+
+            assertFalse(policy.readAReturnScroll(), "one scroll: walked, not read");
         } finally {
             KnownWorld.useAtlas(null);
         }

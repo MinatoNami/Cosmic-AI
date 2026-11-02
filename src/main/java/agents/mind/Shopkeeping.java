@@ -198,6 +198,16 @@ public final class Shopkeeping {
     }
 
     /**
+     * Due its third job and carrying none: a reason to go to a shop, where being one short is
+     * only a reason to buy at one it is at anyway. As a reason to go, one short made the shop
+     * as much an errand as the test: Agent3 went to the Nautilus for scrolls, read one to save
+     * a walk, and was one short again - 55 scrolls and two hundred trips in a day.
+     */
+    public static boolean needsReturnScrolls(WorldModel world) {
+        return ThirdJob.due(world.job(), world.level()) && world.inventory().count(RETURN_SCROLL) == 0;
+    }
+
+    /**
      * Equipment is spare when wearing it could never help: nothing better than what is on
      * that part of the body, not for this job at all, or asking for stats the agent has not
      * got at a level it has already reached. Something better that the agent is simply not

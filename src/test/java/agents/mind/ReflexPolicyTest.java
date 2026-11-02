@@ -24,6 +24,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ReflexPolicyTest {
@@ -1493,7 +1494,7 @@ class ReflexPolicyTest {
 
     /**
      * "Remember #p1052001# from Kerning City? Go see him": the chief sends it to its second-job
-     * instructor, and once they have spoken that errand is done.
+     * instructor, and once they have spoken that errand is done - and the clone they set is next.
      */
     @Test
     void goesWhereTheChiefSendsItUntilTheyHaveSpoken() {
@@ -1516,7 +1517,8 @@ class ReflexPolicyTest {
         ReflexPolicy after = new ReflexPolicy(new Random(1), Disposition.WANDERER);
         after.decide(mind, world, 13);
 
-        assertFalse(after.jobAdvancementPending());
+        assertTrue(after.jobAdvancementPending(), "on to the Dark Lord's Door of Dimension");
+        assertNotEquals("map:30000", after.errandMap(), "not back to the Dark Lord");
     }
 
     /**
@@ -2500,5 +2502,169 @@ class ReflexPolicyTest {
             scroll = policy.readAReturnScroll();
         }
         assertTrue(scroll, "the pier and the tunnel lead only into each other: back to Orbis by scroll");
+    }
+
+    // A Cleric between Grendel (east) and the Forest of Evil II, where its Door of Dimension
+    // stands (west), sent to Grendel by Robeira and already told about the clone.
+    private static final int MAGICIANS_DOOR = 100040106;
+
+    private void aClericToldAboutTheClone() {
+        mind.take(new Observation.MapEntered(1, MAGICIANS_DOOR, 0));
+        mind.take(new Observation.MapEntered(2, 30000, 0));
+        mind.take(new Observation.MapEntered(3, 10000, 0));
+        mind.infer(KnownWorld.portalRef(10000, "west00"), "leads_to", KnownWorld.mapRef(MAGICIANS_DOOR), 4);
+        mind.infer(KnownWorld.portalRef(10000, "east00"), "leads_to", KnownWorld.mapRef(30000), 4);
+        mind.saw("npc:2020009", "present_in", ThirdJob.CHIEFS_ROOM, 4);
+        mind.saw("npc:1032001", "present_in", "map:30000", 4);
+        mind.hear("npc:2020009", "sends_you_to", "npc:1032001", 5);
+        mind.take(new Observation.MapEntered(11, 30000, 0));
+        mind.take(new Observation.DialogueShown(12, 1032001, "There is an opening in the middle of a deep forest"
+                + " of evil in Victoria Island, where it'll lead you to a secret passage.", 0));
+        mind.take(new Observation.MapEntered(13, 10000, 0));
+        world.update(new Observation.MapEntered(13, 10000, 0));
+        world.update(new Observation.StatsChanged(13, Map.of("LEVEL", 85, "JOB", 230)));
+    }
+
+    private void carrying(int itemId, long tick) {
+        world.update(new Observation.InventoryShown(tick, 0, Map.of(1, 24, 2, 24, 3, 24, 4, 24, 5, 24),
+                itemId > 0 ? List.of(new agents.percept.Item(4, 1, itemId, 1, null)) : List.of()));
+    }
+
+    private String doorTaken(ReflexPolicy policy) {
+        policy.cameInAt(new Point(0, 0));
+        return policy.pickDoor(JUNCTION_DOORS, mind, 10000, "player:1").name();
+    }
+
+    /**
+     * Grendel's "an opening in the middle of a deep forest of evil" names nowhere: having heard
+     * it is no errand done, and the Door of Dimension it means is where it goes next.
+     */
+    @Test
+    void goesToTheDoorOfDimensionOnceTheInstructorHasSetTheTest() {
+        aClericToldAboutTheClone();
+        ReflexPolicy policy = new ReflexPolicy(new Random(1), Disposition.WANDERER);
+        policy.decide(mind, world, 14);
+
+        assertTrue(policy.jobAdvancementPending(), "the clone is the rest of the errand");
+        assertEquals("west00", doorTaken(policy), "to the Forest of Evil II, not back to Grendel");
+    }
+
+    @Test
+    void takesTheCharmBackToTheInstructor() {
+        aClericToldAboutTheClone();
+        carrying(ThirdJob.CHARM, 14);
+        ReflexPolicy policy = new ReflexPolicy(new Random(1), Disposition.WANDERER);
+        policy.decide(mind, world, 14);
+
+        assertEquals("east00", doorTaken(policy), "the Black Charm goes to Grendel");
+    }
+
+    /** The door says nothing whether or not it lets it in: found silent, Grendel sets the test again. */
+    @Test
+    void goesBackToTheInstructorWhenTheDoorWillNotOpen() {
+        aClericToldAboutTheClone();
+        mind.saw("npc:" + ThirdJob.DOOR, "does_not_answer", "true", 14);
+        ReflexPolicy policy = new ReflexPolicy(new Random(1), Disposition.WANDERER);
+        policy.decide(mind, world, 15);
+
+        assertEquals("east00", doorTaken(policy));
+    }
+
+    /** Once the necklace has gone to the chief, the clone is behind it, and not gone back to. */
+    @Test
+    void leavesTheCloneAloneOnceTheNecklaceIsEarned() {
+        aClericToldAboutTheClone();
+        carrying(ThirdJob.NECKLACE, 14);
+        ReflexPolicy policy = new ReflexPolicy(new Random(1), Disposition.WANDERER);
+        policy.decide(mind, world, 14);
+        assertTrue(policy.jobAdvancementPending(), "the necklace goes to Robeira");
+
+        carrying(-1, 20);
+        ReflexPolicy after = new ReflexPolicy(new Random(1), Disposition.WANDERER);
+        after.decide(mind, world, 20);
+
+        assertFalse(after.jobAdvancementPending(), "handed in: not back through the door for another");
+    }
+
+    @Test
+    void doesNotWalkOutOfTheClonesRoom() {
+        aClericToldAboutTheClone();
+        world.update(new Observation.MapEntered(14, 108010201, 0));
+        ReflexPolicy policy = new ReflexPolicy(new Random(1), Disposition.WANDERER);
+        policy.decide(mind, world, 14);
+
+        assertFalse(policy.jobAdvancementPending(), "in with the clone, there is nowhere to go but the fight");
+    }
+
+    private void aClericWithScrolls(int scrolls) {
+        mind.take(new Observation.MapEntered(1, 10000, 0));
+        mind.saw("npc:1091002", "sells", "item:" + Shopkeeping.RETURN_SCROLL, 1);
+        world.update(new Observation.MapEntered(2, 10000, 0));
+        world.update(new Observation.StatsChanged(2, Map.of("LEVEL", 85, "JOB", 230)));
+        world.update(new Observation.InventoryShown(2, 1_000_000, Map.of(1, 24, 2, 24, 3, 24, 4, 24, 5, 24),
+                scrolls > 0 ? List.of(new agents.percept.Item(2, 1, Shopkeeping.RETURN_SCROLL, scrolls, null))
+                        : List.of()));
+    }
+
+    /**
+     * One scroll short is a reason to buy at a shop it is at, not to go to one: as a reason to
+     * go, Agent3 went to the Nautilus for scrolls two hundred times in a day.
+     */
+    @Test
+    void goesForReturnScrollsOnlyWithNoneLeft() {
+        aClericWithScrolls(1);
+        assertTrue(Shopkeeping.wantsReturnScrolls(world), "one short, so buys at a counter it is at");
+        assertFalse(Shopkeeping.needsReturnScrolls(world), "but does not go to one for it");
+
+        aClericWithScrolls(0);
+        assertTrue(Shopkeeping.needsReturnScrolls(world), "none left");
+    }
+
+    /** Lith Harbor's Mr. Goldstein, priced by somebody else's whisper. */
+    private void aPriceInLithHarbor(boolean whispered) {
+        aJunction();
+        mind.saw("npc:1002003", "present_in", "map:20000", 4);
+        if (whispered) {
+            mind.take(new Observation.WhisperHeard(5, "Agent2", "!know npc:1002003 wants_first 1500 mesos"));
+        } else {
+            mind.take(new Observation.DialogueShown(5, 1002003, "That'll be 1500 mesos.", 0));
+        }
+        mind.hear("npc:1002003", "wants_first", "1500 mesos", 5);
+        world.update(new Observation.MapEntered(10, 10000, 0));
+        world.update(new Observation.StatsChanged(10, Map.of("LEVEL", 50, "JOB", 230)));
+        world.update(new Observation.InventoryShown(10, 120000, Map.of(1, 24, 2, 24, 3, 24, 4, 24, 5, 24), List.of()));
+        mind.take(new Observation.StatsChanged(10, Map.of("LEVEL", 50, "JOB", 230, "MESO", 120000)));
+    }
+
+    /**
+     * With a job, a price another agent passed on is no errand: Agent3 held whispered Lith
+     * Harbor prices as its errand and went back there two hundred times in a day.
+     */
+    @Test
+    void aWhisperedPriceIsNoErrandWithAJob() {
+        aPriceInLithHarbor(true);
+        ReflexPolicy policy = new ReflexPolicy(new Random(1), Disposition.WANDERER);
+        policy.decide(mind, world, 11);
+
+        assertNull(policy.errandMap());
+    }
+
+    @Test
+    void aPriceNamedToItsFaceIsStillAnErrand() {
+        aPriceInLithHarbor(false);
+        ReflexPolicy policy = new ReflexPolicy(new Random(1), Disposition.WANDERER);
+        policy.decide(mind, world, 11);
+
+        assertEquals("map:20000", policy.errandMap());
+    }
+
+    @Test
+    void aPriceIsNoErrandFromSomebodyWhoDoesNotAnswer() {
+        aPriceInLithHarbor(false);
+        mind.saw("npc:1002003", "does_not_answer", "true", 9);
+        ReflexPolicy policy = new ReflexPolicy(new Random(1), Disposition.WANDERER);
+        policy.decide(mind, world, 11);
+
+        assertNull(policy.errandMap());
     }
 }

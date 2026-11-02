@@ -16,7 +16,7 @@ import java.util.regex.Pattern;
  * maxed and twenty skill points it had nowhere to put, never having been to El Nath.
  *
  * <p>Everything after the first link is said again by the people in it, and followed the
- * way the second job is followed.
+ * way the second job is followed - except where the clone is, which is told here too.
  */
 public final class ThirdJob {
 
@@ -36,6 +36,44 @@ public final class ThirdJob {
             3, 2020010,
             4, 2020011,
             5, 2020013);
+
+    /**
+     * Where each family's Door of Dimension stands, which opens on the instructor's clone.
+     *
+     * <p>The second link the people in it do not say either. Grendel's "an opening in the
+     * middle of a deep forest of evil in Victoria Island" names no map and nobody, so nothing
+     * could be written down from it: Agent3, a level-85 Cleric, spoke to him, took that for the
+     * errand done, and went back and forth between Lith Harbor and the Nautilus for a day.
+     */
+    private static final Map<Integer, String> DOORS = Map.of(
+            1, "map:105070001",     // Ant Tunnel Park
+            2, "map:100040106",     // The Forest of Evil II
+            3, "map:105040305",     // Sleepy Dungeon V
+            4, "map:107000402",     // Monkey Swamp II
+            5, "map:105070200");    // The Cave of Evil Eye II
+
+    /** Door of Dimension: talked to with the test under way, it lets the agent in to the clone. */
+    public static final int DOOR = 1061009;
+
+    /** Black Charm, which the clone drops, for the instructor. */
+    public static final int CHARM = 4031059;
+
+    /** The Necklace of Strength, which the instructor gives for the charm, for the chief. */
+    public static final int NECKLACE = 4031057;
+
+    /** The rooms the doors open on, lobby and clone, for all five families. */
+    private static final int CLONE_ROOMS_FROM = 108010100;
+    private static final int CLONE_ROOMS_TO = 108010501;
+
+    /** This job's Door of Dimension, or null when it has no third job to go for. */
+    public static String doorFor(int job) {
+        return chiefFor(job) > 0 ? DOORS.get(job / 100) : null;
+    }
+
+    /** Whether this is one of the rooms behind a Door of Dimension, where the clone is. */
+    public static boolean isClonesRoom(int mapId) {
+        return mapId >= CLONE_ROOMS_FROM && mapId <= CLONE_ROOMS_TO && mapId % 100 <= 1;
+    }
 
     /**
      * The chief who starts this job's third job, or -1 when it has none to start: not a

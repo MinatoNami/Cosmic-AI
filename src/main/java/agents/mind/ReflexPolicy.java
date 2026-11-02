@@ -616,8 +616,12 @@ public class ReflexPolicy implements Policy {
         // Tunnel I for the rope up to Sleepywood, knocked off it every ten minutes, while the
         // cave's own return scroll goes to Sleepywood.
         String heldFor = heldForTheWayTo != null && decisionsMade - heldSince > HELD_BEFORE_SCROLL ? heldForTheWayTo : null;
-        scrollIsQuicker = travelOrder != null && scrollSavesTheWalk(mind, world.mapId(), travelOrder)
-                || heldFor != null && scrollSavesTheWalk(mind, world.mapId(), heldFor, 1)
+        // Saving a walk is worth a scroll, but not the last one, which is kept for somewhere
+        // nothing walks out of: Agent3 read every one it bought to save a walk, then went
+        // back to the Nautilus for more.
+        boolean theLastScroll = world.inventory().count(Shopkeeping.RETURN_SCROLL) == 1;
+        scrollIsQuicker = !theLastScroll && travelOrder != null && scrollSavesTheWalk(mind, world.mapId(), travelOrder)
+                || !theLastScroll && heldFor != null && scrollSavesTheWalk(mind, world.mapId(), heldFor, 1)
                 // Or going to and fro between two maps for good, each door it can reach leading
                 // only into the other: Agent2 walked between Orbis' tunnel to the Ellinia boat and
                 // the boat's pier for hours, the way back to the station out of reach from where
@@ -1232,7 +1236,7 @@ public class ReflexPolicy implements Policy {
         Set<String> keepers = toSell ? shopkeepers(mind)
                 : Wardrobe.needsAWeapon(world) ? weaponSellers(mind, world)
                 : Fighting.wantsAmmunition(world) ? ammunitionSellers(mind, world)
-                : Shopkeeping.wantsReturnScrolls(world) && !scrollSellers(mind).isEmpty() ? scrollSellers(mind)
+                : Shopkeeping.needsReturnScrolls(world) && !scrollSellers(mind).isEmpty() ? scrollSellers(mind)
                 : knownHealers(mind).stream().anyMatch(item -> world.inventory().count(itemIdIn(item)) > 0)
                         ? stocking(mind, knownManaRestorers(mind))
                         : stocking(mind, knownHealers(mind));
@@ -1256,7 +1260,7 @@ public class ReflexPolicy implements Policy {
         String why = toSell ? "sell what I cannot carry"
                 : Wardrobe.needsAWeapon(world) ? "buy a weapon I can fight with"
                 : Fighting.wantsAmmunition(world) ? "buy something to fire"
-                : Shopkeeping.wantsReturnScrolls(world) && !scrollSellers(mind).isEmpty() ? "buy scrolls home"
+                : Shopkeeping.needsReturnScrolls(world) && !scrollSellers(mind).isEmpty() ? "buy scrolls home"
                 : "buy something that heals";
         if (!IntentExecutor.canSpeakTo(world.mapId(), self, npc.position(), NPC_RANGE)) {
             Point where = npc.position();
@@ -1303,7 +1307,7 @@ public class ReflexPolicy implements Policy {
         if (Fighting.wantsAmmunition(world) || Wardrobe.needsAWeapon(world)) {
             return true;
         }
-        if (Shopkeeping.wantsReturnScrolls(world) && !scrollSellers(mind).isEmpty()) {
+        if (Shopkeeping.needsReturnScrolls(world) && !scrollSellers(mind).isEmpty()) {
             return true;
         }
         Set<String> healers = knownHealers(mind);
@@ -3141,6 +3145,7 @@ public class ReflexPolicy implements Policy {
         errandNpc = -1;
         int mesos = mesosHeld(mind);
         Set<String> stranders = strandedBy(mind);
+        Set<String> silent = doesNotAnswer(mind);
         String here = KnownWorld.mapRef(world.mapId());
         Map<String, KnownWorld.Hop> reachable = null;
         int bestRank = -1;
@@ -3158,6 +3163,14 @@ public class ReflexPolicy implements Policy {
             }
             if (stranders.contains(belief.subject())) {
                 continue;       // it will not accept anything from them, so there is no errand
+            }
+            // With a job, a price is an errand only if the NPC named it, and only while they
+            // answer. Rich enough to pay any price it had heard of, Agent3 - a Cleric due its
+            // third job - held prices other agents had whispered about Lith Harbor's cabs, shops
+            // and ferrymen as its errand, and went back there two hundred times in a day, to be
+            // met by people who do not answer. A beginner is let be: statues' callings come that way.
+            if (world.job() != 0 && (silent.contains(belief.subject()) || !namedByThemselves(mind, belief))) {
+                continue;
             }
             int npcId = npcIdIn(belief.subject());
             Integer spokenAt = greetedAt.get(npcId);
@@ -3225,7 +3238,6 @@ public class ReflexPolicy implements Policy {
             // being the one who might give the calling. The Thief's statue sends people to
             // Kerning City, where Alex stands; the server has no script for him, and Agent2
             // greeted him five hundred and sixty times in an hour as its errand, at level 8.
-            Set<String> silent = doesNotAnswer(mind);
             for (String instructorsRoom : whereCallingsAreGiven(mind)) {
                 for (Belief there : mind.semantic().liveBeliefs()) {
                     if (!there.predicate().equals("present_in") || !there.object().equals(instructorsRoom)
@@ -4356,7 +4368,7 @@ public class ReflexPolicy implements Policy {
             return;
         }
         // Grown into its third job: to its chief, and on to whoever the chief sends it to.
-        if (towardsThirdJob(mind, world, here)) {
+        if (towardsThirdJob(mind, world, here, now)) {
             return;
         }
         // Told by a person to go and take passage from somewhere: that is where it is sent, and
@@ -4502,13 +4514,21 @@ public class ReflexPolicy implements Policy {
      * Where the chief stands is the one thing given rather than found (see {@link ThirdJob});
      * who he sends it to next is what he says, written down like any other instruction. That
      * is its second-job instructor first - "Remember #p1052001# from Kerning City? Go see
-     * him" - and the rest of the test after.
+     * him" - and the rest of the test after. The clone the instructor sets it, nobody says
+     * where, so that is given too, and the necklace earned from it goes back to the chief.
      */
-    private boolean towardsThirdJob(Mind mind, WorldModel world, String here) {
+    private boolean towardsThirdJob(Mind mind, WorldModel world, String here, long now) {
         if (!ThirdJob.due(world.job(), world.level())) {
             return false;
         }
         String chief = "npc:" + ThirdJob.chiefFor(world.job());
+        // The necklace in hand is the strength half passed, and goes to the chief. Written down,
+        // because the chief takes it: with it gone, nothing else says the clone is behind it.
+        if (world.inventory().count(ThirdJob.NECKLACE) > 0) {
+            mind.saw("self", "earned", "item:" + ThirdJob.NECKLACE, now);
+            String room = lastSeenIn(mind, chief).orElse(ThirdJob.CHIEFS_ROOM);
+            return goForThirdJob(mind, here, room, npcIdIn(chief), NECKLACE_WHY);
+        }
         Belief sentOn = null;
         for (Belief belief : mind.semantic().about(chief)) {
             if (belief.predicate().equals("sends_you_to") && belief.object().startsWith("npc:")
@@ -4517,8 +4537,9 @@ public class ReflexPolicy implements Policy {
             }
         }
         if (sentOn != null) {
-            if (lastHeardFrom(mind, sentOn.object()) >= sentOn.lastSeen()) {
-                return false;   // done what the chief said; what they said next is the errand
+            long heardAt = lastHeardFrom(mind, sentOn.object());
+            if (heardAt >= sentOn.lastSeen()) {
+                return towardsTheClone(mind, world, here, sentOn.object(), heardAt);
             }
             Optional<String> map = lastSeenIn(mind, sentOn.object());
             if (map.isEmpty()) {
@@ -4552,6 +4573,55 @@ public class ReflexPolicy implements Policy {
     }
 
     static final String THIRD_JOB_WHY = "your chief, for your third job";
+    static final String NECKLACE_WHY = "your chief, with the necklace for your third job";
+    static final String CLONE_WHY = "the Door of Dimension, to your clone for your third job";
+    static final String CHARM_WHY = "back with the charm for your third job";
+    static final String DOOR_SHUT_WHY = "back to whoever set the test: the Door of Dimension let you nowhere";
+
+    /**
+     * After the instructor, the strength half of the test: through the family's Door of
+     * Dimension to the clone, and the charm it drops back to the instructor.
+     *
+     * Hearing from the instructor used to end the errand, on the grounds that whatever they said
+     * next would be the next one. What they say next names nowhere and nobody, so there was no
+     * next one: see {@link ThirdJob}. Not once the necklace has been earned, though - by then
+     * whoever the chief last sent it to is somebody else, for the other half.
+     */
+    private boolean towardsTheClone(Mind mind, WorldModel world, String here, String instructor,
+                                    long heardAt) {
+        String door = ThirdJob.doorFor(world.job());
+        if (door == null || earned(mind, ThirdJob.NECKLACE)) {
+            return false;
+        }
+        if (ThirdJob.isClonesRoom(world.mapId())) {
+            return false;       // in with the clone: the fight is for the reflexes, not a walk
+        }
+        Optional<String> instructorsRoom = lastSeenIn(mind, instructor);
+        if (world.inventory().count(ThirdJob.CHARM) > 0) {
+            return instructorsRoom.isPresent()
+                    && goForThirdJob(mind, here, instructorsRoom.get(), npcIdIn(instructor), CHARM_WHY);
+        }
+        // The door opens only for somebody the instructor has set the test, and says nothing
+        // either way. Found silent since the instructor last spoke, it is the instructor to see
+        // again, who sets the test or says what is missing.
+        if (instructorsRoom.isPresent() && silentSince(mind, "npc:" + ThirdJob.DOOR, heardAt)) {
+            return goForThirdJob(mind, here, instructorsRoom.get(), npcIdIn(instructor), DOOR_SHUT_WHY);
+        }
+        return goForThirdJob(mind, here, door, ThirdJob.DOOR, CLONE_WHY);
+    }
+
+    /** Whether the agent has ever earned this: carried it, before handing it on. */
+    private static boolean earned(Mind mind, int itemId) {
+        String item = "item:" + itemId;
+        return mind.semantic().about("self").stream()
+                .anyMatch(b -> b.predicate().equals("earned") && b.object().equals(item));
+    }
+
+    /** Whether this NPC has been found not to answer since the given tick. */
+    private static boolean silentSince(Mind mind, String npc, long since) {
+        return mind.semantic().about(npc).stream()
+                .anyMatch(b -> b.predicate().equals("does_not_answer") && b.lastSeen() > since);
+    }
 
     /** Whether an instruction heard at a tick has been carried out since. */
     private static boolean followed(Mind mind, String target, long heardAt) {
@@ -4588,6 +4658,17 @@ public class ReflexPolicy implements Policy {
             }
         }
         return last;
+    }
+
+    /** Whether what this belief says was said by its subject, not only passed on by somebody else. */
+    private static boolean namedByThemselves(Mind mind, Belief belief) {
+        for (long id : belief.supportedBy()) {
+            Optional<agents.memory.Episode> seen = mind.episodic().byId(id);
+            if (seen.isPresent() && !wordOfMouth(seen.get().observation())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** Something somebody said, not something that happened in front of it. */
